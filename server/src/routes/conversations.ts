@@ -1,0 +1,101 @@
+import { Router } from "express";
+import { db, insertMessage, upsertConversation, type ConversationRow } from "../db.js";
+import { getInstagramAdapterForAccount, getStubAdapters } from "../adapters/index.js";
+import { StubAdapter } from "../adapters/stub.js";
+import type { MessagingAdapter, Platform } from "../adapters/types.js";
+
+const PLATFORMS: Platform[] = ["instagram", "tiktok", "twitch"];
+
+function isPlatform(value: unknown): value is Platform {
+  return typeof value === "string" && (PLATFORMS as string[]).includes(value);
+}
+
+export function conversationsRouter(): Router {
+  const router = Router();
+
+  router.get("/", (req, res) => {
+    const platform = req.query.platform;
+    const rows = platform
+      ? db
+          .prepare<[string], ConversationRow>(
+            "SELECT * FROM conversations WHERE platform = ? ORDER BY last_message_at DESC"
+          )
+          .all(String(platform))
+      : db
+          .prepare<[], ConversationRow>("SELECT * FROM conversations ORDER BY last_message_at DESC")
+          .all();
+    res.json(rows);
+  });
+
+  router.get("/:id/messages", (req, res) => {
+    const rows = db
+      .prepare("SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC")
+      .all(req.params.id);
+    res.json(rows);
+  });
+
+  // Send a reply. For platforms with a real adapter (Instagram), this calls
+  // the platform API. For stub platforms (TikTok, Twitch) it records the
+  // message as sent-manually, since there's no API to call yet.
+  router.post("/:id/messages", async (req, res) => {
+    const { text } = req.body as { text?: string };
+    if (!text || !text.trim()) {
+      return res.status(400).json({ error: "text is required" });
+    }
+
+    const conversation = db
+      .prepare<[string], ConversationRow>("SELECT * FROM conversations WHERE id = ?")
+      .get(req.params.id);
+    if (!conversation) return res.status(404).json({ error: "conversation not found" });
+
+    let adapter: MessagingAdapter;
+    if (conversation.platform === "instagram") {
+      adapter = conversation.account_id
+        ? getInstagramAdapterForAccount(conversation.account_id)
+        : new StubAdapter("instagram");
+    } else {
+      adapter = getStubAdapters()[conversation.platform as "tiktok" | "twitch"];
+    }
+
+    if (adapter.canSend) {
+      try {
+        const result = await adapter.sendMessage(conversation.external_id, text);
+        const message = insertMessage(conversation.id, "outbound", text, "api", result.externalMessageId);
+        return res.status(201).json(message);
+      } catch (err) {
+        return res.status(502).json({ error: (err as Error).message });
+      }
+    }
+
+    // Stub platform: record that a VA sent this manually on the platform itself.
+    const message = insertMessage(conversation.id, "outbound", text, "manual");
+    res.status(201).json(message);
+  });
+
+  // For platforms without a receive webhook (TikTok, Twitch), log an
+  // inbound message a VA saw on the platform directly, so it shows up in
+  // the unified inbox alongside Instagram's webhook-delivered messages.
+  router.post("/manual", (req, res) => {
+    const { platform, participantHandle, participantName, text } = req.body as {
+      platform?: string;
+      participantHandle?: string;
+      participantName?: string;
+      text?: string;
+    };
+
+    if (!isPlatform(platform)) {
+      return res.status(400).json({ error: `platform must be one of ${PLATFORMS.join(", ")}` });
+    }
+    if (!participantHandle || !text) {
+      return res.status(400).json({ error: "participantHandle and text are required" });
+    }
+
+    // Manual entries don't have a stable external id from the platform, so
+    // we key the conversation on the handle itself.
+    const conversation = upsertConversation(platform, participantHandle, participantHandle, participantName);
+    const message = insertMessage(conversation.id, "inbound", text, "manual");
+    res.status(201).json({ conversation, message });
+  });
+
+  return router;
+}
