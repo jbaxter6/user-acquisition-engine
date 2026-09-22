@@ -1,15 +1,13 @@
 # Work Log
 
 ## Todos
-- [ ] Set `SITE_PASSWORD` in Railway's env vars (added to the code but not yet set in production — site is currently open to anyone who finds the URL)
+- [ ] Set `SITE_PASSWORD` in Railway's env vars (added to the code but not yet confirmed set in production)
 - [ ] Complete Business Verification in Meta Business Manager if prompted during App Review
-- [ ] Record the App Review demo video per the script in `docs/meta-app-review-submission.md`
+- [ ] Record the App Review demo video per the script in `docs/meta-app-review-submission.md` — note the demo will have to show the connect/UI flow with synthetic or app-initiated data, since real inbound messages aren't visible pre-approval (see Accomplishments)
 - [ ] Submit App Review for `instagram_business_manage_messages` Advanced Access, using the drafted use-case description — decide on inbound-support framing given the README's cold-outreach caveat
-- [ ] Once approved and app is Live, confirm real (non-tester) DMs land in the inbox correctly
-- [ ] Tester-to-tester theory not yet confirmed: added a second account as tester, invite accepted, webhook Test button still works, but a real DM between the two testers still didn't arrive — needs more investigation (check Meta's own delivery/error log, check whether the DM landed in movewithsmooth's Instagram "Message Requests" queue instead of main inbox) now that ngrok is out of the picture
-- [ ] Set remaining Railway env vars if not already done: `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET`, `INSTAGRAM_VERIFY_TOKEN`
-- [ ] Confirm Railway persistent volume is attached at `/data` with `DATA_DIR=/data` set, so the DB survives redeploys
-- [ ] Update Meta's OAuth redirect URI and webhook Callback URL to `https://www.movewithsmooth.com/...`, then reconnect Instagram account(s) (ngrok-era connections didn't carry over)
+- [ ] Once approved and app is Live, confirm real (non-tester) DMs land in the inbox correctly via both webhook and Sync
+- [ ] Untested hypothesis, not currently worth pursuing further: conversations the app initiates first (via the send API) might behave differently from organic inbound-first ones — could matter for the real outreach-then-reply production flow specifically
+- [ ] Redeploy with the `/privacy` route + password-gate-bypass fix (not yet pushed) before submitting App Review
 - [ ] Once one account connects, add satellite accounts as Instagram Testers and connect each via "+ Connect another Instagram account"
 - [ ] If an existing whitelisted Twitch app/credentials exist, wire a real `TwitchAdapter` (same pattern as `InstagramAdapter`)
 - [ ] Choose scraping provider integration (e.g. Modash, Phantombuster) for the Discovery module
@@ -24,6 +22,11 @@
 - Hit a second gotcha: Railway's custom domain required a `TXT` record (`_railway-verify.www`) for ownership verification, separate from and in addition to the `CNAME` record — cert issuance and routing silently stalled (TLS handshake completed but no HTTP response) until that TXT record was added too. Diagnosed via `dig`/`curl` (confirmed DNS was correct and reaching Railway's real IP via an org lookup) before finding the actual missing piece in Railway's UI.
 - Verified the live deploy end-to-end via curl: app, `/api/health`, and `/privacy.html` all serving correctly on `https://www.movewithsmooth.com`, and the bare domain redirect working.
 - Added a site-wide password gate (`server/src/siteAuth.ts`) via HTTP Basic Auth, controlled by a new `SITE_PASSWORD` env var. Chose Basic Auth specifically because browsers cache the credentials per-origin and attach them to every subsequent request including the React app's `fetch()` calls — no frontend changes or login page needed. Deliberately mounted `/webhooks/*` *before* the gate so Meta's server-to-server webhook POSTs (which can't provide the password) keep working; gate disables itself entirely if `SITE_PASSWORD` is unset, so local dev is unaffected. Smoke-tested all four cases (no creds, wrong password, correct password, webhook bypass) against a running server.
+- Real DM still didn't arrive after redeploying off ngrok, on the real production domain, with correctly-registered/verified webhook config — ruled out every remaining infra explanation. Confirmed via the Instagram app itself that the message landed in `@movewithsmooth`'s **primary inbox**, not Message Requests (an earlier hypothesis), so the message genuinely exists on Meta's side.
+- Built `server/src/sync.ts`: a pull-based alternative to the webhook, calling the Graph API's `GET /me/conversations` and message-detail endpoints directly with the account's own token — reasoned that even if push delivery is gated, a direct authenticated read should work regardless. Added `POST /auth/instagram/accounts/:id/sync` and a "Sync now" button per account in `AccountConnection.tsx`.
+- First sync attempt returned 0 conversations. Added raw-response logging rather than trusting the summarized count (same lesson as the earlier webhook-payload mistake) — revealed `{"data":[],"paging":{"next":"..."}}`: an empty page that still offers a next-page cursor, which isn't how real pagination behaves.
+- Extended the sync to follow pagination up to 5 pages. All 5 pages came back empty with `next` still populated on every single one — a real dataset does not behave this way; this is Meta returning an empty result shell on purpose, not real "no data."
+- **Root cause, confirmed by elimination**: real message content is inaccessible via both webhook push and direct API read while the app is in Development mode without Advanced Access — tester status only unlocks authentication and the synthetic "Test" payload tool, not actual message visibility either direction. This is not a bug in anything built here; App Review is the actual, only unlock. Flagged one untested, lower-priority hypothesis for later: conversations the app initiates first via the send API might behave differently than organic inbound-first ones (relevant to the real outreach-then-reply flow specifically) — not worth chasing further right now given Review is the sanctioned path and materials are already prepped.
 - Updated `docs/deploy-railway.md` to reflect the real steps taken (www + forwarding + TXT record, not the originally-assumed simple CNAME-at-root) and marked the deploy as done.
 - Debugged and fixed the webhook verification handshake failing with a 403: `server/.env` was stale (still had the pre-rewrite `INSTAGRAM_PAGE_ID`/`INSTAGRAM_PAGE_ACCESS_TOKEN` fields and an empty `INSTAGRAM_VERIFY_TOKEN`) from before the Instagram Login rewrite. Updated it to the current shape (`INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET`, `OAUTH_REDIRECT_URI`, `CLIENT_URL`, `INSTAGRAM_VERIFY_TOKEN`); `INSTAGRAM_APP_SECRET` still needs to be filled in by hand.
 - Also hit an unrelated port conflict: a background server instance I'd started earlier for testing was still holding port 4000, fighting the user's own `npm run dev` (tsx watch) for the port and causing a force-kill restart loop. Cleared it.
@@ -85,5 +88,6 @@
 - [Meta App Review submission notes](docs/meta-app-review-submission.md) — checklist, permissions, use-case description, and demo script for getting `instagram_business_manage_messages` to Advanced Access
 - [Railway deploy guide](docs/deploy-railway.md) — step-by-step: persistent volume, env vars, custom domain, updating Meta's URLs post-deploy; reflects the real www+forwarding+TXT-record path taken
 - [Site password gate](server/src/siteAuth.ts) — HTTP Basic Auth via `SITE_PASSWORD`, excludes `/webhooks/*`
+- [Conversation sync (pull-based)](server/src/sync.ts) — direct Graph API read as an alternative to webhook push; also the tool that confirmed real message access is Review-gated
 - [Worklog rules (Claude)](.claude/skills/worklog/SKILL.md) — how WORKLOG.md is maintained, for Claude Code
 - [Worklog rules (Copilot)](.github/copilot-instructions.md) — same rules, for GitHub Copilot Chat

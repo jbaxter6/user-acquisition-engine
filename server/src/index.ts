@@ -21,6 +21,15 @@ app.use(express.json());
 // servers, not a browser, and never carry the site password.
 app.use("/webhooks", webhooksRouter());
 
+// Also mounted before the gate: the privacy policy must be publicly
+// reachable for Meta's App Review process — a reviewer can't provide the
+// site password. `/privacy.html` is kept as an alias since it was the
+// original URL used during initial setup.
+const privacyHtmlPath = path.resolve(__dirname, "..", "..", "client", "public", "privacy.html");
+app.get(["/privacy", "/privacy.html"], (_req, res) => {
+  res.sendFile(privacyHtmlPath);
+});
+
 app.use(siteAuth());
 
 app.get("/api/health", (_req, res) => {

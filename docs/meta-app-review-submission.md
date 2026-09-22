@@ -12,7 +12,7 @@ directly into Meta's App Review form fields.
 ## Before submitting
 
 - [ ] Complete Business Verification in Meta Business Manager, if prompted (Advanced Access to messaging permissions may require it)
-- [ ] Privacy policy live at `https://movewithsmooth.com/privacy.html` (drafted — see `client/public/privacy.html`; publish before submitting)
+- [x] Privacy policy live at `https://www.movewithsmooth.com/privacy` (source: `client/public/privacy.html`, served publicly — ahead of the site password gate — via `server/src/index.ts`)
 - [ ] Terms of service URL, if Meta's form requires one (not yet drafted — flag if needed)
 - [ ] App icon, if required by the submission form
 - [ ] Screen recording demonstrating the permission in use (see script below) — record this yourself using the real running app
