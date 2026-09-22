@@ -39,10 +39,16 @@ export async function syncInstagramAccount(
   conversationsUrl.searchParams.set("access_token", account.access_token);
 
   const conversationsRes = await fetch(conversationsUrl);
+  const conversationsRaw = await conversationsRes.text();
+  console.log(
+    `Instagram conversations list for @${account.username} (ig_user_id=${account.ig_user_id}):`,
+    conversationsRes.status,
+    conversationsRaw
+  );
   if (!conversationsRes.ok) {
-    throw new Error(`listing conversations failed: ${await conversationsRes.text()}`);
+    throw new Error(`listing conversations failed: ${conversationsRaw}`);
   }
-  const { data: conversations } = (await conversationsRes.json()) as ConversationsListResponse;
+  const { data: conversations } = JSON.parse(conversationsRaw) as ConversationsListResponse;
 
   let newMessages = 0;
 
