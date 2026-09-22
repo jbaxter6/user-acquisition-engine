@@ -1,19 +1,21 @@
 # Work Log
 
 ## Todos
-- [ ] Confirm a real DM now shows up correctly in the inbox UI, linked to the right account, after the webhook payload-format fix
+- [ ] Complete Business Verification in Meta Business Manager if prompted during App Review
+- [ ] Publish `client/public/privacy.html` at `https://movewithsmooth.com/privacy.html` before submitting App Review
+- [ ] Record the App Review demo video per the script in `docs/meta-app-review-submission.md`
+- [ ] Submit App Review for `instagram_business_manage_messages` Advanced Access, using the drafted use-case description — decide on inbound-support framing given the README's cold-outreach caveat
+- [ ] Once approved and app is Live, confirm real (non-tester) DMs land in the inbox correctly
+- [ ] Tester-to-tester theory not yet confirmed: added a second account as tester, invite accepted, webhook Test button still works, but a real DM between the two testers still didn't arrive — needs more investigation (check Meta's own delivery/error log, check whether the DM landed in movewithsmooth's Instagram "Message Requests" queue instead of main inbox) once deployed off ngrok
+- [ ] Push repo to GitHub (if not already) and deploy to Railway per `docs/deploy-railway.md`
+- [ ] Add Railway persistent volume mounted at `/data`, set env vars (`DATA_DIR`, `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET`, `INSTAGRAM_VERIFY_TOKEN`, `OAUTH_REDIRECT_URI`, `CLIENT_URL`), and point `movewithsmooth.com` DNS at it
+- [ ] Update Meta's OAuth redirect URI and webhook Callback URL to the real domain once deployed, then reconnect Instagram account(s) (ngrok-era connections won't carry over to the new deploy's volume)
 - [ ] Once one account connects, add satellite accounts as Instagram Testers and connect each via "+ Connect another Instagram account"
-- [ ] Re-verify the webhook Callback URL in Meta's dashboard every time ngrok restarts with a new URL (confirmed this is a real recurring gotcha during this session)
-- [ ] Pass Meta App Review for `instagram_business_manage_messages` so accounts beyond registered testers can connect too (realistically may not pass given the cold-outreach use case — see README "Mass Distribution Layer" caveat)
 - [ ] If an existing whitelisted Twitch app/credentials exist, wire a real `TwitchAdapter` (same pattern as `InstagramAdapter`)
 - [ ] Choose scraping provider integration (e.g. Modash, Phantombuster) for the Discovery module
 - [ ] Design satellite account linking/config mechanism for the Distribution module (multiple connected accounts, not just one)
 - [ ] Add auth/login to the inbox app itself (currently unauthenticated, local-only)
 - [ ] Replace SQLite with a shared/hosted DB before multi-VA or production use
-- [ ] Fill in `INSTAGRAM_APP_SECRET` in `server/.env` (still blank as of last check) and restart the server before testing Connect/send
-- [ ] Re-verify the ngrok webhook URL each time ngrok restarts (free tier issues a new random URL per run) — update the Callback URL on Meta's webhook config each time during local dev
-- [ ] Click "Connect Instagram" for the main account (and each satellite, once tester invites are accepted) to confirm the OAuth flow works end-to-end
-- [ ] Send a real test message to a connected account and confirm it lands in the inbox via the webhook
 
 ## Accomplishments
 ### 2026-09-22
@@ -26,6 +28,19 @@
 - Account connected successfully, but no messages were arriving in the inbox. Root-caused via Meta's dashboard "Test" tool on the `messages` webhook field: connecting an account via OAuth does **not** automatically subscribe it to webhook events — each account needs an explicit `POST /{ig-user-id}/subscribed_apps?subscribed_fields=messages` call. Added that as an automatic step 4 in the connect flow (`server/src/routes/auth.ts`) so it happens for every account, including future satellites, without a manual step.
 - After fixing the subscription, the dashboard's "Test" payload revealed the webhook *payload format itself* was wrong in the handler: real Instagram webhook events arrive as `entry[].changes[].field === "messages"` with the message data nested under `value`, not the Messenger-style `entry[].messaging[]` array the code originally assumed. Rewrote `server/src/routes/webhooks.ts` to parse the correct shape.
 - Also diagnosed along the way: ngrok's free tier issues a new random URL on every restart, which silently breaks both the OAuth redirect and the webhook Callback URL until manually re-registered in Meta's dashboard — this tripped delivery more than once during testing.
+- Confirmed via the dashboard Test tool that the webhook pipeline works end-to-end (fake payload correctly created a conversation via `/api/conversations`), but a real DM sent from an unrelated ("random") account to the connected tester account never arrived — silent, no webhook log at all.
+- Diagnosed this as expected Development-mode behavior, not a bug: while the app isn't Live with `instagram_business_manage_messages` at Advanced Access, Instagram only delivers real messaging webhook events for conversations between accounts that are both registered on the app (testers/admins) — a random public account messaging in doesn't qualify. Confirmed with the user that the sender was in fact a non-tester account, matching the theory.
+- Explained the prod path: once the app is Live and the permission is approved via App Review, the connected account(s) receive events from any Instagram user, not just testers — the code doesn't change, only Meta's delivery gating does. Flagged that App Review evaluates the submitted use-case framing, and that this project's actual initiate-then-receive pattern is a real consideration there (separate from whether the receiving side itself is compliant).
+- Correction: the tester-to-tester theory above is **not yet confirmed**. User added the "random" sending account as a tester too (invite accepted), confirmed the webhook Test button still works, but a real DM between the two tester accounts still never arrived. Root cause still open — see Todos.
+- User picked `movewithsmooth.com` as the domain for the outreach engine/Smooth brand.
+- Drafted App Review prep materials: `client/public/privacy.html` (a real, publishable privacy policy page covering Instagram message data collection/use/retention/deletion, contact `jbaxdevs@gmail.com`) and `docs/meta-app-review-submission.md` (pre-submission checklist, requested permissions, a use-case description written in inbound-support framing to paste into Meta's review form, and a screen-recording demo script) — explicitly noted as a starting draft, not legal advice, and that the framing choice doesn't erase the outreach-initiation caveat already documented in `README.md`.
+- Decided to deploy to Railway, partly to eliminate the ngrok-URL-changes-on-restart problem that had been repeatedly breaking the OAuth redirect and webhook callback during local testing.
+- Reworked `server/src/index.ts` to serve the built React app (`client/dist`) as static files from the same Express process/origin as the API, with an SPA fallback to `index.html` for any route outside `/api`, `/webhooks`, `/auth` — avoids a second host, CORS, and a second URL to keep in sync with Meta's config.
+- Made the SQLite data directory configurable via `DATA_DIR` (`server/src/db.ts`), so a deploy can point it at a persistent volume instead of the ephemeral local `../data` folder.
+- Made the client's API base URL default to same-origin (`""`) instead of `http://localhost:4000` (`client/src/api/client.ts`), correct for the new single-origin production setup while local dev keeps working via `client/.env.local`.
+- Added a root `package.json` (build/start scripts orchestrating both `client` and `server`) and `railway.json` (build/start commands) for Railway's Nixpacks builder to pick up automatically.
+- Verified the full production build and start sequence locally end-to-end: `npm run build` at the root builds both apps cleanly, `npm run start` serves the API and the React app from one process on one port, including `/privacy.html`.
+- Wrote `docs/deploy-railway.md`: step-by-step Railway deploy guide (persistent volume, env vars, custom domain, updating Meta's redirect/webhook URLs to the real domain, and a note that ngrok-era connected accounts won't carry over to the new deploy).
 - Added an Instagram account-connection (OAuth) flow so the app itself can log in, instead of requiring a manually pasted page access token in `.env`: `server/src/routes/auth.ts` implements the Meta Login for Business dialog, code→token exchange, long-lived token exchange, and Page/Instagram Business Account lookup.
 - Added `instagram_account` table (`server/src/db.ts`) storing the connected account's page id/name and access token, so a connection persists across server restarts without re-authorizing.
 - `server/src/adapters/index.ts` now builds the Instagram adapter dynamically per-request from the stored account (falling back to `INSTAGRAM_PAGE_ID`/`INSTAGRAM_PAGE_ACCESS_TOKEN` env vars for manual local testing), so a new connection takes effect immediately without a restart.
@@ -60,5 +75,8 @@
 - [Instagram OAuth connect flow](server/src/routes/auth.ts) — Instagram Login (Business Login) OAuth: login/callback/accounts list/disconnect, supports multiple connected accounts
 - [Instagram Setup walkthrough](README.md) — steps to create the Meta developer app needed for the connect flow to work
 - [Inbox data model](server/src/db.ts) — SQLite schema for conversations/messages/connected accounts
+- [Privacy policy](client/public/privacy.html) — publishable page for `movewithsmooth.com/privacy.html`, drafted for Meta App Review
+- [Meta App Review submission notes](docs/meta-app-review-submission.md) — checklist, permissions, use-case description, and demo script for getting `instagram_business_manage_messages` to Advanced Access
+- [Railway deploy guide](docs/deploy-railway.md) — step-by-step: persistent volume, env vars, custom domain, updating Meta's URLs post-deploy
 - [Worklog rules (Claude)](.claude/skills/worklog/SKILL.md) — how WORKLOG.md is maintained, for Claude Code
 - [Worklog rules (Copilot)](.github/copilot-instructions.md) — same rules, for GitHub Copilot Chat
