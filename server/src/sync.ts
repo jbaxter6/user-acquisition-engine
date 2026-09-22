@@ -4,6 +4,7 @@ const GRAPH_API_VERSION = "v21.0";
 
 interface ConversationsListResponse {
   data: Array<{ id: string; updated_time: string }>;
+  paging?: { next?: string };
 }
 
 interface ConversationMessagesResponse {
@@ -34,21 +35,34 @@ function messageExists(externalMessageId: string): boolean {
 export async function syncInstagramAccount(
   account: AccountRow
 ): Promise<{ conversations: number; newMessages: number }> {
-  const conversationsUrl = new URL(`https://graph.instagram.com/${GRAPH_API_VERSION}/me/conversations`);
-  conversationsUrl.searchParams.set("platform", "instagram");
-  conversationsUrl.searchParams.set("access_token", account.access_token);
+  const firstUrl = new URL(`https://graph.instagram.com/${GRAPH_API_VERSION}/me/conversations`);
+  firstUrl.searchParams.set("platform", "instagram");
+  firstUrl.searchParams.set("access_token", account.access_token);
 
-  const conversationsRes = await fetch(conversationsUrl);
-  const conversationsRaw = await conversationsRes.text();
-  console.log(
-    `Instagram conversations list for @${account.username} (ig_user_id=${account.ig_user_id}):`,
-    conversationsRes.status,
-    conversationsRaw
-  );
-  if (!conversationsRes.ok) {
-    throw new Error(`listing conversations failed: ${conversationsRaw}`);
+  // The first page has come back empty while still reporting a `next`
+  // cursor in testing — follow pagination for a few pages rather than
+  // trusting an empty first page means there's nothing to find.
+  const conversations: Array<{ id: string; updated_time: string }> = [];
+  let nextUrl: string | undefined = firstUrl.toString();
+  let pageCount = 0;
+  const MAX_PAGES = 5;
+
+  while (nextUrl && pageCount < MAX_PAGES) {
+    pageCount++;
+    const pageRes = await fetch(nextUrl);
+    const pageRaw = await pageRes.text();
+    console.log(
+      `Instagram conversations page ${pageCount} for @${account.username} (ig_user_id=${account.ig_user_id}):`,
+      pageRes.status,
+      pageRaw
+    );
+    if (!pageRes.ok) {
+      throw new Error(`listing conversations failed: ${pageRaw}`);
+    }
+    const page = JSON.parse(pageRaw) as ConversationsListResponse;
+    conversations.push(...page.data);
+    nextUrl = page.paging?.next;
   }
-  const { data: conversations } = JSON.parse(conversationsRaw) as ConversationsListResponse;
 
   let newMessages = 0;
 
