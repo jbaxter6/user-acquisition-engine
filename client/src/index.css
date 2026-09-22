@@ -101,6 +101,11 @@ body {
   gap: 8px;
 }
 
+.account-connection__actions {
+  display: flex;
+  gap: 6px;
+}
+
 .connect-btn {
   background: var(--accent);
   color: white;

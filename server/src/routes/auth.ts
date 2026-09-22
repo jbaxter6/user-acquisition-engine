@@ -1,6 +1,7 @@
 import { Router } from "express";
 import crypto from "node:crypto";
-import { deleteAccount, listAccounts, upsertAccount } from "../db.js";
+import { deleteAccount, getAccountById, listAccounts, upsertAccount } from "../db.js";
+import { syncInstagramAccount } from "../sync.js";
 
 const GRAPH_API_VERSION = "v21.0";
 const STATE_TTL_MS = 10 * 60 * 1000;
@@ -67,6 +68,22 @@ export function authRouter(): Router {
   router.delete("/instagram/accounts/:id", (req, res) => {
     deleteAccount(Number(req.params.id));
     res.json({ ok: true });
+  });
+
+  // Pulls conversation/message history directly via the Graph API,
+  // independent of webhook push — see server/src/sync.ts for why this
+  // exists (webhook delivery appears gated behind App Review even for
+  // tester-to-tester conversations).
+  router.post("/instagram/accounts/:id/sync", async (req, res) => {
+    const account = getAccountById(Number(req.params.id));
+    if (!account) return res.status(404).json({ error: "account not found" });
+
+    try {
+      const result = await syncInstagramAccount(account);
+      res.json(result);
+    } catch (err) {
+      res.status(502).json({ error: (err as Error).message });
+    }
   });
 
   // Kicks off the OAuth dialog. Call repeatedly — once per satellite

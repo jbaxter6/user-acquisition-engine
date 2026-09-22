@@ -28,6 +28,11 @@ export const api = {
   disconnectInstagramAccount: (id: number) =>
     request<{ ok: true }>(`/auth/instagram/accounts/${id}`, { method: "DELETE" }),
 
+  syncInstagramAccount: (id: number) =>
+    request<{ conversations: number; newMessages: number }>(`/auth/instagram/accounts/${id}/sync`, {
+      method: "POST",
+    }),
+
   listConversations: (platform?: Platform) =>
     request<Conversation[]>(`/api/conversations${platform ? `?platform=${platform}` : ""}`),
 

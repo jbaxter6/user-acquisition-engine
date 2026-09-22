@@ -10,6 +10,7 @@ interface Props {
 export function AccountConnection({ accounts, onChange }: Props) {
   const [banner, setBanner] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  const [syncingId, setSyncingId] = useState<number | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -29,6 +30,19 @@ export function AccountConnection({ accounts, onChange }: Props) {
     onChange();
   };
 
+  const handleSync = async (id: number) => {
+    setSyncingId(id);
+    try {
+      const result = await api.syncInstagramAccount(id);
+      setBanner(`Synced: ${result.conversations} conversation(s), ${result.newMessages} new message(s).`);
+      onChange();
+    } catch (err) {
+      setBanner(`Sync failed: ${String(err)}`);
+    } finally {
+      setSyncingId(null);
+    }
+  };
+
   return (
     <div className="account-connection">
       <button className="secondary" onClick={() => setOpen((o) => !o)}>
@@ -42,9 +56,14 @@ export function AccountConnection({ accounts, onChange }: Props) {
             {accounts.map((a) => (
               <li key={a.id}>
                 <span>@{a.username ?? a.igUserId}</span>
-                <button className="secondary" onClick={() => handleDisconnect(a.id)}>
-                  Disconnect
-                </button>
+                <span className="account-connection__actions">
+                  <button className="secondary" onClick={() => handleSync(a.id)} disabled={syncingId === a.id}>
+                    {syncingId === a.id ? "Syncing..." : "Sync now"}
+                  </button>
+                  <button className="secondary" onClick={() => handleDisconnect(a.id)}>
+                    Disconnect
+                  </button>
+                </span>
               </li>
             ))}
           </ul>
