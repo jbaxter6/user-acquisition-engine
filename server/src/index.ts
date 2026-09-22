@@ -8,6 +8,7 @@ import { instagramAccountCount } from "./adapters/index.js";
 import { conversationsRouter } from "./routes/conversations.js";
 import { webhooksRouter } from "./routes/webhooks.js";
 import { authRouter } from "./routes/auth.js";
+import { siteAuth } from "./siteAuth.js";
 import "./db.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -15,6 +16,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Mounted before the password gate: Meta's webhook POSTs come from their
+// servers, not a browser, and never carry the site password.
+app.use("/webhooks", webhooksRouter());
+
+app.use(siteAuth());
 
 app.get("/api/health", (_req, res) => {
   const connectedInstagramAccounts = instagramAccountCount();
@@ -29,7 +36,6 @@ app.get("/api/health", (_req, res) => {
 });
 
 app.use("/api/conversations", conversationsRouter());
-app.use("/webhooks", webhooksRouter());
 app.use("/auth", authRouter());
 
 // In production, serve the built React app from the same origin/process —
