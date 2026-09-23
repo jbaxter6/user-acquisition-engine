@@ -59,6 +59,17 @@ export interface MessageTemplateStats {
   replied: number;
   reply_rate: number;
   avg_response_hours: number | null;
+  conversations: TemplateConversation[];
+}
+
+export interface TemplateConversation {
+  id: number;
+  platform: Platform;
+  participant_handle: string;
+  participant_name: string | null;
+  sent_at: string;
+  replied: boolean;
+  response_hours: number | null;
 }
 
 export interface ProspectContact {

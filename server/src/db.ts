@@ -1173,6 +1173,17 @@ export interface MessageTemplateStats {
   replied: number;
   reply_rate: number;
   avg_response_hours: number | null;
+  conversations: TemplateConversation[];
+}
+
+export interface TemplateConversation {
+  id: number;
+  platform: string;
+  participant_handle: string;
+  participant_name: string | null;
+  sent_at: string;
+  replied: boolean;
+  response_hours: number | null;
 }
 
 const TOKEN_RE = /\{\{\s*[\w.]+\s*\}\}/g;
@@ -1237,10 +1248,37 @@ export function getMessageTemplateStats(): MessageTemplateStats[] {
     else byConversation.set(m.conversation_id, [m]);
   }
 
+  const conversationInfo = new Map(
+    db
+      .prepare<
+        [],
+        {
+          id: number;
+          platform: string;
+          participant_handle: string;
+          participant_name: string | null;
+        }
+      >(
+        "SELECT id, platform, participant_handle, participant_name FROM conversations",
+      )
+      .all()
+      .map((c) => [c.id, c]),
+  );
+
   const totals = new Map<
     number,
-    { sent: number; replied: number; responseHours: number[] }
-  >(templates.map((t) => [t.id, { sent: 0, replied: 0, responseHours: [] }]));
+    {
+      sent: number;
+      replied: number;
+      responseHours: number[];
+      conversations: TemplateConversation[];
+    }
+  >(
+    templates.map((t) => [
+      t.id,
+      { sent: 0, replied: 0, responseHours: [], conversations: [] },
+    ]),
+  );
 
   for (const thread of byConversation.values()) {
     // One count per template per thread: the first matching outbound message.
@@ -1267,12 +1305,28 @@ export function getMessageTemplateStats(): MessageTemplateStats[] {
       const total = totals.get(matchId)!;
       total.sent++;
       const reply = thread.slice(index + 1).find((r) => r.direction === "inbound");
+      let responseHours: number | null = null;
       if (reply) {
         total.replied++;
         const hours =
           (parseSqliteUtc(reply.created_at) - parseSqliteUtc(m.created_at)) /
           3_600_000;
-        if (Number.isFinite(hours)) total.responseHours.push(Math.max(0, hours));
+        if (Number.isFinite(hours)) {
+          responseHours = Math.max(0, hours);
+          total.responseHours.push(responseHours);
+        }
+      }
+      const info = conversationInfo.get(m.conversation_id);
+      if (info) {
+        total.conversations.push({
+          id: info.id,
+          platform: info.platform,
+          participant_handle: info.participant_handle,
+          participant_name: info.participant_name,
+          sent_at: m.created_at,
+          replied: reply != null,
+          response_hours: responseHours,
+        });
       }
     });
   }
@@ -1291,6 +1345,9 @@ export function getMessageTemplateStats(): MessageTemplateStats[] {
         ? total.responseHours.reduce((a, b) => a + b, 0) /
           total.responseHours.length
         : null,
+      conversations: total.conversations.sort((a, b) =>
+        b.sent_at.localeCompare(a.sent_at),
+      ),
     };
   });
 }

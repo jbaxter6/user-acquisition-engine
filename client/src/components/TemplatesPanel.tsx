@@ -2,7 +2,16 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import type { MessageTemplateStats } from "../types";
-import { IconPlus, IconSearch, IconTag, IconX } from "./icons";
+import {
+  IconChevronDown,
+  IconMoreVertical,
+  IconPlus,
+  IconSearch,
+  IconTag,
+  IconX,
+} from "./icons";
+import { PlatformBadge } from "./PlatformBadge";
+import { formatRelativeTime } from "../lib/relativeTime";
 
 type Filter = "all" | "top" | "drafts";
 type SortKey = "hit" | "newest" | "sent";
@@ -55,6 +64,7 @@ export function TemplatesPanel() {
   const [filter, setFilter] = useState<Filter>("all");
   const [sort, setSort] = useState<SortKey>("hit");
   const [menuId, setMenuId] = useState<number | null>(null);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [name, setName] = useState("");
@@ -217,13 +227,13 @@ export function TemplatesPanel() {
             className={filter === "all" ? "tpl-tab tpl-tab--active" : "tpl-tab"}
             onClick={() => setFilter("all")}
           >
-            All Pitches ({active.length})
+            All Pitches <span className="tpl-tab__count">{active.length}</span>
           </button>
           <button
             className={filter === "top" ? "tpl-tab tpl-tab--active" : "tpl-tab"}
             onClick={() => setFilter("top")}
           >
-            🔥 Top Performers ({topCount})
+            Top Performers <span className="tpl-tab__count">{topCount}</span>
           </button>
           <button
             className={
@@ -231,7 +241,7 @@ export function TemplatesPanel() {
             }
             onClick={() => setFilter("drafts")}
           >
-            New Drafts ({draftCount})
+            New Drafts <span className="tpl-tab__count">{draftCount}</span>
           </button>
         </div>
 
@@ -247,6 +257,7 @@ export function TemplatesPanel() {
               </option>
             ))}
           </select>
+          <IconChevronDown size={14} />
         </label>
       </section>
 
@@ -280,7 +291,7 @@ export function TemplatesPanel() {
                         setMenuId(menuId === t.id ? null : t.id);
                       }}
                     >
-                      ⋮
+                      <IconMoreVertical size={16} />
                     </button>
                     {menuId === t.id && (
                       <div
@@ -359,6 +370,64 @@ export function TemplatesPanel() {
                     />
                   </div>
                 </div>
+
+                {t.conversations.length > 0 && (
+                  <button
+                    className="tpl-convos-toggle"
+                    onClick={() =>
+                      setExpandedId(expandedId === t.id ? null : t.id)
+                    }
+                  >
+                    <span>
+                      {expandedId === t.id ? "Hide" : "View"} conversations (
+                      {t.conversations.length})
+                    </span>
+                    <span
+                      className={
+                        expandedId === t.id
+                          ? "tpl-convos-toggle__chev tpl-convos-toggle__chev--open"
+                          : "tpl-convos-toggle__chev"
+                      }
+                    >
+                      <IconChevronDown size={15} />
+                    </span>
+                  </button>
+                )}
+
+                {expandedId === t.id && (
+                  <ul className="tpl-convos">
+                    {t.conversations.map((c) => (
+                      <li key={c.id}>
+                        <button
+                          className="tpl-convo"
+                          onClick={() =>
+                            navigate(`/inbox?conversationId=${c.id}`)
+                          }
+                          title="Open in inbox"
+                        >
+                          <PlatformBadge platform={c.platform} />
+                          <span className="tpl-convo__who">
+                            {c.participant_name || `@${c.participant_handle}`}
+                          </span>
+                          <span className="tpl-convo__when">
+                            {formatRelativeTime(c.sent_at)}
+                          </span>
+                          <span
+                            className={
+                              c.replied
+                                ? "tpl-convo__status tpl-convo__status--yes"
+                                : "tpl-convo__status"
+                            }
+                          >
+                            {c.replied
+                              ? `Replied${c.response_hours != null ? ` · ${formatHours(c.response_hours)}` : ""}`
+                              : "No reply"}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
 
                 <div className="tpl-card__actions">
                   {t.sent === 0 ? (
