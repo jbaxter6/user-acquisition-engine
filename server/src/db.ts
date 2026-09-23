@@ -988,6 +988,22 @@ export function findConversationByHandle(
     .get(platform, normalized);
 }
 
+export function getFirstOutboundMessage(
+  conversationId: number,
+): { text: string; created_at: string } | undefined {
+  return db
+    .prepare<
+      [number],
+      { text: string; created_at: string }
+    >(
+      `SELECT text, created_at FROM messages
+       WHERE conversation_id = ? AND direction = 'outbound'
+       ORDER BY created_at ASC, id ASC
+       LIMIT 1`,
+    )
+    .get(conversationId);
+}
+
 export function updateConversationAvatar(
   conversationId: number,
   avatarUrl: string,

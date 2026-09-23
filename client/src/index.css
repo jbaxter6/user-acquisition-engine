@@ -1784,3 +1784,31 @@ button:disabled {
     flex: 1;
   }
 }
+
+.prospect-card__existing-thread {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.prospect-card__existing-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+}
+
+.prospect-card__initial-message {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--panel-alt);
+  border: 1px solid var(--border);
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  color: var(--text);
+}
+
+.prospect-card__initial-message--empty {
+  color: var(--text-dim);
+}

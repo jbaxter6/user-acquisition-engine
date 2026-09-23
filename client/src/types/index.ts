@@ -110,6 +110,7 @@ export interface Prospect {
   // already-existing conversation matched by handle (e.g. synced from a
   // webhook). Prefer this over conversation_id for "does a thread exist."
   existing_conversation_id?: number | null;
+  first_outbound_message?: { text: string; created_at: string } | null;
   created_at: string;
   contacted_at: string | null;
   contacts?: ProspectContact[];

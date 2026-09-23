@@ -5,6 +5,7 @@ import {
   ensureProspectForParticipant,
   findConversationByHandle,
   getAccountById,
+  getFirstOutboundMessage,
   getProspectById,
   insertMessage,
   linkProspectChannel,
@@ -34,20 +35,27 @@ export function prospectsRouter(): Router {
     };
     const prospects = listProspects({ platform, status });
     res.json(
-      prospects.map((prospect) => ({
-        ...prospect,
-        channels: listProspectChannels(prospect.id),
-        contacts: listProspectContacts(prospect.id),
-        links: listProspectLinks(prospect.id),
+      prospects.map((prospect) => {
         // Catches a prospect who already has a real inbox thread (e.g.
         // synced from a webhook under their resolved platform ID) even
         // though prospect.conversation_id is only set once they've been
         // "contacted" through this pipeline specifically.
-        existing_conversation_id:
+        const existingConversationId =
           prospect.conversation_id ??
           findConversationByHandle(prospect.platform, prospect.username)?.id ??
-          null,
-      })),
+          null;
+        return {
+          ...prospect,
+          channels: listProspectChannels(prospect.id),
+          contacts: listProspectContacts(prospect.id),
+          links: listProspectLinks(prospect.id),
+          existing_conversation_id: existingConversationId,
+          first_outbound_message:
+            existingConversationId != null
+              ? (getFirstOutboundMessage(existingConversationId) ?? null)
+              : null,
+        };
+      }),
     );
   });
 

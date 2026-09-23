@@ -834,17 +834,6 @@ function ProspectCard({
 
       {tab === "outreach" ? (
         <div className="prospect-card__outreach">
-          {existingConversationId != null && (
-            <div className="prospect-card__existing-thread">
-              <span>You already have a thread with @{prospect.username}.</span>
-              <button
-                className="secondary"
-                onClick={() => navigate(`/inbox?conversationId=${existingConversationId}`)}
-              >
-                Continue in inbox
-              </button>
-            </div>
-          )}
           {prospect.followers != null && (
             <p className="prospect-card__meta">
               {prospect.followers.toLocaleString()} followers
@@ -854,6 +843,33 @@ function ProspectCard({
             <p className="prospect-card__notes">{prospect.notes}</p>
           )}
 
+          {existingConversationId != null ? (
+            <div className="prospect-card__existing-thread">
+              <span className="prospect-card__existing-label">
+                Initial outbound message
+                {prospect.first_outbound_message &&
+                  ` · ${formatRelativeTime(prospect.first_outbound_message.created_at)}`}
+              </span>
+              {prospect.first_outbound_message ? (
+                <p className="prospect-card__initial-message">
+                  {prospect.first_outbound_message.text}
+                </p>
+              ) : (
+                <p className="prospect-card__initial-message prospect-card__initial-message--empty">
+                  No outbound message yet — they messaged you first.
+                </p>
+              )}
+              <button
+                className="prospect-card__cta"
+                onClick={() =>
+                  navigate(`/inbox?conversationId=${existingConversationId}`)
+                }
+              >
+                Continue in inbox
+              </button>
+            </div>
+          ) : (
+            <>
           {templates.length > 0 ? (
             <label className="prospect-card__field">
               <span>Message template</span>
@@ -937,6 +953,8 @@ function ProspectCard({
               No {prospect.platform} account integration yet — send from that
               platform's app directly.
             </p>
+          )}
+            </>
           )}
         </div>
       ) : (
