@@ -93,7 +93,7 @@ export default function App() {
 
       {error && <div className="app__error">{error}</div>}
 
-      <div className="app__body">
+      <div className={selectedId != null ? "app__body app__body--thread-open" : "app__body"}>
         <aside className="app__sidebar">
           <ConversationList
             conversations={conversations}
@@ -115,6 +115,7 @@ export default function App() {
             }
             accountLabel={accountLabel}
             onSend={handleSend}
+            onBack={() => setSelectedId(null)}
           />
         </main>
       </div>

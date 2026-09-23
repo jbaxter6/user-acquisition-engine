@@ -27,6 +27,7 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  height: 100dvh;
 }
 
 .app__header {
@@ -104,6 +105,31 @@ body {
 .account-connection__actions {
   display: flex;
   gap: 6px;
+}
+
+.account-connection__identity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.avatar {
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.avatar--fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent);
+  color: white;
+  font-weight: 700;
 }
 
 .connect-btn {
@@ -230,10 +256,23 @@ body {
   opacity: 0.8;
 }
 
+.thread-view__header-left {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
 .thread-view__header-right {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
+}
+
+.thread-view__back {
+  display: none;
+  flex-shrink: 0;
+  margin-right: 8px;
 }
 
 .thread-view__account {
@@ -431,4 +470,63 @@ button:disabled {
   font-size: 12px;
   color: var(--text-dim);
   margin: 0;
+}
+
+@media (max-width: 720px) {
+  .app__header {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .app__header h1 {
+    font-size: 15px;
+  }
+
+  .app__health {
+    display: none;
+  }
+
+  .account-connection__panel {
+    right: -12px;
+    max-width: calc(100vw - 24px);
+  }
+
+  /* Single-pane mobile layout: show the conversation list OR the thread,
+     never both — toggled by whether a conversation is selected. */
+  .app__sidebar,
+  .app__main {
+    width: 100%;
+  }
+
+  .app__body:not(.app__body--thread-open) .app__main {
+    display: none;
+  }
+
+  .app__body.app__body--thread-open .app__sidebar {
+    display: none;
+  }
+
+  .thread-view__back {
+    display: inline-flex;
+  }
+
+  .thread-view__header,
+  .thread-view__messages,
+  .thread-view__composer {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .message {
+    max-width: 85%;
+  }
+
+  .conversation-list__filters {
+    flex-wrap: wrap;
+  }
+
+  /* Bigger touch targets on mobile. */
+  button {
+    padding: 9px 14px;
+  }
 }

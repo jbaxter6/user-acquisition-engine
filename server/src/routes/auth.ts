@@ -49,6 +49,7 @@ interface LongLivedTokenResponse {
 interface ProfileResponse {
   user_id: string;
   username: string;
+  profile_picture_url?: string;
 }
 
 export function authRouter(): Router {
@@ -60,6 +61,7 @@ export function authRouter(): Router {
       id: a.id,
       username: a.username,
       igUserId: a.ig_user_id,
+      profilePictureUrl: a.profile_picture_url,
       connectedAt: a.connected_at,
     }));
     res.json(accounts);
@@ -163,15 +165,20 @@ export function authRouter(): Router {
       if (!longLivedRes.ok) throw new Error(`token exchange failed: ${await longLivedRes.text()}`);
       const { access_token: longLivedToken } = (await longLivedRes.json()) as LongLivedTokenResponse;
 
-      // 3. Look up the connected account's own profile (id + username).
+      // 3. Look up the connected account's own profile (id, username, avatar).
       const profileUrl = new URL(`https://graph.instagram.com/${GRAPH_API_VERSION}/me`);
-      profileUrl.searchParams.set("fields", "user_id,username");
+      profileUrl.searchParams.set("fields", "user_id,username,profile_picture_url");
       profileUrl.searchParams.set("access_token", longLivedToken);
       const profileRes = await fetch(profileUrl);
       if (!profileRes.ok) throw new Error(`profile lookup failed: ${await profileRes.text()}`);
       const profile = (await profileRes.json()) as ProfileResponse;
 
-      upsertAccount({ igUserId: profile.user_id, username: profile.username, accessToken: longLivedToken });
+      upsertAccount({
+        igUserId: profile.user_id,
+        username: profile.username,
+        profilePictureUrl: profile.profile_picture_url,
+        accessToken: longLivedToken,
+      });
 
       // 4. Subscribe this specific account to webhook events. Configuring a
       // callback URL at the app level (dashboard step 3) is not enough —

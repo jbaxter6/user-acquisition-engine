@@ -31,5 +31,6 @@ export interface InstagramAccount {
   id: number;
   username: string | null;
   igUserId: string;
+  profilePictureUrl: string | null;
   connectedAt: string;
 }

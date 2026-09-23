@@ -1,4 +1,4 @@
-import { db, insertMessage, upsertConversation, type AccountRow } from "./db.js";
+import { db, insertMessage, upsertAccount, upsertConversation, type AccountRow } from "./db.js";
 
 const GRAPH_API_VERSION = "v21.0";
 
@@ -35,6 +35,23 @@ function messageExists(externalMessageId: string): boolean {
 export async function syncInstagramAccount(
   account: AccountRow
 ): Promise<{ conversations: number; newMessages: number }> {
+  // Opportunistically refresh the avatar/username for accounts connected
+  // before profile_picture_url was tracked, since we're already spending
+  // an API call on this account anyway.
+  const profileUrl = new URL(`https://graph.instagram.com/${GRAPH_API_VERSION}/me`);
+  profileUrl.searchParams.set("fields", "user_id,username,profile_picture_url");
+  profileUrl.searchParams.set("access_token", account.access_token);
+  const profileRes = await fetch(profileUrl);
+  if (profileRes.ok) {
+    const profile = (await profileRes.json()) as { username?: string; profile_picture_url?: string };
+    upsertAccount({
+      igUserId: account.ig_user_id,
+      username: profile.username ?? account.username ?? undefined,
+      profilePictureUrl: profile.profile_picture_url,
+      accessToken: account.access_token,
+    });
+  }
+
   const firstUrl = new URL(`https://graph.instagram.com/${GRAPH_API_VERSION}/me/conversations`);
   firstUrl.searchParams.set("platform", "instagram");
   firstUrl.searchParams.set("access_token", account.access_token);

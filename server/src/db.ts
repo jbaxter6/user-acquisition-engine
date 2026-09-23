@@ -54,11 +54,22 @@ db.exec(`
   );
 `);
 
+// Lightweight migration for a column added after the table already existed
+// in deployed databases — CREATE TABLE IF NOT EXISTS above doesn't touch
+// existing tables. Safe to run every startup: ignores the "duplicate
+// column" error on subsequent runs.
+try {
+  db.exec("ALTER TABLE accounts ADD COLUMN profile_picture_url TEXT");
+} catch (err) {
+  if (!(err instanceof Error) || !err.message.includes("duplicate column")) throw err;
+}
+
 export interface AccountRow {
   id: number;
   platform: string;
   ig_user_id: string;
   username: string | null;
+  profile_picture_url: string | null;
   access_token: string;
   connected_at: string;
 }
@@ -101,14 +112,20 @@ export function getAccountByIgUserId(igUserId: string): AccountRow | undefined {
     .get(igUserId);
 }
 
-export function upsertAccount(input: { igUserId: string; username?: string; accessToken: string }): AccountRow {
+export function upsertAccount(input: {
+  igUserId: string;
+  username?: string;
+  profilePictureUrl?: string;
+  accessToken: string;
+}): AccountRow {
   db.prepare(
-    `INSERT INTO accounts (platform, ig_user_id, username, access_token)
-     VALUES ('instagram', ?, ?, ?)
+    `INSERT INTO accounts (platform, ig_user_id, username, profile_picture_url, access_token)
+     VALUES ('instagram', ?, ?, ?, ?)
      ON CONFLICT(platform, ig_user_id) DO UPDATE SET
        username = excluded.username,
+       profile_picture_url = excluded.profile_picture_url,
        access_token = excluded.access_token`
-  ).run(input.igUserId, input.username ?? null, input.accessToken);
+  ).run(input.igUserId, input.username ?? null, input.profilePictureUrl ?? null, input.accessToken);
 
   return getAccountByIgUserId(input.igUserId)!;
 }

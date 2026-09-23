@@ -8,9 +8,10 @@ interface Props {
   canSend: boolean;
   accountLabel: (accountId: number | null) => string | null;
   onSend: (text: string) => Promise<void>;
+  onBack: () => void;
 }
 
-export function ThreadView({ conversation, messages, canSend, accountLabel, onSend }: Props) {
+export function ThreadView({ conversation, messages, canSend, accountLabel, onSend, onBack }: Props) {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
 
@@ -36,9 +37,14 @@ export function ThreadView({ conversation, messages, canSend, accountLabel, onSe
   return (
     <div className="thread-view">
       <div className="thread-view__header">
-        <div>
-          <h2>{conversation.participant_name || conversation.participant_handle}</h2>
-          <span className="thread-view__handle">{conversation.participant_handle}</span>
+        <div className="thread-view__header-left">
+          <button className="thread-view__back secondary" onClick={onBack} aria-label="Back to conversations">
+            ← Back
+          </button>
+          <div>
+            <h2>{conversation.participant_name || conversation.participant_handle}</h2>
+            <span className="thread-view__handle">{conversation.participant_handle}</span>
+          </div>
         </div>
         <div className="thread-view__header-right">
           {accountLabel(conversation.account_id) && (

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
+import { Avatar } from "./Avatar";
 import type { InstagramAccount } from "../types";
 
 interface Props {
@@ -55,7 +56,10 @@ export function AccountConnection({ accounts, onChange }: Props) {
           <ul className="account-connection__list">
             {accounts.map((a) => (
               <li key={a.id}>
-                <span>@{a.username ?? a.igUserId}</span>
+                <span className="account-connection__identity">
+                  <Avatar src={a.profilePictureUrl} label={a.username ?? a.igUserId} />
+                  @{a.username ?? a.igUserId}
+                </span>
                 <span className="account-connection__actions">
                   <button className="secondary" onClick={() => handleSync(a.id)} disabled={syncingId === a.id}>
                     {syncingId === a.id ? "Syncing..." : "Sync now"}
