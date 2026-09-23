@@ -425,14 +425,23 @@ function ProspectCard({
     // If user chose to use browser session, open Instagram DM right away
     if (useBrowserSession) {
       const username = prospect.username?.replace(/^@/, "");
-      if (username) window.open(`https://ig.me/m/${username}`, "_blank", "noopener,noreferrer");
+      if (username)
+        window.open(
+          `https://ig.me/m/${username}`,
+          "_blank",
+          "noopener,noreferrer",
+        );
     }
   };
 
   const startDetectBrowserUsername = () => {
     // open Instagram in a new tab and wait for a postMessage from a bookmarklet
     setDetectionListening(true);
-    const w = window.open("https://www.instagram.com", "_blank", "noopener,noreferrer");
+    const w = window.open(
+      "https://www.instagram.com",
+      "_blank",
+      "noopener,noreferrer",
+    );
     // keep reference unused; user will run bookmarklet on that page to postMessage back
   };
 
@@ -486,7 +495,6 @@ function ProspectCard({
           {prospect.status}
         </span>
       </div>
-
       {prospect.followers != null && (
         <p className="prospect-card__meta">
           {prospect.followers.toLocaleString()} followers
@@ -495,7 +503,6 @@ function ProspectCard({
       {prospect.notes && (
         <p className="prospect-card__notes">{prospect.notes}</p>
       )}
-
       {prospect.channels && prospect.channels.length > 0 && (
         <div className="prospect-card__channels">
           {prospect.channels.map((channel) => (
@@ -517,7 +524,6 @@ function ProspectCard({
           ))}
         </div>
       )}
-
       {prospect.contacts && prospect.contacts.length > 0 && (
         <div className="prospect-card__contacts">
           {prospect.contacts.map((contact) => (
@@ -528,7 +534,7 @@ function ProspectCard({
           ))}
         </div>
       )}
-
+      yoooooyoyoyoy
       <div className="prospect-card__contact-actions">
         {!addingContact ? (
           <button className="secondary" onClick={() => setAddingContact(true)}>
@@ -574,14 +580,10 @@ function ProspectCard({
           </div>
         )}
       </div>
-
       {prospect.status === "new" && (
         <>
           {!composing ? (
-            <button
-              onClick={handleOpenComposer}
-              disabled={!canOpenComposer}
-            >
+            <button onClick={handleOpenComposer} disabled={!canOpenComposer}>
               {!canOpenComposer ? "Connect an account first" : "Message"}
             </button>
           ) : (
@@ -604,7 +606,14 @@ function ProspectCard({
                 </p>
               )}
               {isInstagram && (
-                <label style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: 8 }}>
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    marginTop: 8,
+                  }}
+                >
                   <input
                     type="checkbox"
                     checked={useBrowserSession}
@@ -616,13 +625,22 @@ function ProspectCard({
                 </label>
               )}
               {isInstagram && (
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    marginTop: 8,
+                  }}
+                >
                   <button
                     className="secondary"
                     onClick={startDetectBrowserUsername}
                     disabled={detectionListening}
                   >
-                    {detectionListening ? "Listening for username…" : "Detect browser username"}
+                    {detectionListening
+                      ? "Listening for username…"
+                      : "Detect browser username"}
                   </button>
                   {browserUsername && (
                     <>
@@ -707,7 +725,6 @@ function ProspectCard({
           )}
         </>
       )}
-
       {mergeTargets.length > 0 && (
         <div className="prospect-card__merge">
           <label className="prospect-card__merge-label">
