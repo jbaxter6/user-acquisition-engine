@@ -6,11 +6,15 @@ import {
   getAccountById,
   getProspectById,
   insertMessage,
+  linkProspectChannel,
+  linkProspectManager,
   listProspectChannels,
   listProspectContacts,
+  listProspectLinks,
   listProspects,
   markProspectContacted,
   mergeProspectIntoTarget,
+  unlinkProspects,
   upsertConversation,
   upsertProspectContact,
   type ProspectInput,
@@ -33,6 +37,7 @@ export function prospectsRouter(): Router {
         ...prospect,
         channels: listProspectChannels(prospect.id),
         contacts: listProspectContacts(prospect.id),
+        links: listProspectLinks(prospect.id),
       })),
     );
   });
@@ -201,6 +206,63 @@ export function prospectsRouter(): Router {
     res.status(201).json(contact);
   });
 
+  // Ties a platform/username to this prospect card as a "tied social
+  // profile." Both cards stay independent — see linkProspectChannel.
+  router.post("/:id/channels", (req, res) => {
+    const { platform, username } = req.body as {
+      platform?: string;
+      username?: string;
+    };
+    if (!platform?.trim() || !username?.trim()) {
+      return res.status(400).json({ error: "platform and username are required" });
+    }
+    const prospectId = Number(req.params.id);
+    try {
+      const linked = linkProspectChannel(prospectId, platform, username);
+      res.status(201).json({
+        ...linked,
+        channels: listProspectChannels(prospectId),
+        contacts: listProspectContacts(prospectId),
+        links: listProspectLinks(prospectId),
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "link failed";
+      res.status(400).json({ error: message });
+    }
+  });
+
+  // Ties a platform/username to this prospect card as a "connected
+  // manager/rep," labeled with a role — same non-merging linkage as
+  // /:id/channels above.
+  router.post("/:id/managers", (req, res) => {
+    const { platform, username, role } = req.body as {
+      platform?: string;
+      username?: string;
+      role?: string;
+    };
+    if (!platform?.trim() || !username?.trim()) {
+      return res.status(400).json({ error: "platform and username are required" });
+    }
+    const prospectId = Number(req.params.id);
+    try {
+      const linked = linkProspectManager(prospectId, platform, username, role ?? "manager");
+      res.status(201).json({
+        ...linked,
+        channels: listProspectChannels(prospectId),
+        contacts: listProspectContacts(prospectId),
+        links: listProspectLinks(prospectId),
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "link failed";
+      res.status(400).json({ error: message });
+    }
+  });
+
+  router.delete("/:id/links/:linkedId", (req, res) => {
+    unlinkProspects(Number(req.params.id), Number(req.params.linkedId));
+    res.json({ ok: true });
+  });
+
   router.post("/:id/merge", (req, res) => {
     const targetId = Number(req.body?.targetId ?? req.query?.targetId);
     const sourceId = Number(req.params.id);
@@ -216,6 +278,7 @@ export function prospectsRouter(): Router {
         ...merged,
         channels: listProspectChannels(targetId),
         contacts: listProspectContacts(targetId),
+        links: listProspectLinks(targetId),
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : "merge failed";

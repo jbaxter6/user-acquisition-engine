@@ -145,6 +145,23 @@ export const api = {
       body: JSON.stringify({ targetId }),
     }),
 
+  linkProspectChannel: (id: number, platform: string, username: string) =>
+    request<Prospect>(`/api/prospects/${id}/channels`, {
+      method: "POST",
+      body: JSON.stringify({ platform, username }),
+    }),
+
+  linkProspectManager: (id: number, platform: string, username: string, role: string) =>
+    request<Prospect>(`/api/prospects/${id}/managers`, {
+      method: "POST",
+      body: JSON.stringify({ platform, username, role }),
+    }),
+
+  unlinkProspect: (id: number, linkedId: number) =>
+    request<{ ok: true }>(`/api/prospects/${id}/links/${linkedId}`, {
+      method: "DELETE",
+    }),
+
   listTemplates: () => request<MessageTemplate[]>("/api/templates"),
 
   templateStats: () => request<MessageTemplateStats[]>("/api/templates/stats"),

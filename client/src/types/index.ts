@@ -82,6 +82,16 @@ export interface ProspectChannel {
   last_seen_at: string;
 }
 
+export interface ProspectLink {
+  id: number;
+  platform: Platform;
+  username: string;
+  display_name: string | null;
+  status: "new" | "contacted" | "replied" | "closed";
+  followers: number | null;
+  relationship: string;
+}
+
 export interface Prospect {
   id: number;
   platform: Platform;
@@ -99,4 +109,5 @@ export interface Prospect {
   contacted_at: string | null;
   contacts?: ProspectContact[];
   channels?: ProspectChannel[];
+  links?: ProspectLink[];
 }

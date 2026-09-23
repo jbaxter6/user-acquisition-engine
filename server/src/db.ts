@@ -119,6 +119,18 @@ for (const migration of [
     last_seen_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(prospect_id, platform, handle)
   )`,
+  // Ties two independently-existing prospect cards together (e.g. an
+  // Instagram card and that same person's TikTok card) without merging
+  // them — each stays visible/messageable on its own. Stored as a row in
+  // each direction so either side can list its links with a single query.
+  `CREATE TABLE IF NOT EXISTS prospect_links (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    prospect_id INTEGER NOT NULL REFERENCES prospects(id) ON DELETE CASCADE,
+    linked_prospect_id INTEGER NOT NULL REFERENCES prospects(id) ON DELETE CASCADE,
+    relationship TEXT NOT NULL DEFAULT 'linked',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(prospect_id, linked_prospect_id)
+  )`,
 ]) {
   try {
     db.exec(migration);
@@ -170,6 +182,31 @@ try {
   }
 } catch (err) {
   console.error("Duplicate message cleanup failed:", err);
+}
+
+// One-time migration (safe every startup): linkProspectManager originally
+// tagged the reverse direction of a manager/rep link as a plain "linked",
+// indistinguishable from a real tied social profile. Rewrites any such row
+// to "managed_by:<role>" so it surfaces under "Other Connections" instead —
+// matches nothing once already migrated.
+try {
+  db.prepare(
+    `UPDATE prospect_links
+     SET relationship = 'managed_by:' || (
+       SELECT rev.relationship FROM prospect_links rev
+       WHERE rev.prospect_id = prospect_links.linked_prospect_id
+         AND rev.linked_prospect_id = prospect_links.prospect_id
+     )
+     WHERE relationship = 'linked'
+       AND EXISTS (
+         SELECT 1 FROM prospect_links rev
+         WHERE rev.prospect_id = prospect_links.linked_prospect_id
+           AND rev.linked_prospect_id = prospect_links.prospect_id
+           AND rev.relationship IN ('manager', 'agent', 'assistant', 'owner', 'primary', 'other')
+       )`,
+  ).run();
+} catch (err) {
+  console.error("Manager-link reverse-relationship migration failed:", err);
 }
 
 export interface AccountRow {
@@ -624,6 +661,137 @@ export function mergeProspectIntoTarget(
 
   db.prepare("DELETE FROM prospects WHERE id = ?").run(sourceId);
   return getProspectById(targetId)!;
+}
+
+export interface ProspectLinkRow {
+  id: number;
+  platform: string;
+  username: string;
+  display_name: string | null;
+  status: string;
+  followers: number | null;
+  relationship: string;
+}
+
+export function listProspectLinks(prospectId: number): ProspectLinkRow[] {
+  return db
+    .prepare<
+      [number],
+      ProspectLinkRow
+    >(
+      `SELECT p.id, p.platform, p.username, p.display_name, p.status, p.followers, pl.relationship
+       FROM prospect_links pl
+       JOIN prospects p ON p.id = pl.linked_prospect_id
+       WHERE pl.prospect_id = ?
+       ORDER BY p.username ASC`,
+    )
+    .all(prospectId);
+}
+
+// Ties two prospect cards together as a relationship, not a merge — both
+// stay independently viewable/messageable. Stored in both directions so
+// either card's links can be read with a single query. `relationship`
+// labels the aId -> bId direction (e.g. "linked" for a tied social profile,
+// or a role like "manager" when bId represents a's manager); the reverse
+// defaults to a plain "linked" since b isn't necessarily a's own role-holder.
+export function linkProspects(
+  aId: number,
+  bId: number,
+  relationship = "linked",
+  reverseRelationship: string = relationship,
+): void {
+  if (aId === bId) return;
+  const insert = db.prepare(
+    `INSERT INTO prospect_links (prospect_id, linked_prospect_id, relationship)
+     VALUES (?, ?, ?)
+     ON CONFLICT(prospect_id, linked_prospect_id) DO UPDATE SET relationship = excluded.relationship`,
+  );
+  insert.run(aId, bId, relationship);
+  insert.run(bId, aId, reverseRelationship);
+}
+
+export function unlinkProspects(aId: number, bId: number): void {
+  db.prepare(
+    "DELETE FROM prospect_links WHERE (prospect_id = ? AND linked_prospect_id = ?) OR (prospect_id = ? AND linked_prospect_id = ?)",
+  ).run(aId, bId, bId, aId);
+}
+
+// Shared by linkProspectChannel/linkProspectManager: finds the prospect
+// card for a platform+username, creating a bare one first if it doesn't
+// exist yet — either way the two cards stay separate, just
+// cross-referenced via prospect_links.
+function resolveOrCreateLinkTarget(
+  target: ProspectRow,
+  platform: string,
+  username: string,
+): ProspectRow {
+  const normalizedPlatform = platform.trim().toLowerCase();
+  const normalizedUsername = username.trim().replace(/^@/, "");
+  if (!normalizedPlatform) throw new Error("platform is required");
+  if (!normalizedUsername) throw new Error("username is required");
+
+  if (
+    normalizedPlatform === target.platform &&
+    normalizedUsername.toLowerCase() === target.username.toLowerCase()
+  ) {
+    throw new Error("that's this prospect's own account");
+  }
+
+  let other = getProspectByUsername(normalizedPlatform, normalizedUsername);
+  if (other && other.id === target.id) {
+    throw new Error("that's this prospect's own account");
+  }
+
+  if (!other) {
+    const result = db
+      .prepare(
+        "INSERT INTO prospects (platform, username, source, status) VALUES (?, ?, 'manual_link', 'new')",
+      )
+      .run(normalizedPlatform, normalizedUsername);
+    other = getProspectById(result.lastInsertRowid as number)!;
+  }
+
+  return other;
+}
+
+// Ties another platform/username to an existing prospect card as a "tied
+// social profile" (relationship = "linked" both directions).
+export function linkProspectChannel(
+  prospectId: number,
+  platform: string,
+  username: string,
+): ProspectRow {
+  const target = getProspectById(prospectId);
+  if (!target) throw new Error("prospect not found");
+
+  const other = resolveOrCreateLinkTarget(target, platform, username);
+  linkProspects(prospectId, other.id);
+  return getProspectById(prospectId)!;
+}
+
+// Role labels linkProspectManager accepts — also used to tell a "connected
+// manager/rep" link apart from a plain "linked" tied social profile.
+export const MANAGER_ROLES = ["manager", "agent", "assistant", "owner", "primary", "other"];
+
+// Ties another platform/username to an existing prospect card as a
+// "connected manager/rep" — same non-destructive linkage, but labeled with
+// a role from this prospect's side. The reverse direction is tagged
+// "managed_by:<role>" (instead of a plain "linked") so the other card can
+// surface it under its own "Other Connections" section rather than
+// mistaking it for a tied social profile.
+export function linkProspectManager(
+  prospectId: number,
+  platform: string,
+  username: string,
+  role: string,
+): ProspectRow {
+  const target = getProspectById(prospectId);
+  if (!target) throw new Error("prospect not found");
+
+  const other = resolveOrCreateLinkTarget(target, platform, username);
+  const normalizedRole = MANAGER_ROLES.includes(role.trim()) ? role.trim() : "manager";
+  linkProspects(prospectId, other.id, normalizedRole, `managed_by:${normalizedRole}`);
+  return getProspectById(prospectId)!;
 }
 
 export function bulkInsertProspects(prospects: ProspectInput[]): number {
