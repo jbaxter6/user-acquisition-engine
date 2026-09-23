@@ -25,16 +25,18 @@ directly into Meta's App Review form fields.
 ## Use-case description (paste into the review form)
 
 > Our business uses the Instagram Messaging API to operate a centralized
-> support inbox for our Instagram Business account(s). When a creator,
-> partner, or member of the public sends a direct message to one of our
-> connected Instagram accounts, that message is displayed in our internal
-> dashboard, where a team member reviews it and replies directly through
-> the API. This lets our team manage and respond to inbound Instagram
-> messages consistently, in one place, instead of manually checking each
-> connected account's Instagram app individually. We do not use this
-> permission to send unsolicited messages — it is used to receive and
-> respond to messages initiated by the other party, within Meta's standard
-> messaging window and tag rules.
+> support inbox for our own Instagram Business account(s). This is an
+> internal tool used only by our own authorized team members and our own
+> connected accounts — it is not a public product or service offered to
+> other businesses. When a creator, partner, or member of the public sends
+> a direct message to one of our connected Instagram accounts, that
+> message is displayed in our internal dashboard, where a team member
+> reviews it and replies directly through the API. This lets our team
+> manage and respond to inbound Instagram messages consistently, in one
+> place, instead of manually checking each connected account's Instagram
+> app individually. We do not use this permission to send unsolicited
+> messages — it is used to receive and respond to messages initiated by
+> the other party, within Meta's standard messaging window and tag rules.
 
 ## Screen recording script
 

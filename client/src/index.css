@@ -127,8 +127,8 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--accent);
-  color: white;
+  background: #3a3f4b;
+  color: #c3c8d1;
   font-weight: 700;
 }
 
