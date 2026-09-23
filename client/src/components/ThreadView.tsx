@@ -49,6 +49,7 @@ export function ThreadView({ conversation, messages, canSend, accountFor, onSend
             src={conversation.participant_avatar_url}
             label={conversation.participant_name || conversation.participant_handle}
             size={36}
+            engaged={Boolean(conversation.has_engaged)}
           />
           <div>
             <h2>{conversation.participant_name || conversation.participant_handle}</h2>

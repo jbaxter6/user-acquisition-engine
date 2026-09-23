@@ -13,6 +13,10 @@ export interface Conversation {
   created_at: string;
   last_message_text?: string;
   last_message_direction?: "inbound" | "outbound";
+  // 0/1 from SQLite — whether the other party has ever actually messaged
+  // us (vs. outbound-only, us reaching out with no reply yet). Meta won't
+  // reveal their profile/avatar until they have — see Avatar's `engaged` prop.
+  has_engaged?: number;
 }
 
 export interface Message {

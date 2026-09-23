@@ -17,10 +17,16 @@ export function conversationsRouter(): Router {
     const platform = req.query.platform;
     // Correlated subqueries pull each conversation's most recent message
     // for a list-view preview, without a separate round trip per row.
+    // has_engaged: whether the other party has ever actually messaged us in
+    // this conversation, vs. it being outbound-only so far (we reached out,
+    // no reply yet). Meta won't hand over a participant's profile/avatar
+    // until they've engaged — see instagramProfile.ts — so the UI uses this
+    // to show "not yet engaged" instead of a normal missing-photo fallback.
     const selectWithPreview = `
       SELECT c.*,
         (SELECT m.text FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_message_text,
-        (SELECT m.direction FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_message_direction
+        (SELECT m.direction FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_message_direction,
+        EXISTS(SELECT 1 FROM messages m WHERE m.conversation_id = c.id AND m.direction = 'inbound') AS has_engaged
       FROM conversations c
     `;
     const rows = platform

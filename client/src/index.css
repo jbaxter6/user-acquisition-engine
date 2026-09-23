@@ -159,6 +159,14 @@ body {
   font-weight: 700;
 }
 
+/* Distinct from .avatar--fallback on purpose: an empty dashed ring reads as
+   "no info yet" rather than "here's who this is, just no photo." */
+.avatar--pending {
+  display: inline-block;
+  background: transparent;
+  border: 1.5px dashed var(--border);
+}
+
 .connect-btn {
   background: var(--accent);
   color: white;

@@ -114,6 +114,7 @@ export interface ConversationRow {
   // join), not on rows returned by upsertConversation/getById elsewhere.
   last_message_text?: string;
   last_message_direction?: "inbound" | "outbound";
+  has_engaged?: number;
   status: string;
   last_message_at: string;
   created_at: string;
@@ -281,6 +282,19 @@ export function upsertConversation(
 
 export function updateConversationAvatar(conversationId: number, avatarUrl: string): void {
   db.prepare("UPDATE conversations SET participant_avatar_url = ? WHERE id = ?").run(avatarUrl, conversationId);
+}
+
+/**
+ * Meta only grants profile-lookup consent once the other party has
+ * actually messaged us (see instagramProfile.ts) — an outbound-only
+ * conversation (we reached out, no reply yet) will always 403/500 on that
+ * lookup. Checked before attempting it, so Sync doesn't burn an API call
+ * every run on something that can't succeed yet.
+ */
+export function conversationHasInboundMessage(conversationId: number): boolean {
+  return !!db
+    .prepare("SELECT 1 FROM messages WHERE conversation_id = ? AND direction = 'inbound' LIMIT 1")
+    .get(conversationId);
 }
 
 export function getMessageByExternalId(externalMessageId: string): MessageRow | undefined {

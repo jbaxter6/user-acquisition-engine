@@ -1,4 +1,5 @@
 import {
+  conversationHasInboundMessage,
   getMessageByExternalId,
   insertMessage,
   recomputeConversationLastMessageAt,
@@ -168,7 +169,13 @@ export async function syncInstagramAccount(
 
     if (dbConversation) {
       recomputeConversationLastMessageAt(dbConversation.id);
-      await backfillParticipantAvatar(dbConversation, account.access_token);
+      // Meta withholds profile access (avatar included) until the other
+      // party has actually messaged us — an outbound-only conversation
+      // will always fail this lookup, so skip it rather than burn an API
+      // call every sync on something that can't succeed yet.
+      if (conversationHasInboundMessage(dbConversation.id)) {
+        await backfillParticipantAvatar(dbConversation, account.access_token);
+      }
     }
   }
 

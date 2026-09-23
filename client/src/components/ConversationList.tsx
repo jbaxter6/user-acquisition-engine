@@ -80,7 +80,12 @@ export function ConversationList({
             >
               <div className="conversation-item__row">
                 <span className="conversation-item__identity">
-                  <Avatar src={c.participant_avatar_url} label={c.participant_name || c.participant_handle} size={32} />
+                  <Avatar
+                    src={c.participant_avatar_url}
+                    label={c.participant_name || c.participant_handle}
+                    size={32}
+                    engaged={Boolean(c.has_engaged)}
+                  />
                   <span className="conversation-item__name">{c.participant_name || c.participant_handle}</span>
                 </span>
                 <span className="conversation-item__right">
