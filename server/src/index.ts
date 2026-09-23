@@ -78,6 +78,6 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
 });
 
 const port = process.env.PORT ? Number(process.env.PORT) : 4000;
-app.listen(port, () => {
-  console.log(`Outreach engine server listening on http://localhost:${port}`);
+app.listen(port, "0.0.0.0", () => {
+  console.log(`Outreach engine server listening on http://0.0.0.0:${port}`);
 });

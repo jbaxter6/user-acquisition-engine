@@ -31,6 +31,11 @@ export function siteAuth() {
   const password = process.env.SITE_PASSWORD;
 
   return (req: Request, res: Response, next: NextFunction) => {
+    // Health checks and other infra probes must remain reachable even when
+    // the app itself is password-protected. If this is missing, Railway or
+    // another orchestrator will often report a crash/failed start despite the
+    // Node process staying up.
+    if (req.path === "/api/health") return next();
     if (!password) return next();
 
     const header = req.headers.authorization;
