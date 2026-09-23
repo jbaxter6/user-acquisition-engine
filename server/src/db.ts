@@ -52,6 +52,29 @@ db.exec(`
     external_message_id TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
+
+  -- A separate pipeline from conversations: rows land here from an Excel
+  -- import (and, on the roadmap, automated discovery) before anyone has
+  -- actually reached out. Only becomes a real conversation once "contacted."
+  CREATE TABLE IF NOT EXISTS prospects (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    platform TEXT NOT NULL DEFAULT 'instagram',
+    username TEXT NOT NULL,
+    display_name TEXT,
+    followers INTEGER,
+    notes TEXT,
+    email TEXT,
+    source TEXT NOT NULL DEFAULT 'excel_upload',
+    status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'contacted', 'replied', 'closed')),
+    -- Cached once resolved via Business Discovery, so a retry after a
+    -- failed send doesn't need to re-resolve the username.
+    resolved_ig_user_id TEXT,
+    account_id INTEGER REFERENCES accounts(id),
+    conversation_id INTEGER REFERENCES conversations(id),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    contacted_at TEXT,
+    UNIQUE(platform, username)
+  );
 `);
 
 // Lightweight migration for a column added after the table already existed
@@ -104,6 +127,92 @@ export interface MessageRow {
   source: "api" | "manual" | "webhook";
   external_message_id: string | null;
   created_at: string;
+}
+
+export interface ProspectRow {
+  id: number;
+  platform: string;
+  username: string;
+  display_name: string | null;
+  followers: number | null;
+  notes: string | null;
+  email: string | null;
+  source: string;
+  status: "new" | "contacted" | "replied" | "closed";
+  resolved_ig_user_id: string | null;
+  account_id: number | null;
+  conversation_id: number | null;
+  created_at: string;
+  contacted_at: string | null;
+}
+
+export function listProspects(filters: { platform?: string; status?: string } = {}): ProspectRow[] {
+  const clauses: string[] = [];
+  const params: string[] = [];
+  if (filters.platform) {
+    clauses.push("platform = ?");
+    params.push(filters.platform);
+  }
+  if (filters.status) {
+    clauses.push("status = ?");
+    params.push(filters.status);
+  }
+  const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+  return db.prepare<string[], ProspectRow>(`SELECT * FROM prospects ${where} ORDER BY created_at DESC`).all(...params);
+}
+
+export function getProspectById(id: number): ProspectRow | undefined {
+  return db.prepare<[number], ProspectRow>("SELECT * FROM prospects WHERE id = ?").get(id);
+}
+
+export interface ProspectInput {
+  platform: string;
+  username: string;
+  displayName?: string;
+  followers?: number;
+  notes?: string;
+  email?: string;
+  source?: string;
+}
+
+/** Bulk-inserts prospects, skipping any that already exist (same platform + username). Returns how many were actually inserted. */
+export function bulkInsertProspects(prospects: ProspectInput[]): number {
+  const insert = db.prepare(
+    `INSERT INTO prospects (platform, username, display_name, followers, notes, email, source)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(platform, username) DO NOTHING`
+  );
+  const insertAll = db.transaction((rows: ProspectInput[]) => {
+    let inserted = 0;
+    for (const p of rows) {
+      const result = insert.run(
+        p.platform,
+        p.username,
+        p.displayName ?? null,
+        p.followers ?? null,
+        p.notes ?? null,
+        p.email ?? null,
+        p.source ?? "excel_upload"
+      );
+      if (result.changes > 0) inserted++;
+    }
+    return inserted;
+  });
+  return insertAll(prospects);
+}
+
+export function deleteProspect(id: number): void {
+  db.prepare("DELETE FROM prospects WHERE id = ?").run(id);
+}
+
+export function setProspectResolvedId(id: number, igUserId: string): void {
+  db.prepare("UPDATE prospects SET resolved_ig_user_id = ? WHERE id = ?").run(igUserId, id);
+}
+
+export function markProspectContacted(id: number, accountId: number, conversationId: number): void {
+  db.prepare(
+    "UPDATE prospects SET status = 'contacted', account_id = ?, conversation_id = ?, contacted_at = datetime('now') WHERE id = ?"
+  ).run(accountId, conversationId, id);
 }
 
 export function listAccounts(platform = "instagram"): AccountRow[] {

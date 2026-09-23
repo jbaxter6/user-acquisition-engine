@@ -11,13 +11,22 @@
 - [ ] Sync now fetches every message's detail on every run (not just new ones), to support timestamp repair — fine at current volume, but worth revisiting (e.g. only re-check messages from the last N days) if conversation history grows large enough that repeated full-history syncs become slow or hit rate limits
 - [ ] Once one account connects, add satellite accounts as Instagram Testers and connect each via "+ Connect another Instagram account"
 - [ ] If an existing whitelisted Twitch app/credentials exist, wire a real `TwitchAdapter` (same pattern as `InstagramAdapter`)
-- [ ] Choose scraping provider integration (e.g. Modash, Phantombuster) for the Discovery module
+- [ ] Choose scraping provider integration (e.g. Modash, Phantombuster) for the Discovery module — the actual roadmap item: automation that finds matching accounts by criteria, vs. today's manual Excel import
 - [ ] Design satellite account linking/config mechanism for the Distribution module (multiple connected accounts, not just one)
 - [ ] Add auth/login to the inbox app itself (currently unauthenticated, local-only)
 - [ ] Replace SQLite with a shared/hosted DB before multi-VA or production use
+- [ ] Redeploy the Prospecting page (Excel import, prospect cards, message/mark-contacted) — none of it pushed yet
+- [ ] Confirm whether Business Discovery's returned account ID actually works as a real messaging recipient ID — unverified assumption in `server/src/prospecting.ts`; the first real "Send via API" attempt on a prospect will tell us
+- [ ] Real cold-send to a prospect will likely fail with a Meta messaging-window error most of the time — expected, not a bug; "Mark sent manually" is the intended fallback, not an afterthought
 
 ## Accomplishments
 ### 2026-09-22
+- Built a Prospecting page — the front door of the Discovery module: Excel/CSV import with a column-mapping UI (auto-guesses which sheet column is username/name/followers/notes/email by header name, editable), a separate `prospects` pipeline table (new → contacted → replied → closed) distinct from the inbox so a large import doesn't flood real conversations, and per-prospect cards with a "Message" action.
+- The message action attempts a real API send: resolves the prospect's username to an Instagram ID via the Business Discovery API (`server/src/prospecting.ts`), then sends through the same `InstagramAdapter` used elsewhere. Flagged explicitly as unverified — whether Business Discovery's returned ID actually works as a messaging recipient hasn't been confirmed against real data. On failure (expected fairly often, since Meta's Messaging API is built for responding within an existing conversation, not cold-starting one), the UI surfaces the real error and offers "mark sent manually" as a fallback, matching the existing TikTok/Twitch manual pattern rather than pretending the cold-send always works.
+- Installed `xlsx` for spreadsheet parsing — caught that the npm-published version carries known high-severity vulnerabilities (prototype pollution, ReDoS) with no fix on npm itself (SheetJS ships patched releases from their own CDN instead, due to an npm registry dispute); installed from `cdn.sheetjs.com` instead and confirmed via `npm audit` that only the pre-existing, unrelated `esbuild`/`vite` advisory remains.
+- Caught that a static import of `xlsx` nearly tripled the main JS bundle (156KB → 530KB) even for sessions that never touch Prospecting. Converted to a dynamic `import()` so it only loads when a file is actually selected — confirmed via a real build that it now code-splits into its own ~500KB chunk, main bundle back to ~164KB.
+- Found and fixed a real bug while smoke-testing the new endpoints (not a hypothetical): `/api/prospects/:id/mark-contacted` didn't validate the given account existed before writing to the DB, so a bad `accountId` crashed with a raw SQLite foreign-key error — which Express then returned to the client as a full HTML page with the server's stack trace. Fixed the specific missing validation, and also added a catch-all JSON error handler (`server/src/index.ts`) so any future unhandled error anywhere returns clean JSON instead of leaking internals — a real information-disclosure gap that existed before this feature too, not something new to it.
+- Added a nav tab (Inbox / Prospecting) to the app header — first departure from the single-view layout the app has had all along.
 - Added raw success-path logging to the participant profile lookup (`server/src/instagramProfile.ts`) — it previously only logged on a non-2xx response, so a 200 that simply came back without a `profile_pic` field (participant avatars still not showing, per user report) would have been invisible in the logs. Waiting on the user to redeploy, re-run Sync, and share the log line before diagnosing further, rather than guessing again.
 - Moved the account-filter dropdown (`ConversationList.tsx`) inline with the platform filter row instead of its own separate row below it, pushed to the far right via `margin-left: auto`.
 - Found and fixed the real cause of wrong/out-of-order message timestamps: `insertMessage` (`server/src/db.ts`) always defaulted `created_at` to "now," and `sync.ts` was passing Instagram's actual `created_time` field nowhere — so every message backfilled via Sync got stamped with whenever Sync happened to run, not when it was actually sent, breaking both the displayed time and the sort order (`ORDER BY created_at`).
@@ -117,5 +126,8 @@
 - [Site password gate](server/src/siteAuth.ts) — HTTP Basic Auth via `SITE_PASSWORD`, excludes `/webhooks/*`
 - [Conversation sync (pull-based)](server/src/sync.ts) — direct Graph API read as an alternative to webhook push; also repairs message timestamps and backfills avatars on every run
 - [Relative time formatting](client/src/lib/relativeTime.ts) — "5m ago" style display, with UTC-safe parsing of SQLite's timezone-less timestamps
+- [Prospecting/Business Discovery](server/src/prospecting.ts) — username → Instagram ID resolution and cold-send attempt for prospects; the ID-as-recipient assumption is unverified
+- [Prospect data model](server/src/db.ts) — `prospects` table, separate pipeline from `conversations`
+- [Excel column mapping](client/src/lib/prospectImport.ts) — auto-detects likely columns by header name, `xlsx` loaded via dynamic import
 - [Worklog rules (Claude)](.claude/skills/worklog/SKILL.md) — how WORKLOG.md is maintained, for Claude Code
 - [Worklog rules (Copilot)](.github/copilot-instructions.md) — same rules, for GitHub Copilot Chat

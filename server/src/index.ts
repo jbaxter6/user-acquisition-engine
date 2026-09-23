@@ -8,6 +8,7 @@ import { instagramAccountCount } from "./adapters/index.js";
 import { conversationsRouter } from "./routes/conversations.js";
 import { webhooksRouter } from "./routes/webhooks.js";
 import { authRouter } from "./routes/auth.js";
+import { prospectsRouter } from "./routes/prospects.js";
 import { siteAuth } from "./siteAuth.js";
 import "./db.js";
 
@@ -15,7 +16,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+// Bumped from Express's 100kb default — bulk prospect imports (parsed
+// client-side from an Excel sheet, sent here as JSON) can reasonably run
+// into the thousands of rows.
+app.use(express.json({ limit: "10mb" }));
 
 // Mounted before the password gate: Meta's webhook POSTs come from their
 // servers, not a browser, and never carry the site password.
@@ -45,6 +49,7 @@ app.get("/api/health", (_req, res) => {
 });
 
 app.use("/api/conversations", conversationsRouter());
+app.use("/api/prospects", prospectsRouter());
 app.use("/auth", authRouter());
 
 // In production, serve the built React app from the same origin/process —
@@ -58,6 +63,17 @@ if (fs.existsSync(clientDist)) {
     res.sendFile(path.join(clientDist, "index.html"));
   });
 }
+
+// Catches anything a route didn't handle itself (e.g. a DB constraint
+// error) and returns clean JSON instead of Express's default HTML error
+// page, which includes the full server stack trace — a real information
+// disclosure risk in production. Must be registered last, and needs all
+// four params for Express to recognize it as an error handler.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error("Unhandled error:", err);
+  res.status(500).json({ error: "Internal server error" });
+});
 
 const port = process.env.PORT ? Number(process.env.PORT) : 4000;
 app.listen(port, () => {

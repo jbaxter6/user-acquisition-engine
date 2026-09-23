@@ -1,4 +1,5 @@
-import type { Conversation, HealthResponse, InstagramAccount, Message, Platform } from "../types";
+import type { Conversation, HealthResponse, InstagramAccount, Message, Platform, Prospect } from "../types";
+import type { MappedProspect } from "../lib/prospectImport";
 
 // In dev, client/.env.local points this at the separate server on :4000.
 // In production the built app is served from the same origin as the API
@@ -54,5 +55,28 @@ export const api = {
     request<{ conversation: Conversation; message: Message }>("/api/conversations/manual", {
       method: "POST",
       body: JSON.stringify(input),
+    }),
+
+  listProspects: (filters?: { status?: string }) =>
+    request<Prospect[]>(`/api/prospects${filters?.status ? `?status=${filters.status}` : ""}`),
+
+  bulkImportProspects: (prospects: MappedProspect[]) =>
+    request<{ received: number; inserted: number; skipped: number }>("/api/prospects/bulk", {
+      method: "POST",
+      body: JSON.stringify({ prospects }),
+    }),
+
+  deleteProspect: (id: number) => request<{ ok: true }>(`/api/prospects/${id}`, { method: "DELETE" }),
+
+  messageProspect: (id: number, accountId: number, text: string) =>
+    request<{ conversationId: number }>(`/api/prospects/${id}/message`, {
+      method: "POST",
+      body: JSON.stringify({ accountId, text }),
+    }),
+
+  markProspectContactedManually: (id: number, accountId: number, text: string) =>
+    request<{ conversationId: number }>(`/api/prospects/${id}/mark-contacted`, {
+      method: "POST",
+      body: JSON.stringify({ accountId, text }),
     }),
 };

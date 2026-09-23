@@ -4,10 +4,12 @@ import { ConversationList } from "./components/ConversationList";
 import { ThreadView } from "./components/ThreadView";
 import { ManualMessageForm } from "./components/ManualMessageForm";
 import { AccountConnection } from "./components/AccountConnection";
+import { ProspectingPage } from "./components/ProspectingPage";
 import type { Conversation, HealthResponse, InstagramAccount, Message, Platform } from "./types";
 import "./index.css";
 
 export default function App() {
+  const [view, setView] = useState<"inbox" | "prospecting">("inbox");
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [accounts, setAccounts] = useState<InstagramAccount[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -76,7 +78,23 @@ export default function App() {
   return (
     <div className="app">
       <header className="app__header">
-        <h1>Unified Master Inbox</h1>
+        <div className="app__header-left">
+          <h1>{view === "inbox" ? "Unified Master Inbox" : "Prospecting"}</h1>
+          <nav className="app__nav">
+            <button
+              className={view === "inbox" ? "nav-btn nav-btn--active" : "nav-btn"}
+              onClick={() => setView("inbox")}
+            >
+              Inbox
+            </button>
+            <button
+              className={view === "prospecting" ? "nav-btn nav-btn--active" : "nav-btn"}
+              onClick={() => setView("prospecting")}
+            >
+              Prospecting
+            </button>
+          </nav>
+        </div>
         <div className="app__header-right">
           {health && (
             <div className="app__health">
@@ -93,35 +111,39 @@ export default function App() {
 
       {error && <div className="app__error">{error}</div>}
 
-      <div className={selectedId != null ? "app__body app__body--thread-open" : "app__body"}>
-        <aside className="app__sidebar">
-          <ConversationList
-            conversations={conversations}
-            selectedId={selectedId}
-            filter={filter}
-            onFilterChange={setFilter}
-            accounts={accounts}
-            accountFilter={accountFilter}
-            onAccountFilterChange={setAccountFilter}
-            onSelect={setSelectedId}
-            accountFor={accountFor}
-          />
-          <ManualMessageForm onSubmit={handleManualAdd} />
-        </aside>
+      {view === "inbox" ? (
+        <div className={selectedId != null ? "app__body app__body--thread-open" : "app__body"}>
+          <aside className="app__sidebar">
+            <ConversationList
+              conversations={conversations}
+              selectedId={selectedId}
+              filter={filter}
+              onFilterChange={setFilter}
+              accounts={accounts}
+              accountFilter={accountFilter}
+              onAccountFilterChange={setAccountFilter}
+              onSelect={setSelectedId}
+              accountFor={accountFor}
+            />
+            <ManualMessageForm onSubmit={handleManualAdd} />
+          </aside>
 
-        <main className="app__main">
-          <ThreadView
-            conversation={selectedConversation}
-            messages={messages}
-            canSend={
-              selectedConversation?.platform === "instagram" && selectedConversation.account_id != null
-            }
-            accountFor={accountFor}
-            onSend={handleSend}
-            onBack={() => setSelectedId(null)}
-          />
-        </main>
-      </div>
+          <main className="app__main">
+            <ThreadView
+              conversation={selectedConversation}
+              messages={messages}
+              canSend={
+                selectedConversation?.platform === "instagram" && selectedConversation.account_id != null
+              }
+              accountFor={accountFor}
+              onSend={handleSend}
+              onBack={() => setSelectedId(null)}
+            />
+          </main>
+        </div>
+      ) : (
+        <ProspectingPage accounts={accounts} />
+      )}
     </div>
   );
 }

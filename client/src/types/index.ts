@@ -37,3 +37,20 @@ export interface InstagramAccount {
   profilePictureUrl: string | null;
   connectedAt: string;
 }
+
+export interface Prospect {
+  id: number;
+  platform: Platform;
+  username: string;
+  display_name: string | null;
+  followers: number | null;
+  notes: string | null;
+  email: string | null;
+  source: string;
+  status: "new" | "contacted" | "replied" | "closed";
+  resolved_ig_user_id: string | null;
+  account_id: number | null;
+  conversation_id: number | null;
+  created_at: string;
+  contacted_at: string | null;
+}

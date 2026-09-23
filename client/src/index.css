@@ -44,10 +44,37 @@ body {
   margin: 0;
 }
 
+.app__header-left {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
 .app__header-right {
   display: flex;
   align-items: center;
   gap: 16px;
+}
+
+.app__nav {
+  display: flex;
+  gap: 4px;
+}
+
+.nav-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-dim);
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.nav-btn--active {
+  background: var(--panel-alt);
+  border-color: var(--border);
+  color: var(--text);
 }
 
 .app__health {
@@ -526,14 +553,191 @@ button:disabled {
   margin: 0;
 }
 
+.prospecting {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.prospecting__import {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.prospecting__import h2 {
+  margin: 0 0 6px;
+  font-size: 15px;
+}
+
+.prospecting__hint {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin: 4px 0;
+}
+
+.prospecting__mapping {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.prospecting__mapping-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.prospecting__mapping-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.prospecting__mapping-row select {
+  background: var(--panel-alt);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.prospecting__mapping button {
+  align-self: flex-start;
+}
+
+.prospecting__filters {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.prospecting__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.prospect-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.prospect-card__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.prospect-card__identity {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.prospect-card__name {
+  font-weight: 600;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prospect-card__handle {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.prospect-card__status {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--panel-alt);
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+
+.prospect-card__status--contacted {
+  color: var(--accent);
+}
+
+.prospect-card__status--replied {
+  color: #4caf50;
+}
+
+.prospect-card__meta,
+.prospect-card__notes {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin: 0;
+}
+
+.prospect-card__composer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.prospect-card__composer select,
+.prospect-card__composer textarea {
+  background: var(--panel-alt);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.prospect-card__composer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
 @media (max-width: 720px) {
   .app__header {
     padding: 10px 12px;
     gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .app__header-left {
+    gap: 10px;
   }
 
   .app__header h1 {
     font-size: 15px;
+  }
+
+  .prospecting {
+    padding: 12px;
+  }
+
+  .prospecting__mapping-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .prospecting__cards {
+    grid-template-columns: 1fr;
   }
 
   .app__health {
