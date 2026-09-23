@@ -437,12 +437,12 @@ function ProspectCard({
   const startDetectBrowserUsername = () => {
     // open Instagram in a new tab and wait for a postMessage from a bookmarklet
     setDetectionListening(true);
-    const w = window.open(
+    window.open(
       "https://www.instagram.com",
       "_blank",
       "noopener,noreferrer",
     );
-    // keep reference unused; user will run bookmarklet on that page to postMessage back
+    // keep reference unused; user will run a bookmarklet on that page to postMessage back
   };
 
   useEffect(() => {
