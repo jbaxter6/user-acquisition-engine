@@ -10,6 +10,14 @@ import {
 
 const GRAPH_API_VERSION = "v21.0";
 
+function truncateToken(token: string | null | undefined): string {
+  if (!token) return "(none)";
+  if (token.length <= 16) return "(too short)";
+  const start = token.slice(0, 8);
+  const end = token.slice(-8);
+  return `${start}...${end}`;
+}
+
 /**
  * Resolves a public Instagram username to its underlying user ID via the
  * Business Discovery API, using one of our own connected accounts' token.
@@ -27,13 +35,18 @@ async function resolveUsernameToIgUserId(
   accessToken: string,
   username: string
 ): Promise<string | null> {
+  if (!accessToken || !accessToken.trim()) {
+    console.error(`Business Discovery lookup for @${username}: access token is empty or missing`);
+    return null;
+  }
+
   const url = new URL(`https://graph.facebook.com/${GRAPH_API_VERSION}/${discovererIgUserId}`);
   url.searchParams.set("fields", `business_discovery.username(${username}){id,username,is_business_account,profile_picture_url}`);
   url.searchParams.set("access_token", accessToken);
 
   const res = await fetch(url);
   const raw = await res.text();
-  console.log(`Business Discovery lookup for @${username}:`, res.status, raw);
+  console.log(`Business Discovery lookup for @${username} (token: ${truncateToken(accessToken)}):`, res.status, raw);
   if (!res.ok) return null;
 
   const data = JSON.parse(raw) as {
@@ -75,6 +88,10 @@ export async function sendProspectMessage(
 ) {
   const account = getAccountById(accountId);
   if (!account) throw new ProspectMessageError("Connected account not found.");
+  if (!account.access_token || !account.access_token.trim()) {
+    console.error(`sendProspectMessage for @${prospect.username}: account @${account.username} has invalid token (${truncateToken(account.access_token)})`);
+    throw new ProspectMessageError(`Connected account @${account.username} has an invalid/empty access token. Reconnect the account via "Connect Instagram" to refresh it.`);
+  }
 
   let igUserId = prospect.resolved_ig_user_id;
   if (!igUserId) {
