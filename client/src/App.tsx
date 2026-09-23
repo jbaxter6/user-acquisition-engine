@@ -4,16 +4,16 @@ import { ConversationList } from "./components/ConversationList";
 import { ThreadView } from "./components/ThreadView";
 import { ManualMessageForm } from "./components/ManualMessageForm";
 import { AccountConnection } from "./components/AccountConnection";
+import { PlatformStatusChip } from "./components/PlatformStatusChip";
 import { ProspectingPage } from "./components/ProspectingPage";
 import { TemplatesPanel } from "./components/TemplatesPanel";
-import type { Conversation, HealthResponse, InstagramAccount, Message, Platform } from "./types";
+import type { Conversation, InstagramAccount, Message, Platform } from "./types";
 import "./index.css";
 
-const VIEW_LABELS = { inbox: "Unified Master Inbox", prospecting: "Prospecting", templates: "Templates" } as const;
+const VIEW_LABELS = { inbox: "JB", prospecting: "Prospecting", templates: "Templates" } as const;
 
 export default function App() {
   const [view, setView] = useState<"inbox" | "prospecting" | "templates">("inbox");
-  const [health, setHealth] = useState<HealthResponse | null>(null);
   const [accounts, setAccounts] = useState<InstagramAccount[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [filter, setFilter] = useState<Platform | "all">("all");
@@ -30,7 +30,6 @@ export default function App() {
   };
 
   const refreshAccounts = () => {
-    api.health().then(setHealth).catch((e) => setError(String(e)));
     api.listInstagramAccounts().then(setAccounts).catch(() => setAccounts([]));
     refreshConversations();
   };
@@ -105,16 +104,9 @@ export default function App() {
           </nav>
         </div>
         <div className="app__header-right">
-          {health && (
-            <div className="app__health">
-              {Object.entries(health.adapters).map(([platform, info]) => (
-                <span key={platform} className={info.canSend ? "status-dot status-dot--live" : "status-dot"}>
-                  {platform}: {info.canSend ? "live" : "manual"}
-                </span>
-              ))}
-            </div>
-          )}
           <AccountConnection accounts={accounts} onChange={refreshAccounts} />
+          <PlatformStatusChip platform="tiktok" count={0} title="No TikTok integration yet — messages are logged manually" />
+          <PlatformStatusChip platform="twitch" count={0} title="No Twitch integration yet — messages are logged manually" />
         </div>
       </header>
 

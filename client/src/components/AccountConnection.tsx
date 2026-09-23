@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { Avatar } from "./Avatar";
+import { PlatformIcon } from "./PlatformIcon";
+import { IconRefresh, IconX, Spinner } from "./icons";
 import type { InstagramAccount } from "../types";
 
 interface Props {
@@ -46,31 +48,64 @@ export function AccountConnection({ accounts, onChange }: Props) {
 
   return (
     <div className="account-connection">
-      <button className="secondary" onClick={() => setOpen((o) => !o)}>
-        Instagram accounts ({accounts.length})
+      <button
+        className="platform-status-btn"
+        onClick={() => setOpen((o) => !o)}
+        title={accounts.length > 0 ? `${accounts.length} Instagram account(s) connected` : "No Instagram accounts connected"}
+      >
+        <span
+          className={
+            accounts.length > 0 ? "platform-status-dot platform-status-dot--connected" : "platform-status-dot platform-status-dot--disconnected"
+          }
+        />
+        <PlatformIcon platform="instagram" size={14} />
+        <span>{accounts.length}</span>
       </button>
       {open && (
         <div className="account-connection__panel">
+          <div className="account-connection__panel-header">
+            <span>Instagram accounts</span>
+            <button className="icon-btn icon-btn--ghost" onClick={() => setOpen(false)} title="Close" aria-label="Close">
+              <IconX size={13} />
+            </button>
+          </div>
+
           {banner && <div className="account-connection__banner">{banner}</div>}
-          {accounts.length === 0 && <p className="empty-state">No accounts connected yet.</p>}
-          <ul className="account-connection__list">
-            {accounts.map((a) => (
-              <li key={a.id}>
-                <span className="account-connection__identity">
-                  <Avatar src={a.profilePictureUrl} label={a.username ?? a.igUserId} />
-                  @{a.username ?? a.igUserId}
-                </span>
-                <span className="account-connection__actions">
-                  <button className="secondary" onClick={() => handleSync(a.id)} disabled={syncingId === a.id}>
-                    {syncingId === a.id ? "Syncing..." : "Sync now"}
-                  </button>
-                  <button className="secondary" onClick={() => handleDisconnect(a.id)}>
-                    Disconnect
-                  </button>
-                </span>
-              </li>
-            ))}
-          </ul>
+
+          {accounts.length === 0 ? (
+            <p className="empty-state">No accounts connected yet.</p>
+          ) : (
+            <ul className="account-connection__list">
+              {accounts.map((a) => (
+                <li key={a.id}>
+                  <span className="account-connection__identity">
+                    <Avatar src={a.profilePictureUrl} label={a.username ?? a.igUserId} size={26} />
+                    @{a.username ?? a.igUserId}
+                  </span>
+                  <span className="account-connection__actions">
+                    <button
+                      className="icon-btn"
+                      onClick={() => handleSync(a.id)}
+                      disabled={syncingId === a.id}
+                      title={syncingId === a.id ? "Syncing..." : "Sync now"}
+                      aria-label="Sync now"
+                    >
+                      {syncingId === a.id ? <Spinner size={13} /> : <IconRefresh size={13} />}
+                    </button>
+                    <button
+                      className="icon-btn icon-btn--danger"
+                      onClick={() => handleDisconnect(a.id)}
+                      title="Disconnect"
+                      aria-label="Disconnect"
+                    >
+                      <IconX size={13} />
+                    </button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+
           <a className="connect-btn" href={`${api.baseUrl}/auth/instagram/login`}>
             + Connect {accounts.length > 0 ? "another" : "an"} Instagram account
           </a>

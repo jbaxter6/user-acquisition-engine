@@ -105,6 +105,42 @@ for (const migration of [
   }
 }
 
+// One-time cleanup pass (safe on every startup — finds nothing once
+// already clean): removes duplicate messages that arose from Sync
+// treating a native-app-sent message as "new" each time it saw a
+// different id for what was actually the same (conversation, direction,
+// text) — see findMessageByContent below, added alongside this to stop
+// it from recurring. Keeps the earliest-timestamped copy per duplicate
+// group (the historically accurate one), then recomputes every
+// conversation's last-activity time, since a phantom "just synced"
+// duplicate could have been incorrectly winning that comparison.
+try {
+  const duplicatesRemoved = db
+    .prepare(
+      `DELETE FROM messages
+       WHERE id NOT IN (
+         SELECT id FROM (
+           SELECT id, ROW_NUMBER() OVER (
+             PARTITION BY conversation_id, direction, text
+             ORDER BY created_at ASC, id ASC
+           ) AS rn
+           FROM messages
+         )
+         WHERE rn = 1
+       )`
+    )
+    .run().changes;
+
+  if (duplicatesRemoved > 0) {
+    console.log(`Startup cleanup: removed ${duplicatesRemoved} duplicate message(s).`);
+    for (const { id } of db.prepare("SELECT id FROM conversations").all() as { id: number }[]) {
+      recomputeConversationLastMessageAt(id);
+    }
+  }
+} catch (err) {
+  console.error("Duplicate message cleanup failed:", err);
+}
+
 export interface AccountRow {
   id: number;
   platform: string;
@@ -326,6 +362,27 @@ export function getMessageByExternalId(externalMessageId: string): MessageRow | 
   return db
     .prepare<[string], MessageRow>("SELECT * FROM messages WHERE external_message_id = ?")
     .get(externalMessageId);
+}
+
+/**
+ * Messages sent through the native Instagram app (not our API) don't seem
+ * to keep a stable id across separate Sync calls — a later sync can see
+ * what looks like a brand-new message id for something already synced,
+ * with a `created_time` that's just whenever that sync happened to run.
+ * Matching by exact (conversation, direction, text) as a second check
+ * catches that case before it becomes a duplicate row, since the id alone
+ * can't be trusted for these.
+ */
+export function findMessageByContent(
+  conversationId: number,
+  direction: "inbound" | "outbound",
+  text: string
+): MessageRow | undefined {
+  return db
+    .prepare<[number, string, string], MessageRow>(
+      "SELECT * FROM messages WHERE conversation_id = ? AND direction = ? AND text = ? ORDER BY created_at ASC, id ASC LIMIT 1"
+    )
+    .get(conversationId, direction, text);
 }
 
 /** Repairs a message's timestamp — e.g. correcting rows that were backfilled with "now" before Sync tracked real send times. */

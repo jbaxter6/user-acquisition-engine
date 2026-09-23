@@ -1,5 +1,6 @@
 import {
   conversationHasInboundMessage,
+  findMessageByContent,
   getMessageByExternalId,
   insertMessage,
   recomputeConversationLastMessageAt,
@@ -154,21 +155,24 @@ export async function syncInstagramAccount(
       );
 
       const correctCreatedAt = toSqliteUtc(detail.created_time);
+      const direction = isOutbound ? "outbound" : "inbound";
 
       if (existing) {
         if (existing.created_at !== correctCreatedAt) {
           updateMessageCreatedAt(existing.id, correctCreatedAt);
         }
       } else {
-        insertMessage(
-          dbConversation.id,
-          isOutbound ? "outbound" : "inbound",
-          detail.message,
-          "api",
-          detail.id,
-          correctCreatedAt
-        );
-        newMessages++;
+        // No row for this exact id — but messages sent through the native
+        // Instagram app don't seem to keep a stable id across separate
+        // Sync calls, so also check by content before assuming this is
+        // genuinely new. Without this, the same real message resurfaces
+        // as a duplicate every time Meta hands back a different id for it,
+        // each with created_time ≈ whenever that sync happened to run.
+        const contentMatch = findMessageByContent(dbConversation.id, direction, detail.message);
+        if (!contentMatch) {
+          insertMessage(dbConversation.id, direction, detail.message, "api", detail.id, correctCreatedAt);
+          newMessages++;
+        }
       }
     }
 
