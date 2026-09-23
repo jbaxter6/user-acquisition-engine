@@ -286,6 +286,9 @@ function ProspectCard({
   const [contactRole, setContactRole] = useState("manager");
   const [contactError, setContactError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [useBrowserSession, setUseBrowserSession] = useState(false);
+  const [browserUsername, setBrowserUsername] = useState<string | null>(null);
+  const [detectionListening, setDetectionListening] = useState(false);
   const [mergeTargetId, setMergeTargetId] = useState<number | "">("");
   const [mergeError, setMergeError] = useState<string | null>(null);
 
@@ -392,6 +395,63 @@ function ProspectCard({
     const url = `https://ig.me/m/${username}`;
     window.open(url, "_blank", "noopener,noreferrer");
   };
+
+  const handleOpenComposer = async () => {
+    // user gesture: open composer and prefill/copy template if empty
+    if (!text.trim() && templates.length > 0) {
+      setText(templates[0].body);
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(templates[0].body);
+        }
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch (err) {
+        // ignore
+      }
+    } else if (text.trim()) {
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(text.trim());
+        }
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch (err) {
+        // ignore
+      }
+    }
+
+    setComposing(true);
+    // If user chose to use browser session, open Instagram DM right away
+    if (useBrowserSession) {
+      const username = prospect.username?.replace(/^@/, "");
+      if (username) window.open(`https://ig.me/m/${username}`, "_blank", "noopener,noreferrer");
+    }
+  };
+
+  const startDetectBrowserUsername = () => {
+    // open Instagram in a new tab and wait for a postMessage from a bookmarklet
+    setDetectionListening(true);
+    const w = window.open("https://www.instagram.com", "_blank", "noopener,noreferrer");
+    // keep reference unused; user will run bookmarklet on that page to postMessage back
+  };
+
+  useEffect(() => {
+    const handler = (ev: MessageEvent) => {
+      try {
+        const data = ev.data as any;
+        if (!data || data.type !== "instagram-username") return;
+        if (typeof data.username === "string") {
+          setBrowserUsername(data.username.replace(/^@/, ""));
+          setDetectionListening(false);
+        }
+      } catch (err) {
+        // ignore
+      }
+    };
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, []);
 
   const handleMerge = async () => {
     if (!mergeTargetId) return;
@@ -519,7 +579,7 @@ function ProspectCard({
         <>
           {!composing ? (
             <button
-              onClick={() => setComposing(true)}
+              onClick={handleOpenComposer}
               disabled={!canOpenComposer}
             >
               {!canOpenComposer ? "Connect an account first" : "Message"}
@@ -542,6 +602,42 @@ function ProspectCard({
                   No {prospect.platform} account integration yet — send this
                   from that platform's app directly, then log it here.
                 </p>
+              )}
+              {isInstagram && (
+                <label style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: 8 }}>
+                  <input
+                    type="checkbox"
+                    checked={useBrowserSession}
+                    onChange={(e) => setUseBrowserSession(e.target.checked)}
+                  />
+                  <span style={{ fontSize: 12, color: "var(--text-dim)" }}>
+                    Use browser Instagram session (open IG DM in browser)
+                  </span>
+                </label>
+              )}
+              {isInstagram && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+                  <button
+                    className="secondary"
+                    onClick={startDetectBrowserUsername}
+                    disabled={detectionListening}
+                  >
+                    {detectionListening ? "Listening for username…" : "Detect browser username"}
+                  </button>
+                  {browserUsername && (
+                    <>
+                      <span style={{ fontSize: 12, color: "var(--text-dim)" }}>
+                        Detected: @{browserUsername}
+                      </span>
+                      <button
+                        className="secondary"
+                        onClick={() => setUseBrowserSession(true)}
+                      >
+                        Use detected
+                      </button>
+                    </>
+                  )}
+                </div>
               )}
               {templates.length > 0 && (
                 <select
