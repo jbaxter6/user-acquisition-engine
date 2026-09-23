@@ -176,15 +176,16 @@ export async function syncInstagramAccount(
       const correctCreatedAt = toSqliteUtc(detail.created_time);
       const direction = isOutbound ? "outbound" : "inbound";
 
-      if (!isOutbound) {
-        ensureProspectForParticipant({
-          platform: "instagram",
-          handle: participant.username ?? participant.id,
-          name: participant.username ?? undefined,
-          source: "sync",
-          role: "primary",
-        });
-      }
+      ensureProspectForParticipant({
+        platform: "instagram",
+        handle: participant.username ?? participant.id,
+        name: participant.username ?? undefined,
+        source: "sync",
+        role: "primary",
+        conversationId: dbConversation.id,
+        accountId: account.id,
+        direction,
+      });
 
       if (existing) {
         if (existing.created_at !== correctCreatedAt) {

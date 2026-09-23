@@ -413,23 +413,32 @@ export function ensureProspectForParticipant(input: {
   source?: string;
   role?: string;
   conversationId?: number | null;
+  accountId?: number | null;
+  // "outbound" = we messaged them and they haven't necessarily replied:
+  // creates/keeps the prospect as "contacted" instead of "replied".
+  direction?: "inbound" | "outbound";
 }): ProspectRow {
   const platform = input.platform.toLowerCase();
   const handle = input.handle.trim().replace(/^@/, "");
   if (!handle) throw new Error("participant handle is required");
+  const outbound = input.direction === "outbound";
+  const status = outbound ? "contacted" : "replied";
 
   let prospect = getProspectByUsername(platform, handle);
   if (!prospect) {
     const result = db
       .prepare(
-        "INSERT INTO prospects (platform, username, display_name, source, status, notes) VALUES (?, ?, ?, ?, 'replied', ?)",
+        "INSERT INTO prospects (platform, username, display_name, source, status, notes) VALUES (?, ?, ?, ?, ?, ?)",
       )
       .run(
         platform,
         handle,
         input.name ?? null,
-        input.source ?? "inbound_message",
-        "Auto-created from inbound message",
+        input.source ?? (outbound ? "outbound_message" : "inbound_message"),
+        status,
+        outbound
+          ? "Auto-created from outbound message"
+          : "Auto-created from inbound message",
       );
     prospect = getProspectById(result.lastInsertRowid as number)!;
   } else if (input.name && !prospect.display_name) {
@@ -439,10 +448,26 @@ export function ensureProspectForParticipant(input: {
     );
   }
 
-  if (prospect.status === "new" || prospect.status === "contacted") {
+  if (outbound) {
+    if (prospect.status === "new") {
+      db.prepare(
+        "UPDATE prospects SET status = 'contacted' WHERE id = ?",
+      ).run(prospect.id);
+    }
+  } else if (prospect.status === "new" || prospect.status === "contacted") {
     db.prepare("UPDATE prospects SET status = 'replied' WHERE id = ?").run(
       prospect.id,
     );
+  }
+
+  if (input.conversationId != null) {
+    db.prepare(
+      `UPDATE prospects
+       SET conversation_id = COALESCE(conversation_id, ?),
+           account_id = COALESCE(account_id, ?),
+           contacted_at = COALESCE(contacted_at, datetime('now'))
+       WHERE id = ?`,
+    ).run(input.conversationId, input.accountId ?? null, prospect.id);
   }
 
   attachProspectChannel(
@@ -451,14 +476,16 @@ export function ensureProspectForParticipant(input: {
     handle,
     input.conversationId ?? null,
   );
-  upsertProspectContact(prospect.id, {
-    platform,
-    handle,
-    name: input.name ?? null,
-    role: input.role ?? "primary",
-    source: input.source ?? "inbound_message",
-    isPrimary: true,
-  });
+  if (!outbound) {
+    upsertProspectContact(prospect.id, {
+      platform,
+      handle,
+      name: input.name ?? null,
+      role: input.role ?? "primary",
+      source: input.source ?? "inbound_message",
+      isPrimary: true,
+    });
+  }
 
   return getProspectById(prospect.id)!;
 }
