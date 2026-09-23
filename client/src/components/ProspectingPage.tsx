@@ -216,6 +216,11 @@ function ProspectCard({
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [addingContact, setAddingContact] = useState(false);
+  const [contactHandle, setContactHandle] = useState("");
+  const [contactName, setContactName] = useState("");
+  const [contactRole, setContactRole] = useState("manager");
+  const [contactError, setContactError] = useState<string | null>(null);
 
   const canOpenComposer = isInstagram ? accounts.length > 0 : true;
 
@@ -266,6 +271,26 @@ function ProspectCard({
     }
   };
 
+  const handleAddContact = async () => {
+    if (!contactHandle.trim()) return;
+    setContactError(null);
+    try {
+      await api.addProspectContact(prospect.id, {
+        handle: contactHandle.trim(),
+        name: contactName.trim() || undefined,
+        role: contactRole,
+        isPrimary: false,
+      });
+      setContactHandle("");
+      setContactName("");
+      setContactRole("manager");
+      setAddingContact(false);
+      onChange();
+    } catch (err) {
+      setContactError(String(err));
+    }
+  };
+
   return (
     <div className="prospect-card">
       <div className="prospect-card__header">
@@ -282,6 +307,53 @@ function ProspectCard({
         <p className="prospect-card__meta">{prospect.followers.toLocaleString()} followers</p>
       )}
       {prospect.notes && <p className="prospect-card__notes">{prospect.notes}</p>}
+      {prospect.contacts && prospect.contacts.length > 0 && (
+        <div className="prospect-card__contacts">
+          {prospect.contacts.map((contact) => (
+            <span key={contact.id} className="prospect-card__contact-tag">
+              @{contact.handle}
+              {contact.role ? ` · ${contact.role}` : ""}
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div className="prospect-card__contact-actions">
+        {!addingContact ? (
+          <button className="secondary" onClick={() => setAddingContact(true)}>
+            Add contact
+          </button>
+        ) : (
+          <div className="prospect-card__contact-form">
+            <input
+              value={contactHandle}
+              onChange={(e) => setContactHandle(e.target.value)}
+              placeholder="@handle"
+            />
+            <input
+              value={contactName}
+              onChange={(e) => setContactName(e.target.value)}
+              placeholder="Name (optional)"
+            />
+            <select value={contactRole} onChange={(e) => setContactRole(e.target.value)}>
+              <option value="primary">Primary</option>
+              <option value="manager">Manager</option>
+              <option value="assistant">Assistant</option>
+              <option value="owner">Owner</option>
+              <option value="other">Other</option>
+            </select>
+            {contactError && <p className="composer-note">{contactError}</p>}
+            <div className="prospect-card__composer-actions">
+              <button className="secondary" onClick={() => setAddingContact(false)}>
+                Cancel
+              </button>
+              <button onClick={handleAddContact} disabled={!contactHandle.trim()}>
+                Save contact
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       {prospect.status === "new" && (
         <>
@@ -343,6 +415,56 @@ function ProspectCard({
           )}
         </>
       )}
+
+      {prospect.contacts && prospect.contacts.length > 0 && (
+        <div className="prospect-card__contacts">
+          {prospect.contacts.map((contact) => (
+            <div key={contact.id} className="prospect-card__contact">
+              <span className="prospect-card__contact-handle">@{contact.handle}</span>
+              {contact.name && <span className="prospect-card__contact-name">({contact.name})</span>}
+              {contact.role && <span className="prospect-card__contact-role">· {contact.role}</span>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="prospect-card__add-contact">
+        {addingContact ? (
+          <div className="prospect-card__add-contact-form">
+            <input
+              type="text"
+              value={contactHandle}
+              onChange={(e) => setContactHandle(e.target.value)}
+              placeholder="Contact's handle"
+            />
+            <input
+              type="text"
+              value={contactName}
+              onChange={(e) => setContactName(e.target.value)}
+              placeholder="Contact's name (optional)"
+            />
+            <select
+              value={contactRole}
+              onChange={(e) => setContactRole(e.target.value)}
+            >
+              <option value="manager">Manager</option>
+              <option value="assistant">Assistant</option>
+              <option value="other">Other</option>
+            </select>
+            {contactError && <p className="prospect-card__contact-error">{contactError}</p>}
+            <button onClick={handleAddContact} disabled={sending}>
+              {sending ? "Adding..." : "Add contact"}
+            </button>
+            <button className="secondary" onClick={() => setAddingContact(false)}>
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button onClick={() => setAddingContact(true)} className="prospect-card__add-contact-btn">
+            + Add related contact
+          </button>
+        )}
+      </div>
     </div>
   );
 }

@@ -16,6 +16,8 @@ interface Props {
   onAccountFilterChange: (accountId: number | "all") => void;
   onSelect: (id: number) => void;
   accountFor: (accountId: number | null) => InstagramAccount | null;
+  searchTerm: string;
+  onSearchChange: (value: string) => void;
 }
 
 export function ConversationList({
@@ -28,8 +30,28 @@ export function ConversationList({
   onAccountFilterChange,
   onSelect,
   accountFor,
+  searchTerm,
 }: Props) {
-  const visible = conversations.filter((c) => accountFilter === "all" || c.account_id === accountFilter);
+  const query = searchTerm.trim().toLowerCase();
+  const visible = conversations.filter((c) => {
+    if (accountFilter !== "all" && c.account_id !== accountFilter) return false;
+
+    if (!query) return true;
+
+    const account = accountFor(c.account_id);
+    const searchable = [
+      c.participant_name,
+      c.participant_handle,
+      c.last_message_text,
+      account?.username,
+      account?.igUserId,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
+    return searchable.includes(query);
+  });
 
   return (
     <div className="conversation-list">
@@ -69,7 +91,9 @@ export function ConversationList({
       </div>
 
       <div className="conversation-list__items">
-        {visible.length === 0 && <p className="empty-state">No conversations yet.</p>}
+        {visible.length === 0 && (
+          <p className="empty-state">{query ? "No conversations match your search." : "No conversations yet."}</p>
+        )}
         {visible.map((c) => {
           const account = accountFor(c.account_id);
           return (

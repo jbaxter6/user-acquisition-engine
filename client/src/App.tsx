@@ -3,7 +3,6 @@ import { BrowserRouter, NavLink, Navigate, Route, Routes, useLocation } from "re
 import { api } from "./api/client";
 import { ConversationList } from "./components/ConversationList";
 import { ThreadView } from "./components/ThreadView";
-import { ManualMessageForm } from "./components/ManualMessageForm";
 import { AccountConnection } from "./components/AccountConnection";
 import { PlatformStatusChip } from "./components/PlatformStatusChip";
 import { ProspectingPage } from "./components/ProspectingPage";
@@ -37,6 +36,7 @@ function AppShell() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [filter, setFilter] = useState<Platform | "all">("all");
   const [accountFilter, setAccountFilter] = useState<number | "all">("all");
+  const [searchTerm, setSearchTerm] = useState("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -149,6 +149,8 @@ function AppShell() {
               messages={messages}
               selectedConversation={selectedConversation}
               accountFor={accountFor}
+              searchTerm={searchTerm}
+              onSearchChange={setSearchTerm}
               onFilterChange={setFilter}
               onAccountFilterChange={setAccountFilter}
               onSelect={setSelectedId}
@@ -175,6 +177,8 @@ function InboxPage(props: {
   messages: Message[];
   selectedConversation: Conversation | null;
   accountFor: (accountId: number | null) => InstagramAccount | null;
+  searchTerm: string;
+  onSearchChange: (value: string) => void;
   onFilterChange: (value: Platform | "all") => void;
   onAccountFilterChange: (value: number | "all") => void;
   onSelect: (id: number | null) => void;
@@ -200,8 +204,18 @@ function InboxPage(props: {
           onAccountFilterChange={props.onAccountFilterChange}
           onSelect={props.onSelect}
           accountFor={props.accountFor}
+          searchTerm={props.searchTerm}
+          onSearchChange={props.onSearchChange}
         />
-        <ManualMessageForm onSubmit={props.onManualAdd} />
+        <div className="conversation-list__search conversation-list__search--sidebar">
+          <input
+            type="search"
+            value={props.searchTerm}
+            onChange={(e) => props.onSearchChange(e.target.value)}
+            placeholder="Search conversations"
+            aria-label="Search conversations"
+          />
+        </div>
       </aside>
 
       <main className="app__main">

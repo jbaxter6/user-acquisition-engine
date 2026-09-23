@@ -87,6 +87,19 @@ db.exec(`
     contacted_at TEXT,
     UNIQUE(platform, username)
   );
+
+  CREATE TABLE IF NOT EXISTS prospect_contacts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    prospect_id INTEGER NOT NULL REFERENCES prospects(id) ON DELETE CASCADE,
+    platform TEXT NOT NULL DEFAULT 'instagram',
+    handle TEXT NOT NULL,
+    name TEXT,
+    role TEXT NOT NULL DEFAULT 'primary',
+    is_primary INTEGER NOT NULL DEFAULT 0,
+    source TEXT NOT NULL DEFAULT 'manual',
+    last_seen_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(prospect_id, platform, handle)
+  );
 `);
 
 // Lightweight migration for a column added after the table already existed
@@ -203,6 +216,18 @@ export interface ProspectRow {
   conversation_id: number | null;
   created_at: string;
   contacted_at: string | null;
+}
+
+export interface ProspectContactRow {
+  id: number;
+  prospect_id: number;
+  platform: string;
+  handle: string;
+  name: string | null;
+  role: string;
+  is_primary: number;
+  source: string;
+  last_seen_at: string;
 }
 
 export function listProspects(filters: { platform?: string; status?: string } = {}): ProspectRow[] {
@@ -509,4 +534,105 @@ export function getMessageTemplateStats(): MessageTemplateStats[] {
     )
     .all()
     .map((row) => ({ ...row, reply_rate: row.sent > 0 ? row.replied / row.sent : 0 }));
+}
+
+export function getProspectByUsername(platform: string, username: string): ProspectRow | undefined {
+  const normalized = username.trim().replace(/^@/, "");
+  return db
+    .prepare<[string, string], ProspectRow>(
+      "SELECT * FROM prospects WHERE platform = ? AND LOWER(username) = LOWER(?) LIMIT 1"
+    )
+    .get(platform, normalized);
+}
+
+export function listProspectContacts(prospectId: number): ProspectContactRow[] {
+  return db
+    .prepare<[number], ProspectContactRow>(
+      "SELECT * FROM prospect_contacts WHERE prospect_id = ? ORDER BY is_primary DESC, last_seen_at DESC, id ASC"
+    )
+    .all(prospectId);
+}
+
+export function upsertProspectContact(
+  prospectId: number,
+  input: {
+    platform: string;
+    handle: string;
+    name?: string | null;
+    role?: string;
+    source?: string;
+    isPrimary?: boolean;
+  }
+): ProspectContactRow {
+  const handle = input.handle.trim().replace(/^@/, "");
+  if (!handle) throw new Error("contact handle is required");
+
+  const result = db
+    .prepare(
+      `INSERT INTO prospect_contacts (prospect_id, platform, handle, name, role, is_primary, source, last_seen_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+       ON CONFLICT(prospect_id, platform, handle) DO UPDATE SET
+         name = excluded.name,
+         role = excluded.role,
+         is_primary = excluded.is_primary,
+         source = excluded.source,
+         last_seen_at = datetime('now')`
+    )
+    .run(
+      prospectId,
+      input.platform,
+      handle,
+      input.name ?? null,
+      input.role ?? "primary",
+      input.isPrimary ? 1 : 0,
+      input.source ?? "manual"
+    );
+
+  return (
+    db.prepare<[number], ProspectContactRow>("SELECT * FROM prospect_contacts WHERE id = ?").get(result.lastInsertRowid as number) ??
+    db
+      .prepare<[number, string, string], ProspectContactRow>(
+        "SELECT * FROM prospect_contacts WHERE prospect_id = ? AND platform = ? AND handle = ? LIMIT 1"
+      )
+      .get(prospectId, input.platform, handle)!
+  );
+}
+
+export function ensureProspectForParticipant(input: {
+  platform: string;
+  handle: string;
+  name?: string | null;
+  source?: string;
+  role?: string;
+}): ProspectRow {
+  const platform = input.platform.toLowerCase();
+  const handle = input.handle.trim().replace(/^@/, "");
+  if (!handle) throw new Error("participant handle is required");
+
+  let prospect = getProspectByUsername(platform, handle);
+  if (!prospect) {
+    const result = db
+      .prepare(
+        "INSERT INTO prospects (platform, username, display_name, source, status, notes) VALUES (?, ?, ?, ?, 'replied', ?)"
+      )
+      .run(platform, handle, input.name ?? null, input.source ?? "inbound_message", "Auto-created from inbound message");
+    prospect = getProspectById(result.lastInsertRowid as number)!;
+  } else if (input.name && !prospect.display_name) {
+    db.prepare("UPDATE prospects SET display_name = ? WHERE id = ?").run(input.name, prospect.id);
+  }
+
+  if (prospect.status === "new" || prospect.status === "contacted") {
+    db.prepare("UPDATE prospects SET status = 'replied' WHERE id = ?").run(prospect.id);
+  }
+
+  upsertProspectContact(prospect.id, {
+    platform,
+    handle,
+    name: input.name ?? null,
+    role: input.role ?? "primary",
+    source: input.source ?? "inbound_message",
+    isPrimary: true,
+  });
+
+  return getProspectById(prospect.id)!;
 }

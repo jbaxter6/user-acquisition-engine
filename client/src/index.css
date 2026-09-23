@@ -303,6 +303,34 @@ body {
   min-height: 0;
 }
 
+.conversation-list__search {
+  padding: 10px 10px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.conversation-list__search--sidebar {
+  padding: 10px;
+  border-top: 1px solid var(--border);
+  border-bottom: none;
+}
+
+.conversation-list__search input {
+  width: 100%;
+  background: var(--panel-alt);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.conversation-list__search input:focus {
+  outline: 2px solid rgba(124, 92, 255, 0.2);
+  border-color: var(--accent);
+}
+
 .conversation-list__filters {
   display: flex;
   align-items: center;
@@ -847,6 +875,45 @@ button:disabled {
   justify-content: flex-end;
   gap: 6px;
   flex-wrap: wrap;
+}
+
+.prospect-card__contacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.prospect-card__contact-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(91, 140, 255, 0.08);
+  color: var(--text);
+  font-size: 11px;
+}
+
+.prospect-card__contact-actions {
+  margin-top: 2px;
+}
+
+.prospect-card__contact-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.prospect-card__contact-form input,
+.prospect-card__contact-form select {
+  background: var(--panel-alt);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 13px;
+  font-family: inherit;
 }
 
 .templates__form {

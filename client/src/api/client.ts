@@ -94,6 +94,12 @@ export const api = {
       body: JSON.stringify({ accountId, text, templateId }),
     }),
 
+  addProspectContact: (id: number, input: { handle: string; name?: string; role?: string; isPrimary?: boolean }) =>
+    request<{ id: number; prospect_id: number; handle: string; name: string | null; role: string }>(`/api/prospects/${id}/contacts`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+
   listTemplates: () => request<MessageTemplate[]>("/api/templates"),
 
   templateStats: () => request<MessageTemplateStats[]>("/api/templates/stats"),

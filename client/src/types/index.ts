@@ -60,6 +60,18 @@ export interface MessageTemplateStats {
   reply_rate: number;
 }
 
+export interface ProspectContact {
+  id: number;
+  prospect_id: number;
+  platform: Platform;
+  handle: string;
+  name: string | null;
+  role: string;
+  is_primary: number;
+  source: string;
+  last_seen_at: string;
+}
+
 export interface Prospect {
   id: number;
   platform: Platform;
@@ -75,4 +87,5 @@ export interface Prospect {
   conversation_id: number | null;
   created_at: string;
   contacted_at: string | null;
+  contacts?: ProspectContact[];
 }

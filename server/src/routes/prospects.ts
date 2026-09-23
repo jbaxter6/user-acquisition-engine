@@ -2,12 +2,15 @@ import { Router } from "express";
 import {
   bulkInsertProspects,
   deleteProspect,
+  ensureProspectForParticipant,
   getAccountById,
   getProspectById,
   insertMessage,
+  listProspectContacts,
   listProspects,
   markProspectContacted,
   upsertConversation,
+  upsertProspectContact,
   type ProspectInput,
 } from "../db.js";
 import { ProspectMessageError, sendProspectMessage } from "../prospecting.js";
@@ -19,7 +22,13 @@ export function prospectsRouter(): Router {
 
   router.get("/", (req, res) => {
     const { platform, status } = req.query as { platform?: string; status?: string };
-    res.json(listProspects({ platform, status }));
+    const prospects = listProspects({ platform, status });
+    res.json(
+      prospects.map((prospect) => ({
+        ...prospect,
+        contacts: listProspectContacts(prospect.id),
+      }))
+    );
   });
 
   // Expects rows already parsed/column-mapped client-side (the Excel file
@@ -117,6 +126,29 @@ export function prospectsRouter(): Router {
     markProspectContacted(prospect.id, resolvedAccountId, conversation.id);
 
     res.json({ conversationId: conversation.id });
+  });
+
+  router.post("/:id/contacts", (req, res) => {
+    const { handle, name, role, isPrimary } = req.body as {
+      handle?: string;
+      name?: string;
+      role?: string;
+      isPrimary?: boolean;
+    };
+    const prospect = getProspectById(Number(req.params.id));
+    if (!prospect) return res.status(404).json({ error: "prospect not found" });
+    if (!handle?.trim()) return res.status(400).json({ error: "handle is required" });
+
+    const contact = upsertProspectContact(Number(req.params.id), {
+      platform: prospect.platform,
+      handle,
+      name,
+      role: role ?? "manager",
+      source: "manual",
+      isPrimary: !!isPrimary,
+    });
+
+    res.status(201).json(contact);
   });
 
   return router;

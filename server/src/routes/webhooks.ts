@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getAccountByIgUserId, insertMessage, upsertConversation } from "../db.js";
+import { ensureProspectForParticipant, getAccountByIgUserId, insertMessage, upsertConversation } from "../db.js";
 import { backfillParticipantAvatar } from "../instagramProfile.js";
 
 interface InstagramWebhookBody {
@@ -50,6 +50,13 @@ export function webhooksRouter(): Router {
 
         const account = getAccountByIgUserId(recipientId);
         const conversation = upsertConversation("instagram", senderId, senderId, undefined, account?.id);
+        ensureProspectForParticipant({
+          platform: "instagram",
+          handle: senderId,
+          name: undefined,
+          source: "webhook",
+          role: "primary",
+        });
         insertMessage(conversation.id, "inbound", text, "webhook", change.value?.message?.mid);
         // Not awaited — avatar lookup shouldn't delay the webhook ack Meta expects.
         if (account) void backfillParticipantAvatar(conversation, account.access_token);

@@ -124,6 +124,7 @@
 
 ### 2026-09-23
 - Split the app into route-based pages so Inbox, Prospecting, and Templates each have their own URL, while the JB brand remains pinned in the header and the nav stays visible across views.
+- Added a search box to the inbox conversation list so it can filter by participant name/handle, connected account, or the last-message preview while keeping the existing platform and account filters in place.
 
 ## Documentation Index
 - [Project Overview](README.md) — vision, problem statement, and 3-module architecture
