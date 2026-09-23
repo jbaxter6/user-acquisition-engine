@@ -105,6 +105,11 @@ export interface Prospect {
   resolved_ig_user_id: string | null;
   account_id: number | null;
   conversation_id: number | null;
+  // Set once this prospect has an inbox thread — either from having been
+  // "contacted" through this pipeline (conversation_id) or from an
+  // already-existing conversation matched by handle (e.g. synced from a
+  // webhook). Prefer this over conversation_id for "does a thread exist."
+  existing_conversation_id?: number | null;
   created_at: string;
   contacted_at: string | null;
   contacts?: ProspectContact[];

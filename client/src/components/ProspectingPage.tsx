@@ -478,9 +478,11 @@ function ProspectCard({
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
   const [linkingChannel, setLinkingChannel] = useState(false);
   const [linkingManager, setLinkingManager] = useState(false);
+
+  const existingConversationId =
+    prospect.existing_conversation_id ?? prospect.conversation_id ?? null;
 
   const links = prospect.links ?? [];
   const legacyContacts = prospect.contacts ?? [];
@@ -531,41 +533,12 @@ function ProspectCard({
     }
   };
 
-  const handleMarkManually = async () => {
-    if (!text.trim()) return;
-    if (isInstagram && !accountId) return;
-    setSending(true);
-    try {
-      await api.markProspectContactedManually(
-        prospect.id,
-        isInstagram ? (accountId as number) : null,
-        text.trim(),
-        templateId || undefined,
-      );
-      setText("");
-      setSendError(null);
-      onChange();
-    } catch (err) {
-      setSendError(String(err));
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const handleCopyMessage = async () => {
-    if (!text.trim()) return;
-    try {
-      await navigator.clipboard.writeText(text.trim());
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // ignore — user can still select/copy manually
-    }
-  };
-
   const handleOpenInstagram = () => {
     const username = prospect.username?.replace(/^@/, "");
-    if (!username) return;
+    if (!username || !text.trim()) return;
+    // Kick off the clipboard write without awaiting so window.open still
+    // runs inside the click's user-gesture window (Safari blocks it otherwise).
+    navigator.clipboard?.writeText(text.trim()).catch(() => {});
     window.open(`https://ig.me/m/${username}`, "_blank", "noopener,noreferrer");
   };
 
@@ -641,11 +614,11 @@ function ProspectCard({
         <span className={`pill pill--status-${prospect.status}`}>
           {STATUS_LABEL[prospect.status]}
         </span>
-        {prospect.conversation_id != null && (
+        {existingConversationId != null && (
           <button
             className="pill pill--link"
             onClick={() =>
-              navigate(`/inbox?conversationId=${prospect.conversation_id}`)
+              navigate(`/inbox?conversationId=${existingConversationId}`)
             }
           >
             Open conversation
@@ -678,6 +651,17 @@ function ProspectCard({
 
       {tab === "outreach" ? (
         <div className="prospect-card__outreach">
+          {existingConversationId != null && (
+            <div className="prospect-card__existing-thread">
+              <span>You already have a thread with @{prospect.username}.</span>
+              <button
+                className="secondary"
+                onClick={() => navigate(`/inbox?conversationId=${existingConversationId}`)}
+              >
+                Continue in inbox
+              </button>
+            </div>
+          )}
           {prospect.followers != null && (
             <p className="prospect-card__meta">
               {prospect.followers.toLocaleString()} followers
@@ -687,14 +671,14 @@ function ProspectCard({
             <p className="prospect-card__notes">{prospect.notes}</p>
           )}
 
-          {templates.length > 0 && (
+          {templates.length > 0 ? (
             <label className="prospect-card__field">
               <span>Message template</span>
               <select
                 value={templateId}
                 onChange={(e) => handleTemplatePick(e.target.value)}
               >
-                <option value="">— write from scratch —</option>
+                <option value="">Select a template…</option>
                 {templates.map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.name}
@@ -702,14 +686,19 @@ function ProspectCard({
                 ))}
               </select>
             </label>
+          ) : (
+            <p className="composer-note">
+              No message templates yet — create one on the Templates page before
+              messaging prospects.
+            </p>
           )}
 
           <div className="prospect-card__textarea-wrap">
             <textarea
               value={text}
-              onChange={(e) => setText(e.target.value)}
+              readOnly
               rows={5}
-              placeholder="Write a message..."
+              placeholder="Select a template above…"
             />
             <span className="prospect-card__char-count">
               {text.length} chars
@@ -717,37 +706,25 @@ function ProspectCard({
           </div>
 
           {sendError && (
-            <p className="composer-note">
-              Send failed: {sendError} — copy the message and send it yourself,
-              then mark it below.
-            </p>
+            <p className="composer-note">Send failed: {sendError}</p>
           )}
 
-          <div className="prospect-card__outreach-actions">
-            <button
-              className="secondary"
-              onClick={handleCopyMessage}
-              disabled={!text.trim()}
-            >
-              {copied ? "Copied!" : "Copy"}
-            </button>
-            {isInstagram && (
+          {isInstagram && (
+            <div className="prospect-card__outreach-actions">
               <button
-                className="secondary"
+                className="prospect-card__open-btn"
                 onClick={handleOpenInstagram}
-                disabled={!prospect.username}
+                disabled={!prospect.username || templateId === "" || !text.trim()}
+                title={
+                  templateId === ""
+                    ? "Select a template first"
+                    : "Copies the template text, then opens the DM"
+                }
               >
-                Open in Instagram
+                Copy &amp; open in Instagram
               </button>
-            )}
-            <button
-              className="secondary"
-              onClick={handleMarkManually}
-              disabled={sending || !text.trim()}
-            >
-              Mark sent manually
-            </button>
-          </div>
+            </div>
+          )}
 
           {isInstagram ? (
             accounts.length > 0 ? (
@@ -771,16 +748,11 @@ function ProspectCard({
                   {sending ? "Sending..." : "Message with template"}
                 </button>
               </div>
-            ) : (
-              <p className="composer-note">
-                Connect an Instagram account to send via the API — you can still
-                copy/mark manually above.
-              </p>
-            )
+            ) : null
           ) : (
             <p className="composer-note">
               No {prospect.platform} account integration yet — send from that
-              platform's app, then mark it above.
+              platform's app directly.
             </p>
           )}
         </div>

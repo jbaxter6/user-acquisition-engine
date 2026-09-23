@@ -938,6 +938,29 @@ export function upsertConversation(
     .get(result.lastInsertRowid as number)!;
 }
 
+// Finds an existing conversation by platform + participant handle, across
+// every connected account — used to catch a prospect who already has a
+// real inbox thread (e.g. synced from a webhook, keyed by their resolved
+// platform ID) before a cold-outreach flow would otherwise create a
+// separate, un-synced conversation keyed by their raw username.
+export function findConversationByHandle(
+  platform: string,
+  handle: string,
+): ConversationRow | undefined {
+  const normalized = handle.trim().replace(/^@/, "");
+  return db
+    .prepare<
+      [string, string],
+      ConversationRow
+    >(
+      `SELECT * FROM conversations
+       WHERE platform = ? AND LOWER(participant_handle) = LOWER(?)
+       ORDER BY last_message_at DESC
+       LIMIT 1`,
+    )
+    .get(platform, normalized);
+}
+
 export function updateConversationAvatar(
   conversationId: number,
   avatarUrl: string,

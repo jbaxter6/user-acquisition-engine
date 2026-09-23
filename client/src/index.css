@@ -970,12 +970,44 @@ button:disabled {
   gap: 10px;
 }
 
+.prospect-card .prospect-card__open-btn {
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 0 12px rgba(91, 140, 255, 0.35);
+}
+
+.prospect-card .prospect-card__open-btn:hover:not(:disabled) {
+  filter: brightness(1.15);
+}
+
+.prospect-card .prospect-card__open-btn:disabled {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text-dim);
+  box-shadow: none;
+}
+
 .prospect-card__field {
   display: flex;
   flex-direction: column;
   gap: 4px;
   font-size: 12px;
   color: var(--text-dim);
+}
+
+.prospect-card__existing-thread {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid rgba(91, 140, 255, 0.35);
+  background: rgba(91, 140, 255, 0.08);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--text);
 }
 
 .prospect-card__field select {
@@ -1002,6 +1034,12 @@ button:disabled {
   font-size: 13px;
   font-family: inherit;
   resize: vertical;
+}
+
+.prospect-card__textarea-wrap textarea:read-only {
+  color: var(--text-dim);
+  cursor: default;
+  resize: none;
 }
 
 .prospect-card__char-count {

@@ -3,6 +3,7 @@ import {
   bulkInsertProspects,
   deleteProspect,
   ensureProspectForParticipant,
+  findConversationByHandle,
   getAccountById,
   getProspectById,
   insertMessage,
@@ -38,6 +39,14 @@ export function prospectsRouter(): Router {
         channels: listProspectChannels(prospect.id),
         contacts: listProspectContacts(prospect.id),
         links: listProspectLinks(prospect.id),
+        // Catches a prospect who already has a real inbox thread (e.g.
+        // synced from a webhook under their resolved platform ID) even
+        // though prospect.conversation_id is only set once they've been
+        // "contacted" through this pipeline specifically.
+        existing_conversation_id:
+          prospect.conversation_id ??
+          findConversationByHandle(prospect.platform, prospect.username)?.id ??
+          null,
       })),
     );
   });
@@ -158,15 +167,18 @@ export function prospectsRouter(): Router {
     const resolvedAccountId =
       prospect.platform === "instagram" ? accountId! : null;
 
-    // Without a resolved real ID, key the conversation on the username —
-    // same fallback manual TikTok/Twitch conversations already use.
-    const externalId = prospect.resolved_ig_user_id ?? prospect.username;
+    // Prefer an already-existing conversation for this handle (e.g. synced
+    // from a webhook under their real platform ID) over creating a new one
+    // keyed by username — otherwise a prospect who already DM'd in would
+    // end up with a second, disconnected "shadow" thread here.
+    const existing = findConversationByHandle(prospect.platform, prospect.username);
+    const externalId = existing?.external_id ?? prospect.resolved_ig_user_id ?? prospect.username;
     const conversation = upsertConversation(
       prospect.platform,
       externalId,
       prospect.username,
       prospect.display_name ?? undefined,
-      resolvedAccountId ?? undefined,
+      existing?.account_id ?? resolvedAccountId ?? undefined,
     );
     insertMessage(
       conversation.id,
