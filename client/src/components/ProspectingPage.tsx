@@ -94,6 +94,12 @@ export function ProspectingPage({ accounts }: Props) {
   }, [statusFilter, platformFilter]);
 
   useEffect(() => {
+    window.addEventListener("accounts-synced", refresh);
+    return () => window.removeEventListener("accounts-synced", refresh);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter, platformFilter]);
+
+  useEffect(() => {
     api
       .listTemplates()
       .then(setTemplates)
