@@ -1,5 +1,6 @@
 import type { Conversation, Platform } from "../types";
 import { PlatformBadge } from "./PlatformBadge";
+import { Avatar } from "./Avatar";
 
 const PLATFORM_FILTERS: Array<{ label: string; value: Platform | "all" }> = [
   { label: "All", value: "all" },
@@ -47,7 +48,10 @@ export function ConversationList({
             onClick={() => onSelect(c.id)}
           >
             <div className="conversation-item__row">
-              <span className="conversation-item__name">{c.participant_name || c.participant_handle}</span>
+              <span className="conversation-item__identity">
+                <Avatar src={c.participant_avatar_url} label={c.participant_name || c.participant_handle} size={32} />
+                <span className="conversation-item__name">{c.participant_name || c.participant_handle}</span>
+              </span>
               <PlatformBadge platform={c.platform} />
             </div>
             <div className="conversation-item__handle">

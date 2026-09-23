@@ -58,10 +58,15 @@ db.exec(`
 // in deployed databases — CREATE TABLE IF NOT EXISTS above doesn't touch
 // existing tables. Safe to run every startup: ignores the "duplicate
 // column" error on subsequent runs.
-try {
-  db.exec("ALTER TABLE accounts ADD COLUMN profile_picture_url TEXT");
-} catch (err) {
-  if (!(err instanceof Error) || !err.message.includes("duplicate column")) throw err;
+for (const migration of [
+  "ALTER TABLE accounts ADD COLUMN profile_picture_url TEXT",
+  "ALTER TABLE conversations ADD COLUMN participant_avatar_url TEXT",
+]) {
+  try {
+    db.exec(migration);
+  } catch (err) {
+    if (!(err instanceof Error) || !err.message.includes("duplicate column")) throw err;
+  }
 }
 
 export interface AccountRow {
@@ -81,6 +86,7 @@ export interface ConversationRow {
   external_id: string;
   participant_handle: string;
   participant_name: string | null;
+  participant_avatar_url: string | null;
   status: string;
   last_message_at: string;
   created_at: string;
@@ -158,6 +164,10 @@ export function upsertConversation(
   return db
     .prepare<[number], ConversationRow>("SELECT * FROM conversations WHERE id = ?")
     .get(result.lastInsertRowid as number)!;
+}
+
+export function updateConversationAvatar(conversationId: number, avatarUrl: string): void {
+  db.prepare("UPDATE conversations SET participant_avatar_url = ? WHERE id = ?").run(avatarUrl, conversationId);
 }
 
 export function insertMessage(

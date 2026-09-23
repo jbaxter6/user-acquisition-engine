@@ -246,6 +246,19 @@ body {
   font-weight: 600;
 }
 
+.conversation-item__identity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.conversation-item__identity .conversation-item__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .conversation-item__handle {
   font-size: 12px;
   color: var(--text-dim);
@@ -259,6 +272,7 @@ body {
 .thread-view__header-left {
   display: flex;
   align-items: center;
+  gap: 10px;
   min-width: 0;
 }
 

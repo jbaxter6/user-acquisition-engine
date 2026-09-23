@@ -7,6 +7,7 @@ export interface Conversation {
   external_id: string;
   participant_handle: string;
   participant_name: string | null;
+  participant_avatar_url: string | null;
   status: string;
   last_message_at: string;
   created_at: string;

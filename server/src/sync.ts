@@ -1,4 +1,5 @@
 import { db, insertMessage, upsertAccount, upsertConversation, type AccountRow } from "./db.js";
+import { backfillParticipantAvatar } from "./instagramProfile.js";
 
 const GRAPH_API_VERSION = "v21.0";
 
@@ -128,6 +129,7 @@ export async function syncInstagramAccount(
         "api",
         detail.id
       );
+      await backfillParticipantAvatar(dbConversation, account.access_token);
       newMessages++;
     }
   }
