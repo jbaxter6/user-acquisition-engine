@@ -164,11 +164,26 @@ export function authRouter(): Router {
       const longLivedRes = await fetch(longLivedUrl);
       if (!longLivedRes.ok) throw new Error(`token exchange failed: ${await longLivedRes.text()}`);
       const { access_token: longLivedToken } = (await longLivedRes.json()) as LongLivedTokenResponse;
+      const normalizedToken = longLivedToken?.trim();
+      if (!normalizedToken) {
+        throw new Error(`token exchange returned an empty access token: ${JSON.stringify({ access_token: longLivedToken })}`);
+      }
 
-      // 3. Look up the connected account's own profile (id, username, avatar).
+      // 3. Validate it immediately before persisting it. If this fails, the
+      // user token from the app callback is invalid or stale and no DB row
+      // should be written with it.
+      const validationUrl = new URL(`https://graph.instagram.com/${GRAPH_API_VERSION}/me`);
+      validationUrl.searchParams.set("fields", "user_id,username");
+      validationUrl.searchParams.set("access_token", normalizedToken);
+      const validationRes = await fetch(validationUrl);
+      if (!validationRes.ok) {
+        throw new Error(`token validation failed: ${await validationRes.text()}`);
+      }
+
+      // 4. Look up the connected account's own profile (id, username, avatar).
       const profileUrl = new URL(`https://graph.instagram.com/${GRAPH_API_VERSION}/me`);
       profileUrl.searchParams.set("fields", "user_id,username,profile_picture_url");
-      profileUrl.searchParams.set("access_token", longLivedToken);
+      profileUrl.searchParams.set("access_token", normalizedToken);
       const profileRes = await fetch(profileUrl);
       if (!profileRes.ok) throw new Error(`profile lookup failed: ${await profileRes.text()}`);
       const profile = (await profileRes.json()) as ProfileResponse;
@@ -177,16 +192,16 @@ export function authRouter(): Router {
         igUserId: profile.user_id,
         username: profile.username,
         profilePictureUrl: profile.profile_picture_url,
-        accessToken: longLivedToken,
+        accessToken: normalizedToken,
       });
 
-      // 4. Subscribe this specific account to webhook events. Configuring a
+      // 5. Subscribe this specific account to webhook events. Configuring a
       // callback URL at the app level (dashboard step 3) is not enough —
       // each connected account has to opt in separately, or Meta never
       // sends its messages to the webhook at all.
       const subscribeUrl = new URL(`https://graph.instagram.com/${GRAPH_API_VERSION}/${profile.user_id}/subscribed_apps`);
       subscribeUrl.searchParams.set("subscribed_fields", "messages");
-      subscribeUrl.searchParams.set("access_token", longLivedToken);
+      subscribeUrl.searchParams.set("access_token", normalizedToken);
       const subscribeRes = await fetch(subscribeUrl, { method: "POST" });
       if (!subscribeRes.ok) {
         console.error(`Webhook subscription failed for @${profile.username}:`, await subscribeRes.text());

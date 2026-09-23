@@ -25,6 +25,10 @@
 - [ ] Redeploy multi-platform Prospecting import (platform column mapping, default-platform selector, platform filter, TikTok/Twitch manual-only messaging) — merged cleanly with the concurrent templates work, verified via typecheck/build/API smoke test, no browser check
 
 ## Accomplishments
+### 2026-09-23 (continued)
+- Fixed the prospect Business Discovery lookup to use the Facebook Graph endpoint (`graph.facebook.com`) instead of the Instagram Graph endpoint, which is why Meta was returning "Tried accessing nonexisting field (business_discovery)" for valid usernames.
+- Fixed an Instagram OAuth token-handling bug: the long-lived token exchanged during connect wasn't being validated before storage, so invalid/malformed tokens made it into the database and later caused "Invalid OAuth access token - Cannot parse access token" errors during prospect Business Discovery lookups. Now validates and trims the token immediately after exchange (step 3 in `server/src/routes/auth.ts`), before persisting it.
+
 ### 2026-09-23
 - Root-caused the duplicate-message bug from the user's screenshot (same outreach text appearing twice in a thread, correct "3mo ago" copy plus a wrong "2h ago" one — and explains the earlier-reported wrong list timestamps too, same cause): messages sent through the native Instagram app (not our API) don't appear to keep a stable id across separate Sync calls, so a later sync sees what looks like a brand-new message — different id, `created_time` ≈ whenever that sync happened to run — for something already synced under an earlier id. The phantom "just synced" copy was then winning the "most recent" comparison for the whole conversation, explaining both bugs at once.
 - Fixed going forward: added `findMessageByContent` (`server/src/db.ts`) as a second check in `sync.ts` — before inserting what looks like a new message (no row matches its id), also check for an existing message in the same conversation with the same direction and exact text, and skip the insert if found rather than trusting the id alone.
