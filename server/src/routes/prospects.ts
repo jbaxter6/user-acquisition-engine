@@ -6,9 +6,11 @@ import {
   getAccountById,
   getProspectById,
   insertMessage,
+  listProspectChannels,
   listProspectContacts,
   listProspects,
   markProspectContacted,
+  mergeProspectIntoTarget,
   upsertConversation,
   upsertProspectContact,
   type ProspectInput,
@@ -26,6 +28,7 @@ export function prospectsRouter(): Router {
     res.json(
       prospects.map((prospect) => ({
         ...prospect,
+        channels: listProspectChannels(prospect.id),
         contacts: listProspectContacts(prospect.id),
       }))
     );
@@ -149,6 +152,28 @@ export function prospectsRouter(): Router {
     });
 
     res.status(201).json(contact);
+  });
+
+  router.post("/:id/merge", (req, res) => {
+    const targetId = Number(req.body?.targetId ?? req.query?.targetId);
+    const sourceId = Number(req.params.id);
+    if (!Number.isFinite(targetId) || targetId <= 0) {
+      return res.status(400).json({ error: "targetId is required" });
+    }
+    if (sourceId === targetId) {
+      return res.json(getProspectById(targetId));
+    }
+    try {
+      const merged = mergeProspectIntoTarget(sourceId, targetId);
+      res.json({
+        ...merged,
+        channels: listProspectChannels(targetId),
+        contacts: listProspectContacts(targetId),
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "merge failed";
+      res.status(400).json({ error: message });
+    }
   });
 
   return router;

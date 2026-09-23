@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import type { InstagramAccount, MessageTemplate, Platform, Prospect } from "../types";
 import {
@@ -190,7 +191,14 @@ export function ProspectingPage({ accounts }: Props) {
         <div className="prospecting__cards">
           {prospects.length === 0 && <p className="empty-state">No prospects yet — import a sheet to get started.</p>}
           {prospects.map((p) => (
-            <ProspectCard key={p.id} prospect={p} accounts={accounts} templates={templates} onChange={refresh} />
+            <ProspectCard
+              key={p.id}
+              prospect={p}
+              accounts={accounts}
+              templates={templates}
+              allProspects={prospects}
+              onChange={refresh}
+            />
           ))}
         </div>
       </section>
@@ -202,13 +210,16 @@ function ProspectCard({
   prospect,
   accounts,
   templates,
+  allProspects,
   onChange,
 }: {
   prospect: Prospect;
   accounts: InstagramAccount[];
   templates: MessageTemplate[];
+  allProspects: Prospect[];
   onChange: () => void;
 }) {
+  const navigate = useNavigate();
   const isInstagram = prospect.platform === "instagram";
   const [composing, setComposing] = useState(false);
   const [accountId, setAccountId] = useState<number | "">(accounts[0]?.id ?? "");
@@ -221,8 +232,11 @@ function ProspectCard({
   const [contactName, setContactName] = useState("");
   const [contactRole, setContactRole] = useState("manager");
   const [contactError, setContactError] = useState<string | null>(null);
+  const [mergeTargetId, setMergeTargetId] = useState<number | "">("");
+  const [mergeError, setMergeError] = useState<string | null>(null);
 
   const canOpenComposer = isInstagram ? accounts.length > 0 : true;
+  const mergeTargets = allProspects.filter((candidate) => candidate.id !== prospect.id);
 
   const handleTemplatePick = (value: string) => {
     const id = value ? Number(value) : "";
@@ -291,6 +305,18 @@ function ProspectCard({
     }
   };
 
+  const handleMerge = async () => {
+    if (!mergeTargetId) return;
+    setMergeError(null);
+    try {
+      await api.mergeProspects(prospect.id, Number(mergeTargetId));
+      setMergeTargetId("");
+      onChange();
+    } catch (err) {
+      setMergeError(String(err));
+    }
+  };
+
   return (
     <div className="prospect-card">
       <div className="prospect-card__header">
@@ -307,6 +333,28 @@ function ProspectCard({
         <p className="prospect-card__meta">{prospect.followers.toLocaleString()} followers</p>
       )}
       {prospect.notes && <p className="prospect-card__notes">{prospect.notes}</p>}
+
+      {prospect.channels && prospect.channels.length > 0 && (
+        <div className="prospect-card__channels">
+          {prospect.channels.map((channel) => (
+            <div key={channel.id} className="prospect-card__channel">
+              <span className="prospect-card__channel-label">
+                <PlatformBadge platform={channel.platform} />
+                @{channel.username}
+              </span>
+              {channel.conversation_id && (
+                <button
+                  className="secondary"
+                  onClick={() => navigate(`/inbox?conversationId=${channel.conversation_id}`)}
+                >
+                  Open conversation
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
       {prospect.contacts && prospect.contacts.length > 0 && (
         <div className="prospect-card__contacts">
           {prospect.contacts.map((contact) => (
@@ -416,55 +464,25 @@ function ProspectCard({
         </>
       )}
 
-      {prospect.contacts && prospect.contacts.length > 0 && (
-        <div className="prospect-card__contacts">
-          {prospect.contacts.map((contact) => (
-            <div key={contact.id} className="prospect-card__contact">
-              <span className="prospect-card__contact-handle">@{contact.handle}</span>
-              {contact.name && <span className="prospect-card__contact-name">({contact.name})</span>}
-              {contact.role && <span className="prospect-card__contact-role">· {contact.role}</span>}
-            </div>
-          ))}
+      {mergeTargets.length > 0 && (
+        <div className="prospect-card__merge">
+          <label className="prospect-card__merge-label">
+            <span>Merge with duplicate</span>
+            <select value={mergeTargetId} onChange={(e) => setMergeTargetId(Number(e.target.value) || "") }>
+              <option value="">Select a prospect</option>
+              {mergeTargets.map((target) => (
+                <option key={target.id} value={target.id}>
+                  {target.display_name || `@${target.username}`} ({target.platform})
+                </option>
+              ))}
+            </select>
+          </label>
+          {mergeError && <p className="composer-note">{mergeError}</p>}
+          <button className="secondary" onClick={handleMerge} disabled={!mergeTargetId}>
+            Merge prospect
+          </button>
         </div>
       )}
-
-      <div className="prospect-card__add-contact">
-        {addingContact ? (
-          <div className="prospect-card__add-contact-form">
-            <input
-              type="text"
-              value={contactHandle}
-              onChange={(e) => setContactHandle(e.target.value)}
-              placeholder="Contact's handle"
-            />
-            <input
-              type="text"
-              value={contactName}
-              onChange={(e) => setContactName(e.target.value)}
-              placeholder="Contact's name (optional)"
-            />
-            <select
-              value={contactRole}
-              onChange={(e) => setContactRole(e.target.value)}
-            >
-              <option value="manager">Manager</option>
-              <option value="assistant">Assistant</option>
-              <option value="other">Other</option>
-            </select>
-            {contactError && <p className="prospect-card__contact-error">{contactError}</p>}
-            <button onClick={handleAddContact} disabled={sending}>
-              {sending ? "Adding..." : "Add contact"}
-            </button>
-            <button className="secondary" onClick={() => setAddingContact(false)}>
-              Cancel
-            </button>
-          </div>
-        ) : (
-          <button onClick={() => setAddingContact(true)} className="prospect-card__add-contact-btn">
-            + Add related contact
-          </button>
-        )}
-      </div>
     </div>
   );
 }

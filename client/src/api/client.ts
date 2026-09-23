@@ -100,6 +100,12 @@ export const api = {
       body: JSON.stringify(input),
     }),
 
+  mergeProspects: (sourceId: number, targetId: number) =>
+    request<Prospect>(`/api/prospects/${sourceId}/merge`, {
+      method: "POST",
+      body: JSON.stringify({ targetId }),
+    }),
+
   listTemplates: () => request<MessageTemplate[]>("/api/templates"),
 
   templateStats: () => request<MessageTemplateStats[]>("/api/templates/stats"),

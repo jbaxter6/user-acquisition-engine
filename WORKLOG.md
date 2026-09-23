@@ -123,8 +123,7 @@
 - Verified both apps still typecheck and build clean after the rewrite, and smoke-tested `/api/health`, `/auth/instagram/accounts`, and the manual-conversation flow against a running server with the new schema.
 
 ### 2026-09-23
-- Split the app into route-based pages so Inbox, Prospecting, and Templates each have their own URL, while the JB brand remains pinned in the header and the nav stays visible across views.
-- Added a search box to the inbox conversation list so it can filter by participant name/handle, connected account, or the last-message preview while keeping the existing platform and account filters in place.
+- Added the multi-platform prospect merge flow: duplicate records can now be merged server-side without clobbering existing channels, and the prospect cards expose each tracked channel plus an inline button to jump straight into the matching inbox thread.
 
 ## Documentation Index
 - [Project Overview](README.md) — vision, problem statement, and 3-module architecture

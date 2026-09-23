@@ -27,8 +27,8 @@ async function resolveUsernameToIgUserId(
   accessToken: string,
   username: string
 ): Promise<string | null> {
-  const url = new URL(`https://graph.instagram.com/${GRAPH_API_VERSION}/${discovererIgUserId}`);
-  url.searchParams.set("fields", `business_discovery.username(${username}){id}`);
+  const url = new URL(`https://graph.facebook.com/${GRAPH_API_VERSION}/${discovererIgUserId}`);
+  url.searchParams.set("fields", `business_discovery.username(${username}){id,username,is_business_account,profile_picture_url}`);
   url.searchParams.set("access_token", accessToken);
 
   const res = await fetch(url);
@@ -36,8 +36,24 @@ async function resolveUsernameToIgUserId(
   console.log(`Business Discovery lookup for @${username}:`, res.status, raw);
   if (!res.ok) return null;
 
-  const data = JSON.parse(raw) as { business_discovery?: { id?: string } };
-  return data.business_discovery?.id ?? null;
+  const data = JSON.parse(raw) as {
+    business_discovery?: {
+      id?: string;
+      username?: string;
+      is_business_account?: boolean;
+      profile_picture_url?: string;
+    };
+  };
+
+  const discovered = data.business_discovery;
+  if (!discovered?.id) return null;
+  if (discovered.is_business_account === false) {
+    throw new ProspectMessageError(
+      `@${username} is not a Business or Creator account, so it can't be messaged via the Instagram API. Use "Mark sent manually" instead.`
+    );
+  }
+
+  return discovered.id;
 }
 
 export class ProspectMessageError extends Error {}
@@ -65,7 +81,7 @@ export async function sendProspectMessage(
     igUserId = await resolveUsernameToIgUserId(account.ig_user_id, account.access_token, prospect.username);
     if (!igUserId) {
       throw new ProspectMessageError(
-        `Couldn't resolve @${prospect.username} to an Instagram account ID — they may not be a Business/Creator account, or the username may be wrong.`
+        `Couldn't resolve @${prospect.username} to an Instagram account ID — they may not be a Business/Creator account, or the username may be wrong. Use "Mark sent manually" if you already sent it yourself.`
       );
     }
     setProspectResolvedId(prospect.id, igUserId);

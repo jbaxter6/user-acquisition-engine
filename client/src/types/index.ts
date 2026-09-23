@@ -72,6 +72,16 @@ export interface ProspectContact {
   last_seen_at: string;
 }
 
+export interface ProspectChannel {
+  id: number;
+  prospect_id: number;
+  platform: Platform;
+  username: string;
+  conversation_id: number | null;
+  source: string;
+  last_seen_at: string;
+}
+
 export interface Prospect {
   id: number;
   platform: Platform;
@@ -88,4 +98,5 @@ export interface Prospect {
   created_at: string;
   contacted_at: string | null;
   contacts?: ProspectContact[];
+  channels?: ProspectChannel[];
 }

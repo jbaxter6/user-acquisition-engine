@@ -41,6 +41,14 @@ function AppShell() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const requestedId = Number(searchParams.get("conversationId"));
+    if (Number.isFinite(requestedId) && requestedId > 0) {
+      setSelectedId(requestedId);
+    }
+  }, [location.search]);
+
   const refreshConversations = () => {
     api
       .listConversations(filter === "all" ? undefined : filter)
