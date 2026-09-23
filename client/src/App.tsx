@@ -216,6 +216,9 @@ function AppShell() {
   );
 }
 
+const SIDEBAR_MIN = 240;
+const SIDEBAR_MAX = 600;
+
 function InboxPage(props: {
   accounts: InstagramAccount[];
   conversations: Conversation[];
@@ -239,6 +242,35 @@ function InboxPage(props: {
   }) => Promise<void>;
   onBack: () => void;
 }) {
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const saved = Number(localStorage.getItem("sidebarWidth"));
+    return saved >= SIDEBAR_MIN && saved <= SIDEBAR_MAX ? saved : 300;
+  });
+
+  const startResize = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = sidebarWidth;
+    let latest = startWidth;
+    document.body.classList.add("is-resizing");
+
+    const onMove = (ev: PointerEvent) => {
+      latest = Math.min(
+        SIDEBAR_MAX,
+        Math.max(SIDEBAR_MIN, startWidth + ev.clientX - startX),
+      );
+      setSidebarWidth(latest);
+    };
+    const onUp = () => {
+      document.body.classList.remove("is-resizing");
+      localStorage.setItem("sidebarWidth", String(latest));
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+
   return (
     <div
       className={
@@ -247,7 +279,7 @@ function InboxPage(props: {
           : "app__body"
       }
     >
-      <aside className="app__sidebar">
+      <aside className="app__sidebar" style={{ width: sidebarWidth }}>
         <ConversationList
           conversations={props.conversations}
           selectedId={props.selectedId}
@@ -271,6 +303,18 @@ function InboxPage(props: {
           />
         </div>
       </aside>
+
+      <div
+        className="app__resizer"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize conversation list"
+        onPointerDown={startResize}
+        onDoubleClick={() => {
+          setSidebarWidth(300);
+          localStorage.setItem("sidebarWidth", "300");
+        }}
+      />
 
       <main className="app__main">
         <ThreadView

@@ -289,6 +289,32 @@ body {
   min-height: 0;
 }
 
+.app__resizer {
+  width: 5px;
+  margin-left: -3px;
+  margin-right: -2px;
+  cursor: col-resize;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 2;
+  background: transparent;
+  transition: background 0.15s ease;
+}
+
+.app__resizer:hover,
+body.is-resizing .app__resizer {
+  background: var(--accent);
+}
+
+body.is-resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+.app__sidebar {
+  flex-shrink: 0;
+}
+
 .app__main {
   flex: 1;
   min-height: 0;
@@ -1466,7 +1492,11 @@ button:disabled {
      never both — toggled by whether a conversation is selected. */
   .app__sidebar,
   .app__main {
-    width: 100%;
+    width: 100% !important;
+  }
+
+  .app__resizer {
+    display: none;
   }
 
   .app__body:not(.app__body--thread-open) .app__main {
