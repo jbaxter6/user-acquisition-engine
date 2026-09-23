@@ -125,7 +125,8 @@ for (const migration of [
   } catch (err) {
     if (
       !(err instanceof Error) ||
-      (!err.message.includes("duplicate column") && !err.message.includes("already exists"))
+      (!err.message.includes("duplicate column") &&
+        !err.message.includes("already exists"))
     )
       throw err;
   }
@@ -153,13 +154,17 @@ try {
            FROM messages
          )
          WHERE rn = 1
-       )`
+       )`,
     )
     .run().changes;
 
   if (duplicatesRemoved > 0) {
-    console.log(`Startup cleanup: removed ${duplicatesRemoved} duplicate message(s).`);
-    for (const { id } of db.prepare("SELECT id FROM conversations").all() as { id: number }[]) {
+    console.log(
+      `Startup cleanup: removed ${duplicatesRemoved} duplicate message(s).`,
+    );
+    for (const { id } of db.prepare("SELECT id FROM conversations").all() as {
+      id: number;
+    }[]) {
       recomputeConversationLastMessageAt(id);
     }
   }
@@ -263,7 +268,9 @@ export interface ProspectInput {
   source?: string;
 }
 
-export function listProspects(filters: { platform?: string; status?: string } = {}): ProspectRow[] {
+export function listProspects(
+  filters: { platform?: string; status?: string } = {},
+): ProspectRow[] {
   const clauses: string[] = [];
   const params: string[] = [];
   if (filters.platform) {
@@ -275,27 +282,39 @@ export function listProspects(filters: { platform?: string; status?: string } = 
     params.push(filters.status);
   }
   const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
-  return db.prepare<string[], ProspectRow>(`SELECT * FROM prospects ${where} ORDER BY created_at DESC`).all(...params);
+  return db
+    .prepare<
+      string[],
+      ProspectRow
+    >(`SELECT * FROM prospects ${where} ORDER BY created_at DESC`)
+    .all(...params);
 }
 
 export function getProspectById(id: number): ProspectRow | undefined {
-  return db.prepare<[number], ProspectRow>("SELECT * FROM prospects WHERE id = ?").get(id);
+  return db
+    .prepare<[number], ProspectRow>("SELECT * FROM prospects WHERE id = ?")
+    .get(id);
 }
 
-export function getProspectByUsername(platform: string, username: string): ProspectRow | undefined {
+export function getProspectByUsername(
+  platform: string,
+  username: string,
+): ProspectRow | undefined {
   const normalized = username.trim().replace(/^@/, "");
   return db
-    .prepare<[string, string], ProspectRow>(
-      "SELECT * FROM prospects WHERE platform = ? AND LOWER(username) = LOWER(?) LIMIT 1"
-    )
+    .prepare<
+      [string, string],
+      ProspectRow
+    >("SELECT * FROM prospects WHERE platform = ? AND LOWER(username) = LOWER(?) LIMIT 1")
     .get(platform, normalized);
 }
 
 export function listProspectContacts(prospectId: number): ProspectContactRow[] {
   return db
-    .prepare<[number], ProspectContactRow>(
-      "SELECT * FROM prospect_contacts WHERE prospect_id = ? ORDER BY is_primary DESC, last_seen_at DESC, id ASC"
-    )
+    .prepare<
+      [number],
+      ProspectContactRow
+    >("SELECT * FROM prospect_contacts WHERE prospect_id = ? ORDER BY is_primary DESC, last_seen_at DESC, id ASC")
     .all(prospectId);
 }
 
@@ -308,7 +327,7 @@ export function upsertProspectContact(
     role?: string;
     source?: string;
     isPrimary?: boolean;
-  }
+  },
 ): ProspectContactRow {
   const handle = input.handle.trim().replace(/^@/, "");
   if (!handle) throw new Error("contact handle is required");
@@ -322,7 +341,7 @@ export function upsertProspectContact(
          role = excluded.role,
          is_primary = excluded.is_primary,
          source = excluded.source,
-         last_seen_at = datetime('now')`
+         last_seen_at = datetime('now')`,
     )
     .run(
       prospectId,
@@ -331,15 +350,21 @@ export function upsertProspectContact(
       input.name ?? null,
       input.role ?? "primary",
       input.isPrimary ? 1 : 0,
-      input.source ?? "manual"
+      input.source ?? "manual",
     );
 
   return (
-    db.prepare<[number], ProspectContactRow>("SELECT * FROM prospect_contacts WHERE id = ?").get(result.lastInsertRowid as number) ??
     db
-      .prepare<[number, string, string], ProspectContactRow>(
-        "SELECT * FROM prospect_contacts WHERE prospect_id = ? AND platform = ? AND handle = ? LIMIT 1"
-      )
+      .prepare<
+        [number],
+        ProspectContactRow
+      >("SELECT * FROM prospect_contacts WHERE id = ?")
+      .get(result.lastInsertRowid as number) ??
+    db
+      .prepare<
+        [number, string, string],
+        ProspectContactRow
+      >("SELECT * FROM prospect_contacts WHERE prospect_id = ? AND platform = ? AND handle = ? LIMIT 1")
       .get(prospectId, input.platform, handle)!
   );
 }
@@ -360,19 +385,35 @@ export function ensureProspectForParticipant(input: {
   if (!prospect) {
     const result = db
       .prepare(
-        "INSERT INTO prospects (platform, username, display_name, source, status, notes) VALUES (?, ?, ?, ?, 'replied', ?)"
+        "INSERT INTO prospects (platform, username, display_name, source, status, notes) VALUES (?, ?, ?, ?, 'replied', ?)",
       )
-      .run(platform, handle, input.name ?? null, input.source ?? "inbound_message", "Auto-created from inbound message");
+      .run(
+        platform,
+        handle,
+        input.name ?? null,
+        input.source ?? "inbound_message",
+        "Auto-created from inbound message",
+      );
     prospect = getProspectById(result.lastInsertRowid as number)!;
   } else if (input.name && !prospect.display_name) {
-    db.prepare("UPDATE prospects SET display_name = ? WHERE id = ?").run(input.name, prospect.id);
+    db.prepare("UPDATE prospects SET display_name = ? WHERE id = ?").run(
+      input.name,
+      prospect.id,
+    );
   }
 
   if (prospect.status === "new" || prospect.status === "contacted") {
-    db.prepare("UPDATE prospects SET status = 'replied' WHERE id = ?").run(prospect.id);
+    db.prepare("UPDATE prospects SET status = 'replied' WHERE id = ?").run(
+      prospect.id,
+    );
   }
 
-  attachProspectChannel(prospect.id, platform, handle, input.conversationId ?? null);
+  attachProspectChannel(
+    prospect.id,
+    platform,
+    handle,
+    input.conversationId ?? null,
+  );
   upsertProspectContact(prospect.id, {
     platform,
     handle,
@@ -387,9 +428,10 @@ export function ensureProspectForParticipant(input: {
 
 export function listProspectChannels(prospectId: number): ProspectChannelRow[] {
   return db
-    .prepare<[number], ProspectChannelRow>(
-      "SELECT * FROM prospect_channels WHERE prospect_id = ? ORDER BY last_seen_at DESC, platform ASC"
-    )
+    .prepare<
+      [number],
+      ProspectChannelRow
+    >("SELECT * FROM prospect_channels WHERE prospect_id = ? ORDER BY last_seen_at DESC, platform ASC")
     .all(prospectId);
 }
 
@@ -400,7 +442,7 @@ export function upsertProspectChannel(
     username: string;
     conversationId?: number | null;
     source?: string;
-  }
+  },
 ): ProspectChannelRow {
   const username = input.username.trim().replace(/^@/, "");
   if (!username) throw new Error("channel username is required");
@@ -412,27 +454,38 @@ export function upsertProspectChannel(
        ON CONFLICT(prospect_id, platform, username) DO UPDATE SET
          conversation_id = excluded.conversation_id,
          source = excluded.source,
-         last_seen_at = datetime('now')`
+         last_seen_at = datetime('now')`,
     )
     .run(
       prospectId,
       input.platform.toLowerCase(),
       username,
       input.conversationId ?? null,
-      input.source ?? "manual"
+      input.source ?? "manual",
     );
 
   return (
-    db.prepare<[number], ProspectChannelRow>("SELECT * FROM prospect_channels WHERE id = ?").get(result.lastInsertRowid as number) ??
     db
-      .prepare<[number, string, string], ProspectChannelRow>(
-        "SELECT * FROM prospect_channels WHERE prospect_id = ? AND platform = ? AND username = ? LIMIT 1"
-      )
+      .prepare<
+        [number],
+        ProspectChannelRow
+      >("SELECT * FROM prospect_channels WHERE id = ?")
+      .get(result.lastInsertRowid as number) ??
+    db
+      .prepare<
+        [number, string, string],
+        ProspectChannelRow
+      >("SELECT * FROM prospect_channels WHERE prospect_id = ? AND platform = ? AND username = ? LIMIT 1")
       .get(prospectId, input.platform.toLowerCase(), username)!
   );
 }
 
-export function attachProspectChannel(prospectId: number, platform: string, username: string, conversationId?: number | null): void {
+export function attachProspectChannel(
+  prospectId: number,
+  platform: string,
+  username: string,
+  conversationId?: number | null,
+): void {
   upsertProspectChannel(prospectId, {
     platform,
     username,
@@ -441,7 +494,10 @@ export function attachProspectChannel(prospectId: number, platform: string, user
   });
 }
 
-export function mergeProspectIntoTarget(sourceId: number, targetId: number): ProspectRow {
+export function mergeProspectIntoTarget(
+  sourceId: number,
+  targetId: number,
+): ProspectRow {
   if (sourceId === targetId) {
     return getProspectById(targetId)!;
   }
@@ -450,36 +506,62 @@ export function mergeProspectIntoTarget(sourceId: number, targetId: number): Pro
   const target = getProspectById(targetId);
   if (!source || !target) throw new Error("prospect not found");
 
-  for (const row of db.prepare<[number], ProspectChannelRow>("SELECT * FROM prospect_channels WHERE prospect_id = ?").all(sourceId)) {
+  for (const row of db
+    .prepare<
+      [number],
+      ProspectChannelRow
+    >("SELECT * FROM prospect_channels WHERE prospect_id = ?")
+    .all(sourceId)) {
     const channelRecord = db
-      .prepare<[number, string, string], ProspectChannelRow>(
-        "SELECT * FROM prospect_channels WHERE prospect_id = ? AND platform = ? AND username = ? LIMIT 1"
-      )
+      .prepare<
+        [number, string, string],
+        ProspectChannelRow
+      >("SELECT * FROM prospect_channels WHERE prospect_id = ? AND platform = ? AND username = ? LIMIT 1")
       .get(targetId, row.platform, row.username);
 
     if (channelRecord) {
-      const nextConversationId = channelRecord.conversation_id ?? row.conversation_id;
+      const nextConversationId =
+        channelRecord.conversation_id ?? row.conversation_id;
       db.prepare(
         `UPDATE prospect_channels
          SET conversation_id = ?, source = ?, last_seen_at = CASE
            WHEN datetime(?) > datetime(last_seen_at) THEN ?
            ELSE last_seen_at
          END
-         WHERE id = ?`
-      ).run(nextConversationId, row.source, row.last_seen_at, row.last_seen_at, channelRecord.id);
+         WHERE id = ?`,
+      ).run(
+        nextConversationId,
+        row.source,
+        row.last_seen_at,
+        row.last_seen_at,
+        channelRecord.id,
+      );
     } else {
       db.prepare(
         `INSERT INTO prospect_channels (prospect_id, platform, username, conversation_id, source, last_seen_at)
-         VALUES (?, ?, ?, ?, ?, ?)`
-      ).run(targetId, row.platform, row.username, row.conversation_id, row.source, row.last_seen_at);
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      ).run(
+        targetId,
+        row.platform,
+        row.username,
+        row.conversation_id,
+        row.source,
+        row.last_seen_at,
+      );
     }
   }
 
-  for (const row of db.prepare<[number], ProspectContactRow>("SELECT * FROM prospect_contacts WHERE prospect_id = ?").all(sourceId)) {
+  for (const row of db
+    .prepare<
+      [number],
+      ProspectContactRow
+    >("SELECT * FROM prospect_contacts WHERE prospect_id = ?")
+    .all(sourceId)) {
     const existing = db
-      .prepare<[number, string, string], ProspectContactRow>(
-        "SELECT * FROM prospect_contacts WHERE prospect_id = ? AND platform = ? AND handle = ? LIMIT 1"
-      )
+      .prepare<
+        [number, string, string],
+        ProspectContactRow
+      >("SELECT * FROM prospect_contacts WHERE prospect_id = ? AND platform = ? AND handle = ? LIMIT 1")
       .get(targetId, row.platform, row.handle);
 
     if (existing) {
@@ -493,13 +575,30 @@ export function mergeProspectIntoTarget(sourceId: number, targetId: number): Pro
                WHEN datetime(?) > datetime(last_seen_at) THEN ?
                ELSE last_seen_at
              END
-         WHERE id = ?`
-      ).run(row.name ?? existing.name, row.role ?? existing.role, row.is_primary, row.source, row.last_seen_at, row.last_seen_at, existing.id);
+         WHERE id = ?`,
+      ).run(
+        row.name ?? existing.name,
+        row.role ?? existing.role,
+        row.is_primary,
+        row.source,
+        row.last_seen_at,
+        row.last_seen_at,
+        existing.id,
+      );
     } else {
       db.prepare(
         `INSERT INTO prospect_contacts (prospect_id, platform, handle, name, role, is_primary, source, last_seen_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-      ).run(targetId, row.platform, row.handle, row.name, row.role, row.is_primary, row.source, row.last_seen_at);
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).run(
+        targetId,
+        row.platform,
+        row.handle,
+        row.name,
+        row.role,
+        row.is_primary,
+        row.source,
+        row.last_seen_at,
+      );
     }
   }
 
@@ -511,7 +610,7 @@ export function mergeProspectIntoTarget(sourceId: number, targetId: number): Pro
          contacted_at = COALESCE(contacted_at, ?),
          display_name = COALESCE(NULLIF(display_name, ''), ?),
          notes = COALESCE(NULLIF(notes, ''), ?)
-     WHERE id = ?`
+     WHERE id = ?`,
   ).run(
     source.status,
     source.status,
@@ -520,7 +619,7 @@ export function mergeProspectIntoTarget(sourceId: number, targetId: number): Pro
     source.contacted_at,
     source.display_name,
     source.notes,
-    targetId
+    targetId,
   );
 
   db.prepare("DELETE FROM prospects WHERE id = ?").run(sourceId);
@@ -531,7 +630,7 @@ export function bulkInsertProspects(prospects: ProspectInput[]): number {
   const insert = db.prepare(
     `INSERT INTO prospects (platform, username, display_name, followers, notes, email, source)
      VALUES (?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(platform, username) DO NOTHING`
+     ON CONFLICT(platform, username) DO NOTHING`,
   );
   const insertAll = db.transaction((rows: ProspectInput[]) => {
     let inserted = 0;
@@ -543,13 +642,18 @@ export function bulkInsertProspects(prospects: ProspectInput[]): number {
         p.followers ?? null,
         p.notes ?? null,
         p.email ?? null,
-        p.source ?? "excel_upload"
+        p.source ?? "excel_upload",
       );
       if (result.changes > 0) {
         inserted++;
         const prospect = getProspectByUsername(p.platform, p.username);
         if (prospect) {
-          attachProspectChannel(prospect.id, prospect.platform, prospect.username, prospect.conversation_id ?? null);
+          attachProspectChannel(
+            prospect.id,
+            prospect.platform,
+            prospect.username,
+            prospect.conversation_id ?? null,
+          );
         }
       }
     }
@@ -563,28 +667,43 @@ export function deleteProspect(id: number): void {
 }
 
 export function setProspectResolvedId(id: number, igUserId: string): void {
-  db.prepare("UPDATE prospects SET resolved_ig_user_id = ? WHERE id = ?").run(igUserId, id);
+  db.prepare("UPDATE prospects SET resolved_ig_user_id = ? WHERE id = ?").run(
+    igUserId,
+    id,
+  );
 }
 
-export function markProspectContacted(id: number, accountId: number | null, conversationId: number): void {
+export function markProspectContacted(
+  id: number,
+  accountId: number | null,
+  conversationId: number,
+): void {
   db.prepare(
-    "UPDATE prospects SET status = 'contacted', account_id = ?, conversation_id = ?, contacted_at = datetime('now') WHERE id = ?"
+    "UPDATE prospects SET status = 'contacted', account_id = ?, conversation_id = ?, contacted_at = datetime('now') WHERE id = ?",
   ).run(accountId, conversationId, id);
 }
 
 export function listAccounts(platform = "instagram"): AccountRow[] {
   return db
-    .prepare<[string], AccountRow>("SELECT * FROM accounts WHERE platform = ? ORDER BY connected_at ASC")
+    .prepare<
+      [string],
+      AccountRow
+    >("SELECT * FROM accounts WHERE platform = ? ORDER BY connected_at ASC")
     .all(platform);
 }
 
 export function getAccountById(id: number): AccountRow | undefined {
-  return db.prepare<[number], AccountRow>("SELECT * FROM accounts WHERE id = ?").get(id);
+  return db
+    .prepare<[number], AccountRow>("SELECT * FROM accounts WHERE id = ?")
+    .get(id);
 }
 
 export function getAccountByIgUserId(igUserId: string): AccountRow | undefined {
   return db
-    .prepare<[string], AccountRow>("SELECT * FROM accounts WHERE platform = 'instagram' AND ig_user_id = ?")
+    .prepare<
+      [string],
+      AccountRow
+    >("SELECT * FROM accounts WHERE platform = 'instagram' AND ig_user_id = ?")
     .get(igUserId);
 }
 
@@ -600,8 +719,13 @@ export function upsertAccount(input: {
      ON CONFLICT(platform, ig_user_id) DO UPDATE SET
        username = excluded.username,
        profile_picture_url = excluded.profile_picture_url,
-       access_token = excluded.access_token`
-  ).run(input.igUserId, input.username ?? null, input.profilePictureUrl ?? null, input.accessToken);
+       access_token = excluded.access_token`,
+  ).run(
+    input.igUserId,
+    input.username ?? null,
+    input.profilePictureUrl ?? null,
+    input.accessToken,
+  );
 
   return getAccountByIgUserId(input.igUserId)!;
 }
@@ -615,67 +739,98 @@ export function upsertConversation(
   externalId: string,
   participantHandle: string,
   participantName?: string,
-  accountId?: number
+  accountId?: number,
 ): ConversationRow {
   const existing = db
-    .prepare<[string, string, number | null], ConversationRow>(
-      "SELECT * FROM conversations WHERE platform = ? AND external_id = ? AND account_id IS ?"
-    )
+    .prepare<
+      [string, string, number | null],
+      ConversationRow
+    >("SELECT * FROM conversations WHERE platform = ? AND external_id = ? AND account_id IS ?")
     .get(platform, externalId, accountId ?? null);
 
   if (existing) return existing;
 
   const result = db
     .prepare(
-      "INSERT INTO conversations (platform, account_id, external_id, participant_handle, participant_name) VALUES (?, ?, ?, ?, ?)"
+      "INSERT INTO conversations (platform, account_id, external_id, participant_handle, participant_name) VALUES (?, ?, ?, ?, ?)",
     )
-    .run(platform, accountId ?? null, externalId, participantHandle, participantName ?? null);
+    .run(
+      platform,
+      accountId ?? null,
+      externalId,
+      participantHandle,
+      participantName ?? null,
+    );
 
   return db
-    .prepare<[number], ConversationRow>("SELECT * FROM conversations WHERE id = ?")
+    .prepare<
+      [number],
+      ConversationRow
+    >("SELECT * FROM conversations WHERE id = ?")
     .get(result.lastInsertRowid as number)!;
 }
 
-export function updateConversationAvatar(conversationId: number, avatarUrl: string): void {
-  db.prepare("UPDATE conversations SET participant_avatar_url = ? WHERE id = ?").run(avatarUrl, conversationId);
+export function updateConversationAvatar(
+  conversationId: number,
+  avatarUrl: string,
+): void {
+  db.prepare(
+    "UPDATE conversations SET participant_avatar_url = ? WHERE id = ?",
+  ).run(avatarUrl, conversationId);
 }
 
 export function conversationHasInboundMessage(conversationId: number): boolean {
   return !!db
-    .prepare("SELECT 1 FROM messages WHERE conversation_id = ? AND direction = 'inbound' LIMIT 1")
+    .prepare(
+      "SELECT 1 FROM messages WHERE conversation_id = ? AND direction = 'inbound' LIMIT 1",
+    )
     .get(conversationId);
 }
 
-export function getMessageByExternalId(externalMessageId: string): MessageRow | undefined {
+export function getMessageByExternalId(
+  externalMessageId: string,
+): MessageRow | undefined {
   return db
-    .prepare<[string], MessageRow>("SELECT * FROM messages WHERE external_message_id = ?")
+    .prepare<
+      [string],
+      MessageRow
+    >("SELECT * FROM messages WHERE external_message_id = ?")
     .get(externalMessageId);
 }
 
 export function findMessageByContent(
   conversationId: number,
   direction: "inbound" | "outbound",
-  text: string
+  text: string,
 ): MessageRow | undefined {
   return db
-    .prepare<[number, string, string], MessageRow>(
-      "SELECT * FROM messages WHERE conversation_id = ? AND direction = ? AND text = ? ORDER BY created_at ASC, id ASC LIMIT 1"
-    )
+    .prepare<
+      [number, string, string],
+      MessageRow
+    >("SELECT * FROM messages WHERE conversation_id = ? AND direction = ? AND text = ? ORDER BY created_at ASC, id ASC LIMIT 1")
     .get(conversationId, direction, text);
 }
 
-export function updateMessageCreatedAt(messageId: number, createdAt: string): void {
-  db.prepare("UPDATE messages SET created_at = ? WHERE id = ?").run(createdAt, messageId);
+export function updateMessageCreatedAt(
+  messageId: number,
+  createdAt: string,
+): void {
+  db.prepare("UPDATE messages SET created_at = ? WHERE id = ?").run(
+    createdAt,
+    messageId,
+  );
 }
 
-export function recomputeConversationLastMessageAt(conversationId: number): void {
+export function recomputeConversationLastMessageAt(
+  conversationId: number,
+): void {
   db.prepare(
     `UPDATE conversations
      SET last_message_at = COALESCE(
        (SELECT MAX(created_at) FROM messages WHERE conversation_id = ?),
        last_message_at
      )
-     WHERE id = ?`
+     WHERE id = ?`,
   ).run(conversationId, conversationId);
 }
 
@@ -686,54 +841,93 @@ export function insertMessage(
   source: "api" | "manual" | "webhook",
   externalMessageId?: string,
   createdAt?: string,
-  templateId?: number
+  templateId?: number,
 ): MessageRow {
   const result = createdAt
     ? db
         .prepare(
-          "INSERT INTO messages (conversation_id, direction, text, source, external_message_id, created_at, template_id) VALUES (?, ?, ?, ?, ?, ?, ?)"
+          "INSERT INTO messages (conversation_id, direction, text, source, external_message_id, created_at, template_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
         )
-        .run(conversationId, direction, text, source, externalMessageId ?? null, createdAt, templateId ?? null)
+        .run(
+          conversationId,
+          direction,
+          text,
+          source,
+          externalMessageId ?? null,
+          createdAt,
+          templateId ?? null,
+        )
     : db
         .prepare(
-          "INSERT INTO messages (conversation_id, direction, text, source, external_message_id, template_id) VALUES (?, ?, ?, ?, ?, ?)"
+          "INSERT INTO messages (conversation_id, direction, text, source, external_message_id, template_id) VALUES (?, ?, ?, ?, ?, ?)",
         )
-        .run(conversationId, direction, text, source, externalMessageId ?? null, templateId ?? null);
+        .run(
+          conversationId,
+          direction,
+          text,
+          source,
+          externalMessageId ?? null,
+          templateId ?? null,
+        );
 
   const now = new Date().toISOString().slice(0, 19).replace("T", " ");
-  db.prepare("UPDATE conversations SET last_message_at = MAX(last_message_at, ?) WHERE id = ?").run(
-    createdAt ?? now,
-    conversationId
-  );
+  db.prepare(
+    "UPDATE conversations SET last_message_at = MAX(last_message_at, ?) WHERE id = ?",
+  ).run(createdAt ?? now, conversationId);
 
   return db
     .prepare<[number], MessageRow>("SELECT * FROM messages WHERE id = ?")
     .get(result.lastInsertRowid as number)!;
 }
 
-export function listMessageTemplates(includeArchived = false): MessageTemplateRow[] {
+export function listMessageTemplates(
+  includeArchived = false,
+): MessageTemplateRow[] {
   const where = includeArchived ? "" : "WHERE archived_at IS NULL";
   return db
-    .prepare<[], MessageTemplateRow>(`SELECT * FROM message_templates ${where} ORDER BY created_at DESC`)
+    .prepare<
+      [],
+      MessageTemplateRow
+    >(`SELECT * FROM message_templates ${where} ORDER BY created_at DESC`)
     .all();
 }
 
-export function getMessageTemplateById(id: number): MessageTemplateRow | undefined {
-  return db.prepare<[number], MessageTemplateRow>("SELECT * FROM message_templates WHERE id = ?").get(id);
+export function getMessageTemplateById(
+  id: number,
+): MessageTemplateRow | undefined {
+  return db
+    .prepare<
+      [number],
+      MessageTemplateRow
+    >("SELECT * FROM message_templates WHERE id = ?")
+    .get(id);
 }
 
-export function createMessageTemplate(name: string, body: string): MessageTemplateRow {
-  const result = db.prepare("INSERT INTO message_templates (name, body) VALUES (?, ?)").run(name, body);
+export function createMessageTemplate(
+  name: string,
+  body: string,
+): MessageTemplateRow {
+  const result = db
+    .prepare("INSERT INTO message_templates (name, body) VALUES (?, ?)")
+    .run(name, body);
   return getMessageTemplateById(result.lastInsertRowid as number)!;
 }
 
-export function updateMessageTemplate(id: number, name: string, body: string): MessageTemplateRow | undefined {
-  db.prepare("UPDATE message_templates SET name = ?, body = ? WHERE id = ?").run(name, body, id);
+export function updateMessageTemplate(
+  id: number,
+  name: string,
+  body: string,
+): MessageTemplateRow | undefined {
+  db.prepare(
+    "UPDATE message_templates SET name = ?, body = ? WHERE id = ?",
+  ).run(name, body, id);
   return getMessageTemplateById(id);
 }
 
 export function archiveMessageTemplate(id: number): void {
-  db.prepare("UPDATE message_templates SET archived_at = datetime('now') WHERE id = ?").run(id);
+  db.prepare(
+    "UPDATE message_templates SET archived_at = datetime('now') WHERE id = ?",
+  ).run(id);
 }
 
 export interface MessageTemplateStats {
@@ -762,8 +956,11 @@ export function getMessageTemplateStats(): MessageTemplateStats[] {
        FROM message_templates t
        LEFT JOIN messages m ON m.template_id = t.id AND m.direction = 'outbound'
        GROUP BY t.id
-       ORDER BY t.created_at DESC`
+       ORDER BY t.created_at DESC`,
     )
     .all()
-    .map((row) => ({ ...row, reply_rate: row.sent > 0 ? row.replied / row.sent : 0 }));
+    .map((row) => ({
+      ...row,
+      reply_rate: row.sent > 0 ? row.replied / row.sent : 0,
+    }));
 }

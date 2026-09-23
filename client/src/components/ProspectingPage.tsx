@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
-import type { InstagramAccount, MessageTemplate, Platform, Prospect } from "../types";
+import type {
+  InstagramAccount,
+  MessageTemplate,
+  Platform,
+  Prospect,
+} from "../types";
 import {
   applyMapping,
   autoMapColumns,
@@ -20,7 +25,10 @@ interface Props {
   accounts: InstagramAccount[];
 }
 
-const STATUS_FILTERS: Array<{ label: string; value: Prospect["status"] | "all" }> = [
+const STATUS_FILTERS: Array<{
+  label: string;
+  value: Prospect["status"] | "all";
+}> = [
   { label: "All", value: "all" },
   { label: "New", value: "new" },
   { label: "Contacted", value: "contacted" },
@@ -37,10 +45,14 @@ const PLATFORM_FILTERS: Array<{ label: string; value: Platform | "all" }> = [
 
 export function ProspectingPage({ accounts }: Props) {
   const [prospects, setProspects] = useState<Prospect[]>([]);
-  const [statusFilter, setStatusFilter] = useState<Prospect["status"] | "all">("all");
+  const [statusFilter, setStatusFilter] = useState<Prospect["status"] | "all">(
+    "all",
+  );
   const [platformFilter, setPlatformFilter] = useState<Platform | "all">("all");
   const [sheet, setSheet] = useState<ParsedSheet | null>(null);
-  const [mapping, setMapping] = useState<Partial<Record<ProspectField, string>>>({});
+  const [mapping, setMapping] = useState<
+    Partial<Record<ProspectField, string>>
+  >({});
   const [defaultPlatform, setDefaultPlatform] = useState<Platform>("instagram");
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<string | null>(null);
@@ -64,7 +76,10 @@ export function ProspectingPage({ accounts }: Props) {
   }, [statusFilter, platformFilter]);
 
   useEffect(() => {
-    api.listTemplates().then(setTemplates).catch((e) => setError(String(e)));
+    api
+      .listTemplates()
+      .then(setTemplates)
+      .catch((e) => setError(String(e)));
   }, []);
 
   const handleFile = async (file: File) => {
@@ -77,7 +92,11 @@ export function ProspectingPage({ accounts }: Props) {
 
   const handleImport = async () => {
     if (!sheet) return;
-    const mapped: MappedProspect[] = applyMapping(sheet.rows, mapping, defaultPlatform);
+    const mapped: MappedProspect[] = applyMapping(
+      sheet.rows,
+      mapping,
+      defaultPlatform,
+    );
     if (mapped.length === 0) {
       setImportResult("No valid rows — make sure a Username column is mapped.");
       return;
@@ -85,7 +104,9 @@ export function ProspectingPage({ accounts }: Props) {
     setImporting(true);
     try {
       const result = await api.bulkImportProspects(mapped);
-      setImportResult(`Imported ${result.inserted} new prospect(s), skipped ${result.skipped} already on file.`);
+      setImportResult(
+        `Imported ${result.inserted} new prospect(s), skipped ${result.skipped} already on file.`,
+      );
       setSheet(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
       refresh();
@@ -101,8 +122,9 @@ export function ProspectingPage({ accounts }: Props) {
       <section className="prospecting__import">
         <h2>Import prospects</h2>
         <p className="prospecting__hint">
-          Upload an Excel/CSV sheet — map its columns below, then import. Duplicate username+platform pairs
-          are skipped automatically. If your sheet doesn't have a platform column, everything imports as the
+          Upload an Excel/CSV sheet — map its columns below, then import.
+          Duplicate username+platform pairs are skipped automatically. If your
+          sheet doesn't have a platform column, everything imports as the
           default platform below.
         </p>
         <div className="prospecting__import-actions">
@@ -115,18 +137,29 @@ export function ProspectingPage({ accounts }: Props) {
               if (file) handleFile(file);
             }}
           />
-          <button className="secondary" onClick={() => downloadProspectTemplate()}>
+          <button
+            className="secondary"
+            onClick={() => downloadProspectTemplate()}
+          >
             Download template
           </button>
         </div>
 
         {sheet && (
           <div className="prospecting__mapping">
-            <p className="prospecting__hint">{sheet.rows.length} row(s) found. Map each field to a column:</p>
+            <p className="prospecting__hint">
+              {sheet.rows.length} row(s) found. Map each field to a column:
+            </p>
 
             <label className="prospecting__mapping-row">
-              <span>Default platform (used when no Platform column is mapped, or a row's value isn't recognized)</span>
-              <select value={defaultPlatform} onChange={(e) => setDefaultPlatform(e.target.value as Platform)}>
+              <span>
+                Default platform (used when no Platform column is mapped, or a
+                row's value isn't recognized)
+              </span>
+              <select
+                value={defaultPlatform}
+                onChange={(e) => setDefaultPlatform(e.target.value as Platform)}
+              >
                 <option value="instagram">Instagram</option>
                 <option value="tiktok">TikTok</option>
                 <option value="twitch">Twitch</option>
@@ -140,7 +173,10 @@ export function ProspectingPage({ accounts }: Props) {
                   <select
                     value={mapping[field] ?? ""}
                     onChange={(e) =>
-                      setMapping((m) => ({ ...m, [field]: e.target.value || undefined }))
+                      setMapping((m) => ({
+                        ...m,
+                        [field]: e.target.value || undefined,
+                      }))
                     }
                   >
                     <option value="">— none —</option>
@@ -153,8 +189,13 @@ export function ProspectingPage({ accounts }: Props) {
                 </label>
               ))}
             </div>
-            <button onClick={handleImport} disabled={importing || !mapping.username}>
-              {importing ? "Importing..." : `Import ${sheet.rows.length} row(s)`}
+            <button
+              onClick={handleImport}
+              disabled={importing || !mapping.username}
+            >
+              {importing
+                ? "Importing..."
+                : `Import ${sheet.rows.length} row(s)`}
             </button>
           </div>
         )}
@@ -169,7 +210,11 @@ export function ProspectingPage({ accounts }: Props) {
           {STATUS_FILTERS.map((f) => (
             <button
               key={f.value}
-              className={f.value === statusFilter ? "filter-btn filter-btn--active" : "filter-btn"}
+              className={
+                f.value === statusFilter
+                  ? "filter-btn filter-btn--active"
+                  : "filter-btn"
+              }
               onClick={() => setStatusFilter(f.value)}
             >
               {f.label}
@@ -178,7 +223,9 @@ export function ProspectingPage({ accounts }: Props) {
           <select
             className="conversation-list__account-filter"
             value={platformFilter}
-            onChange={(e) => setPlatformFilter(e.target.value as Platform | "all")}
+            onChange={(e) =>
+              setPlatformFilter(e.target.value as Platform | "all")
+            }
           >
             {PLATFORM_FILTERS.map((f) => (
               <option key={f.value} value={f.value}>
@@ -189,7 +236,11 @@ export function ProspectingPage({ accounts }: Props) {
         </div>
 
         <div className="prospecting__cards">
-          {prospects.length === 0 && <p className="empty-state">No prospects yet — import a sheet to get started.</p>}
+          {prospects.length === 0 && (
+            <p className="empty-state">
+              No prospects yet — import a sheet to get started.
+            </p>
+          )}
           {prospects.map((p) => (
             <ProspectCard
               key={p.id}
@@ -222,7 +273,9 @@ function ProspectCard({
   const navigate = useNavigate();
   const isInstagram = prospect.platform === "instagram";
   const [composing, setComposing] = useState(false);
-  const [accountId, setAccountId] = useState<number | "">(accounts[0]?.id ?? "");
+  const [accountId, setAccountId] = useState<number | "">(
+    accounts[0]?.id ?? "",
+  );
   const [templateId, setTemplateId] = useState<number | "">("");
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -236,7 +289,9 @@ function ProspectCard({
   const [mergeError, setMergeError] = useState<string | null>(null);
 
   const canOpenComposer = isInstagram ? accounts.length > 0 : true;
-  const mergeTargets = allProspects.filter((candidate) => candidate.id !== prospect.id);
+  const mergeTargets = allProspects.filter(
+    (candidate) => candidate.id !== prospect.id,
+  );
 
   const handleTemplatePick = (value: string) => {
     const id = value ? Number(value) : "";
@@ -252,7 +307,12 @@ function ProspectCard({
     setSending(true);
     setSendError(null);
     try {
-      await api.messageProspect(prospect.id, accountId, text.trim(), templateId || undefined);
+      await api.messageProspect(
+        prospect.id,
+        accountId,
+        text.trim(),
+        templateId || undefined,
+      );
       setComposing(false);
       setText("");
       onChange();
@@ -272,7 +332,7 @@ function ProspectCard({
         prospect.id,
         isInstagram ? (accountId as number) : null,
         text.trim(),
-        templateId || undefined
+        templateId || undefined,
       );
       setComposing(false);
       setText("");
@@ -320,32 +380,47 @@ function ProspectCard({
   return (
     <div className="prospect-card">
       <div className="prospect-card__header">
-        <Avatar src={null} label={prospect.display_name || prospect.username} size={36} />
+        <Avatar
+          src={null}
+          label={prospect.display_name || prospect.username}
+          size={36}
+        />
         <div className="prospect-card__identity">
-          <span className="prospect-card__name">{prospect.display_name || `@${prospect.username}`}</span>
+          <span className="prospect-card__name">
+            {prospect.display_name || `@${prospect.username}`}
+          </span>
           <span className="prospect-card__handle">@{prospect.username}</span>
         </div>
         <PlatformBadge platform={prospect.platform} />
-        <span className={`prospect-card__status prospect-card__status--${prospect.status}`}>{prospect.status}</span>
+        <span
+          className={`prospect-card__status prospect-card__status--${prospect.status}`}
+        >
+          {prospect.status}
+        </span>
       </div>
 
       {prospect.followers != null && (
-        <p className="prospect-card__meta">{prospect.followers.toLocaleString()} followers</p>
+        <p className="prospect-card__meta">
+          {prospect.followers.toLocaleString()} followers
+        </p>
       )}
-      {prospect.notes && <p className="prospect-card__notes">{prospect.notes}</p>}
+      {prospect.notes && (
+        <p className="prospect-card__notes">{prospect.notes}</p>
+      )}
 
       {prospect.channels && prospect.channels.length > 0 && (
         <div className="prospect-card__channels">
           {prospect.channels.map((channel) => (
             <div key={channel.id} className="prospect-card__channel">
               <span className="prospect-card__channel-label">
-                <PlatformBadge platform={channel.platform} />
-                @{channel.username}
+                <PlatformBadge platform={channel.platform} />@{channel.username}
               </span>
               {channel.conversation_id && (
                 <button
                   className="secondary"
-                  onClick={() => navigate(`/inbox?conversationId=${channel.conversation_id}`)}
+                  onClick={() =>
+                    navigate(`/inbox?conversationId=${channel.conversation_id}`)
+                  }
                 >
                   Open conversation
                 </button>
@@ -383,7 +458,10 @@ function ProspectCard({
               onChange={(e) => setContactName(e.target.value)}
               placeholder="Name (optional)"
             />
-            <select value={contactRole} onChange={(e) => setContactRole(e.target.value)}>
+            <select
+              value={contactRole}
+              onChange={(e) => setContactRole(e.target.value)}
+            >
               <option value="primary">Primary</option>
               <option value="manager">Manager</option>
               <option value="assistant">Assistant</option>
@@ -392,10 +470,16 @@ function ProspectCard({
             </select>
             {contactError && <p className="composer-note">{contactError}</p>}
             <div className="prospect-card__composer-actions">
-              <button className="secondary" onClick={() => setAddingContact(false)}>
+              <button
+                className="secondary"
+                onClick={() => setAddingContact(false)}
+              >
                 Cancel
               </button>
-              <button onClick={handleAddContact} disabled={!contactHandle.trim()}>
+              <button
+                onClick={handleAddContact}
+                disabled={!contactHandle.trim()}
+              >
                 Save contact
               </button>
             </div>
@@ -406,13 +490,19 @@ function ProspectCard({
       {prospect.status === "new" && (
         <>
           {!composing ? (
-            <button onClick={() => setComposing(true)} disabled={!canOpenComposer}>
+            <button
+              onClick={() => setComposing(true)}
+              disabled={!canOpenComposer}
+            >
               {!canOpenComposer ? "Connect an account first" : "Message"}
             </button>
           ) : (
             <div className="prospect-card__composer">
               {isInstagram ? (
-                <select value={accountId} onChange={(e) => setAccountId(Number(e.target.value))}>
+                <select
+                  value={accountId}
+                  onChange={(e) => setAccountId(Number(e.target.value))}
+                >
                   {accounts.map((a) => (
                     <option key={a.id} value={a.id}>
                       @{a.username ?? a.igUserId}
@@ -421,12 +511,15 @@ function ProspectCard({
                 </select>
               ) : (
                 <p className="composer-note">
-                  No {prospect.platform} account integration yet — send this from that platform's app
-                  directly, then log it here.
+                  No {prospect.platform} account integration yet — send this
+                  from that platform's app directly, then log it here.
                 </p>
               )}
               {templates.length > 0 && (
-                <select value={templateId} onChange={(e) => handleTemplatePick(e.target.value)}>
+                <select
+                  value={templateId}
+                  onChange={(e) => handleTemplatePick(e.target.value)}
+                >
                   <option value="">— write from scratch —</option>
                   {templates.map((t) => (
                     <option key={t.id} value={t.id}>
@@ -443,18 +536,29 @@ function ProspectCard({
               />
               {sendError && (
                 <p className="composer-note">
-                  Send failed: {sendError} — you can send it yourself from the app and mark it below instead.
+                  Send failed: {sendError} — you can send it yourself from the
+                  app and mark it below instead.
                 </p>
               )}
               <div className="prospect-card__composer-actions">
-                <button className="secondary" onClick={() => setComposing(false)}>
+                <button
+                  className="secondary"
+                  onClick={() => setComposing(false)}
+                >
                   Cancel
                 </button>
-                <button className="secondary" onClick={handleMarkManually} disabled={sending || !text.trim()}>
+                <button
+                  className="secondary"
+                  onClick={handleMarkManually}
+                  disabled={sending || !text.trim()}
+                >
                   Mark sent manually
                 </button>
                 {isInstagram && (
-                  <button onClick={handleSend} disabled={sending || !text.trim()}>
+                  <button
+                    onClick={handleSend}
+                    disabled={sending || !text.trim()}
+                  >
                     {sending ? "Sending..." : "Send via API"}
                   </button>
                 )}
@@ -468,17 +572,25 @@ function ProspectCard({
         <div className="prospect-card__merge">
           <label className="prospect-card__merge-label">
             <span>Merge with duplicate</span>
-            <select value={mergeTargetId} onChange={(e) => setMergeTargetId(Number(e.target.value) || "") }>
+            <select
+              value={mergeTargetId}
+              onChange={(e) => setMergeTargetId(Number(e.target.value) || "")}
+            >
               <option value="">Select a prospect</option>
               {mergeTargets.map((target) => (
                 <option key={target.id} value={target.id}>
-                  {target.display_name || `@${target.username}`} ({target.platform})
+                  {target.display_name || `@${target.username}`} (
+                  {target.platform})
                 </option>
               ))}
             </select>
           </label>
           {mergeError && <p className="composer-note">{mergeError}</p>}
-          <button className="secondary" onClick={handleMerge} disabled={!mergeTargetId}>
+          <button
+            className="secondary"
+            onClick={handleMerge}
+            disabled={!mergeTargetId}
+          >
             Merge prospect
           </button>
         </div>

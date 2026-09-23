@@ -1,5 +1,12 @@
 import { useEffect, useState } from "react";
-import { BrowserRouter, NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
+import {
+  BrowserRouter,
+  NavLink,
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+} from "react-router-dom";
 import { api } from "./api/client";
 import { ConversationList } from "./components/ConversationList";
 import { ThreadView } from "./components/ThreadView";
@@ -7,10 +14,19 @@ import { AccountConnection } from "./components/AccountConnection";
 import { PlatformStatusChip } from "./components/PlatformStatusChip";
 import { ProspectingPage } from "./components/ProspectingPage";
 import { TemplatesPanel } from "./components/TemplatesPanel";
-import type { Conversation, InstagramAccount, Message, Platform } from "./types";
+import type {
+  Conversation,
+  InstagramAccount,
+  Message,
+  Platform,
+} from "./types";
 import "./index.css";
 
-const VIEW_LABELS = { inbox: "Inbox", prospecting: "Prospecting", templates: "Templates" } as const;
+const VIEW_LABELS = {
+  inbox: "Inbox",
+  prospecting: "Prospecting",
+  templates: "Templates",
+} as const;
 const BRAND_NAME = "JB";
 
 type View = keyof typeof VIEW_LABELS;
@@ -57,7 +73,10 @@ function AppShell() {
   };
 
   const refreshAccounts = () => {
-    api.listInstagramAccounts().then(setAccounts).catch(() => setAccounts([]));
+    api
+      .listInstagramAccounts()
+      .then(setAccounts)
+      .catch(() => setAccounts([]));
     refreshConversations();
   };
 
@@ -76,10 +95,14 @@ function AppShell() {
       setMessages([]);
       return;
     }
-    api.listMessages(selectedId).then(setMessages).catch((e) => setError(String(e)));
+    api
+      .listMessages(selectedId)
+      .then(setMessages)
+      .catch((e) => setError(String(e)));
   }, [selectedId]);
 
-  const selectedConversation = conversations.find((c) => c.id === selectedId) ?? null;
+  const selectedConversation =
+    conversations.find((c) => c.id === selectedId) ?? null;
 
   const accountFor = (accountId: number | null): InstagramAccount | null => {
     if (accountId == null) return null;
@@ -116,19 +139,25 @@ function AppShell() {
           <nav className="app__nav" aria-label="Main navigation">
             <NavLink
               to="/inbox"
-              className={({ isActive }) => (isActive ? "nav-btn nav-btn--active" : "nav-btn")}
+              className={({ isActive }) =>
+                isActive ? "nav-btn nav-btn--active" : "nav-btn"
+              }
             >
               Inbox
             </NavLink>
             <NavLink
               to="/prospecting"
-              className={({ isActive }) => (isActive ? "nav-btn nav-btn--active" : "nav-btn")}
+              className={({ isActive }) =>
+                isActive ? "nav-btn nav-btn--active" : "nav-btn"
+              }
             >
               Prospecting
             </NavLink>
             <NavLink
               to="/templates"
-              className={({ isActive }) => (isActive ? "nav-btn nav-btn--active" : "nav-btn")}
+              className={({ isActive }) =>
+                isActive ? "nav-btn nav-btn--active" : "nav-btn"
+              }
             >
               Templates
             </NavLink>
@@ -136,8 +165,16 @@ function AppShell() {
         </div>
         <div className="app__header-right">
           <AccountConnection accounts={accounts} onChange={refreshAccounts} />
-          <PlatformStatusChip platform="tiktok" count={0} title="No TikTok integration yet — messages are logged manually" />
-          <PlatformStatusChip platform="twitch" count={0} title="No Twitch integration yet — messages are logged manually" />
+          <PlatformStatusChip
+            platform="tiktok"
+            count={0}
+            title="No TikTok integration yet — messages are logged manually"
+          />
+          <PlatformStatusChip
+            platform="twitch"
+            count={0}
+            title="No Twitch integration yet — messages are logged manually"
+          />
         </div>
       </header>
 
@@ -168,7 +205,10 @@ function AppShell() {
             />
           }
         />
-        <Route path="/prospecting" element={<ProspectingPage accounts={accounts} />} />
+        <Route
+          path="/prospecting"
+          element={<ProspectingPage accounts={accounts} />}
+        />
         <Route path="/templates" element={<TemplatesPanel />} />
         <Route path="*" element={<Navigate to="/inbox" replace />} />
       </Routes>
@@ -200,7 +240,13 @@ function InboxPage(props: {
   onBack: () => void;
 }) {
   return (
-    <div className={props.selectedId != null ? "app__body app__body--thread-open" : "app__body"}>
+    <div
+      className={
+        props.selectedId != null
+          ? "app__body app__body--thread-open"
+          : "app__body"
+      }
+    >
       <aside className="app__sidebar">
         <ConversationList
           conversations={props.conversations}
@@ -231,7 +277,8 @@ function InboxPage(props: {
           conversation={props.selectedConversation}
           messages={props.messages}
           canSend={
-            props.selectedConversation?.platform === "instagram" && props.selectedConversation.account_id != null
+            props.selectedConversation?.platform === "instagram" &&
+            props.selectedConversation.account_id != null
           }
           accountFor={props.accountFor}
           onSend={props.onSend}

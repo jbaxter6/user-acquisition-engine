@@ -1,5 +1,10 @@
 import { Router } from "express";
-import { ensureProspectForParticipant, getAccountByIgUserId, insertMessage, upsertConversation } from "../db.js";
+import {
+  ensureProspectForParticipant,
+  getAccountByIgUserId,
+  insertMessage,
+  upsertConversation,
+} from "../db.js";
 import { backfillParticipantAvatar } from "../instagramProfile.js";
 
 interface InstagramWebhookBody {
@@ -46,10 +51,22 @@ export function webhooksRouter(): Router {
         const recipientId = change.value?.recipient?.id;
         const text = change.value?.message?.text;
         // is_echo events are messages *we* sent, already recorded on send.
-        if (!senderId || !recipientId || !text || change.value?.message?.is_echo) continue;
+        if (
+          !senderId ||
+          !recipientId ||
+          !text ||
+          change.value?.message?.is_echo
+        )
+          continue;
 
         const account = getAccountByIgUserId(recipientId);
-        const conversation = upsertConversation("instagram", senderId, senderId, undefined, account?.id);
+        const conversation = upsertConversation(
+          "instagram",
+          senderId,
+          senderId,
+          undefined,
+          account?.id,
+        );
         ensureProspectForParticipant({
           platform: "instagram",
           handle: senderId,
@@ -57,9 +74,16 @@ export function webhooksRouter(): Router {
           source: "webhook",
           role: "primary",
         });
-        insertMessage(conversation.id, "inbound", text, "webhook", change.value?.message?.mid);
+        insertMessage(
+          conversation.id,
+          "inbound",
+          text,
+          "webhook",
+          change.value?.message?.mid,
+        );
         // Not awaited — avatar lookup shouldn't delay the webhook ack Meta expects.
-        if (account) void backfillParticipantAvatar(conversation, account.access_token);
+        if (account)
+          void backfillParticipantAvatar(conversation, account.access_token);
       }
     }
 

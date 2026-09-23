@@ -30,7 +30,14 @@ app.use("/webhooks", webhooksRouter());
 // reachable for Meta's App Review process — a reviewer can't provide the
 // site password. `/privacy.html` is kept as an alias since it was the
 // original URL used during initial setup.
-const privacyHtmlPath = path.resolve(__dirname, "..", "..", "client", "public", "privacy.html");
+const privacyHtmlPath = path.resolve(
+  __dirname,
+  "..",
+  "..",
+  "client",
+  "public",
+  "privacy.html",
+);
 app.get(["/privacy", "/privacy.html"], (_req, res) => {
   res.sendFile(privacyHtmlPath);
 });
@@ -42,7 +49,10 @@ app.get("/api/health", (_req, res) => {
   res.json({
     ok: true,
     adapters: {
-      instagram: { canSend: connectedInstagramAccounts > 0, connectedAccounts: connectedInstagramAccounts },
+      instagram: {
+        canSend: connectedInstagramAccounts > 0,
+        connectedAccounts: connectedInstagramAccounts,
+      },
       tiktok: { canSend: false },
       twitch: { canSend: false },
     },
@@ -72,10 +82,17 @@ if (fs.existsSync(clientDist)) {
 // disclosure risk in production. Must be registered last, and needs all
 // four params for Express to recognize it as an error handler.
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error("Unhandled error:", err);
-  res.status(500).json({ error: "Internal server error" });
-});
+app.use(
+  (
+    err: Error,
+    _req: express.Request,
+    res: express.Response,
+    _next: express.NextFunction,
+  ) => {
+    console.error("Unhandled error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  },
+);
 
 const port = process.env.PORT ? Number(process.env.PORT) : 4000;
 app.listen(port, "0.0.0.0", () => {

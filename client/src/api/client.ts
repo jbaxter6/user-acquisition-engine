@@ -33,18 +33,26 @@ export const api = {
 
   health: () => request<HealthResponse>("/api/health"),
 
-  listInstagramAccounts: () => request<InstagramAccount[]>("/auth/instagram/accounts"),
+  listInstagramAccounts: () =>
+    request<InstagramAccount[]>("/auth/instagram/accounts"),
 
   disconnectInstagramAccount: (id: number) =>
-    request<{ ok: true }>(`/auth/instagram/accounts/${id}`, { method: "DELETE" }),
-
-  syncInstagramAccount: (id: number) =>
-    request<{ conversations: number; newMessages: number }>(`/auth/instagram/accounts/${id}/sync`, {
-      method: "POST",
+    request<{ ok: true }>(`/auth/instagram/accounts/${id}`, {
+      method: "DELETE",
     }),
 
+  syncInstagramAccount: (id: number) =>
+    request<{ conversations: number; newMessages: number }>(
+      `/auth/instagram/accounts/${id}/sync`,
+      {
+        method: "POST",
+      },
+    ),
+
   listConversations: (platform?: Platform) =>
-    request<Conversation[]>(`/api/conversations${platform ? `?platform=${platform}` : ""}`),
+    request<Conversation[]>(
+      `/api/conversations${platform ? `?platform=${platform}` : ""}`,
+    ),
 
   listMessages: (conversationId: number) =>
     request<Message[]>(`/api/conversations/${conversationId}/messages`),
@@ -61,10 +69,13 @@ export const api = {
     participantName?: string;
     text: string;
   }) =>
-    request<{ conversation: Conversation; message: Message }>("/api/conversations/manual", {
-      method: "POST",
-      body: JSON.stringify(input),
-    }),
+    request<{ conversation: Conversation; message: Message }>(
+      "/api/conversations/manual",
+      {
+        method: "POST",
+        body: JSON.stringify(input),
+      },
+    ),
 
   listProspects: (filters?: { status?: string; platform?: Platform }) => {
     const params = new URLSearchParams();
@@ -75,27 +86,55 @@ export const api = {
   },
 
   bulkImportProspects: (prospects: MappedProspect[]) =>
-    request<{ received: number; inserted: number; skipped: number }>("/api/prospects/bulk", {
-      method: "POST",
-      body: JSON.stringify({ prospects }),
-    }),
+    request<{ received: number; inserted: number; skipped: number }>(
+      "/api/prospects/bulk",
+      {
+        method: "POST",
+        body: JSON.stringify({ prospects }),
+      },
+    ),
 
-  deleteProspect: (id: number) => request<{ ok: true }>(`/api/prospects/${id}`, { method: "DELETE" }),
+  deleteProspect: (id: number) =>
+    request<{ ok: true }>(`/api/prospects/${id}`, { method: "DELETE" }),
 
-  messageProspect: (id: number, accountId: number, text: string, templateId?: number) =>
+  messageProspect: (
+    id: number,
+    accountId: number,
+    text: string,
+    templateId?: number,
+  ) =>
     request<{ conversationId: number }>(`/api/prospects/${id}/message`, {
       method: "POST",
       body: JSON.stringify({ accountId, text, templateId }),
     }),
 
-  markProspectContactedManually: (id: number, accountId: number | null, text: string, templateId?: number) =>
+  markProspectContactedManually: (
+    id: number,
+    accountId: number | null,
+    text: string,
+    templateId?: number,
+  ) =>
     request<{ conversationId: number }>(`/api/prospects/${id}/mark-contacted`, {
       method: "POST",
       body: JSON.stringify({ accountId, text, templateId }),
     }),
 
-  addProspectContact: (id: number, input: { handle: string; name?: string; role?: string; isPrimary?: boolean }) =>
-    request<{ id: number; prospect_id: number; handle: string; name: string | null; role: string }>(`/api/prospects/${id}/contacts`, {
+  addProspectContact: (
+    id: number,
+    input: {
+      handle: string;
+      name?: string;
+      role?: string;
+      isPrimary?: boolean;
+    },
+  ) =>
+    request<{
+      id: number;
+      prospect_id: number;
+      handle: string;
+      name: string | null;
+      role: string;
+    }>(`/api/prospects/${id}/contacts`, {
       method: "POST",
       body: JSON.stringify(input),
     }),
@@ -122,5 +161,6 @@ export const api = {
       body: JSON.stringify({ name, body }),
     }),
 
-  archiveTemplate: (id: number) => request<{ ok: true }>(`/api/templates/${id}`, { method: "DELETE" }),
+  archiveTemplate: (id: number) =>
+    request<{ ok: true }>(`/api/templates/${id}`, { method: "DELETE" }),
 };

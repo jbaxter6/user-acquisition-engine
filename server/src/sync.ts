@@ -48,17 +48,22 @@ function toSqliteUtc(isoTimestamp: string): string {
  * with any valid account token — see WORKLOG.md for how that was diagnosed.
  */
 export async function syncInstagramAccount(
-  account: AccountRow
+  account: AccountRow,
 ): Promise<{ conversations: number; newMessages: number }> {
   // Opportunistically refresh the avatar/username for accounts connected
   // before profile_picture_url was tracked, since we're already spending
   // an API call on this account anyway.
-  const profileUrl = new URL(`https://graph.instagram.com/${GRAPH_API_VERSION}/me`);
+  const profileUrl = new URL(
+    `https://graph.instagram.com/${GRAPH_API_VERSION}/me`,
+  );
   profileUrl.searchParams.set("fields", "user_id,username,profile_picture_url");
   profileUrl.searchParams.set("access_token", account.access_token);
   const profileRes = await fetch(profileUrl);
   if (profileRes.ok) {
-    const profile = (await profileRes.json()) as { username?: string; profile_picture_url?: string };
+    const profile = (await profileRes.json()) as {
+      username?: string;
+      profile_picture_url?: string;
+    };
     upsertAccount({
       igUserId: account.ig_user_id,
       username: profile.username ?? account.username ?? undefined,
@@ -67,7 +72,9 @@ export async function syncInstagramAccount(
     });
   }
 
-  const firstUrl = new URL(`https://graph.instagram.com/${GRAPH_API_VERSION}/me/conversations`);
+  const firstUrl = new URL(
+    `https://graph.instagram.com/${GRAPH_API_VERSION}/me/conversations`,
+  );
   firstUrl.searchParams.set("platform", "instagram");
   firstUrl.searchParams.set("access_token", account.access_token);
 
@@ -86,7 +93,7 @@ export async function syncInstagramAccount(
     console.log(
       `Instagram conversations page ${pageCount} for @${account.username} (ig_user_id=${account.ig_user_id}):`,
       pageRes.status,
-      pageRaw
+      pageRaw,
     );
     if (!pageRes.ok) {
       throw new Error(`listing conversations failed: ${pageRaw}`);
@@ -99,16 +106,22 @@ export async function syncInstagramAccount(
   let newMessages = 0;
 
   for (const conversation of conversations) {
-    const messagesUrl = new URL(`https://graph.instagram.com/${GRAPH_API_VERSION}/${conversation.id}`);
+    const messagesUrl = new URL(
+      `https://graph.instagram.com/${GRAPH_API_VERSION}/${conversation.id}`,
+    );
     messagesUrl.searchParams.set("fields", "messages");
     messagesUrl.searchParams.set("access_token", account.access_token);
 
     const messagesRes = await fetch(messagesUrl);
     if (!messagesRes.ok) {
-      console.error(`fetching conversation ${conversation.id} failed:`, await messagesRes.text());
+      console.error(
+        `fetching conversation ${conversation.id} failed:`,
+        await messagesRes.text(),
+      );
       continue;
     }
-    const { messages } = (await messagesRes.json()) as ConversationMessagesResponse;
+    const { messages } =
+      (await messagesRes.json()) as ConversationMessagesResponse;
     const messageIds = messages?.data ?? [];
     if (messageIds.length === 0) continue;
 
@@ -126,19 +139,24 @@ export async function syncInstagramAccount(
     for (const { id: messageId } of messageIds) {
       const existing = getMessageByExternalId(messageId);
 
-      const detailUrl = new URL(`https://graph.instagram.com/${GRAPH_API_VERSION}/${messageId}`);
+      const detailUrl = new URL(
+        `https://graph.instagram.com/${GRAPH_API_VERSION}/${messageId}`,
+      );
       detailUrl.searchParams.set("fields", "id,created_time,from,to,message");
       detailUrl.searchParams.set("access_token", account.access_token);
 
       const detailRes = await fetch(detailUrl);
       if (!detailRes.ok) {
-        console.error(`fetching message ${messageId} failed:`, await detailRes.text());
+        console.error(
+          `fetching message ${messageId} failed:`,
+          await detailRes.text(),
+        );
         continue;
       }
       const detailRaw = await detailRes.text();
       console.log(
         `Message detail for ${messageId} (existing db row: ${existing?.id ?? "none"}):`,
-        detailRaw
+        detailRaw,
       );
       const detail = JSON.parse(detailRaw) as MessageDetailResponse;
       if (!detail.message) continue;
@@ -152,7 +170,7 @@ export async function syncInstagramAccount(
         participant.id,
         participant.username ?? participant.id,
         undefined,
-        account.id
+        account.id,
       );
 
       const correctCreatedAt = toSqliteUtc(detail.created_time);
@@ -179,9 +197,20 @@ export async function syncInstagramAccount(
         // genuinely new. Without this, the same real message resurfaces
         // as a duplicate every time Meta hands back a different id for it,
         // each with created_time ≈ whenever that sync happened to run.
-        const contentMatch = findMessageByContent(dbConversation.id, direction, detail.message);
+        const contentMatch = findMessageByContent(
+          dbConversation.id,
+          direction,
+          detail.message,
+        );
         if (!contentMatch) {
-          insertMessage(dbConversation.id, direction, detail.message, "api", detail.id, correctCreatedAt);
+          insertMessage(
+            dbConversation.id,
+            direction,
+            detail.message,
+            "api",
+            detail.id,
+            correctCreatedAt,
+          );
           newMessages++;
         }
       }

@@ -10,7 +10,9 @@ function timingSafeEqualStr(a: string, b: string): boolean {
   const maxLen = Math.max(bufA.length, bufB.length, 1);
   const paddedA = Buffer.concat([bufA], maxLen);
   const paddedB = Buffer.concat([bufB], maxLen);
-  return crypto.timingSafeEqual(paddedA, paddedB) && bufA.length === bufB.length;
+  return (
+    crypto.timingSafeEqual(paddedA, paddedB) && bufA.length === bufB.length
+  );
 }
 
 /**
@@ -42,7 +44,8 @@ export function siteAuth() {
     if (header?.startsWith("Basic ")) {
       const decoded = Buffer.from(header.slice(6), "base64").toString("utf8");
       const separatorIndex = decoded.indexOf(":");
-      const providedPassword = separatorIndex >= 0 ? decoded.slice(separatorIndex + 1) : decoded;
+      const providedPassword =
+        separatorIndex >= 0 ? decoded.slice(separatorIndex + 1) : decoded;
       if (timingSafeEqualStr(providedPassword, password)) {
         return next();
       }

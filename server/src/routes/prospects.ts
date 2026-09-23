@@ -23,14 +23,17 @@ export function prospectsRouter(): Router {
   const router = Router();
 
   router.get("/", (req, res) => {
-    const { platform, status } = req.query as { platform?: string; status?: string };
+    const { platform, status } = req.query as {
+      platform?: string;
+      status?: string;
+    };
     const prospects = listProspects({ platform, status });
     res.json(
       prospects.map((prospect) => ({
         ...prospect,
         channels: listProspectChannels(prospect.id),
         contacts: listProspectContacts(prospect.id),
-      }))
+      })),
     );
   });
 
@@ -39,17 +42,23 @@ export function prospectsRouter(): Router {
   router.post("/bulk", (req, res) => {
     const { prospects } = req.body as { prospects?: unknown };
     if (!Array.isArray(prospects) || prospects.length === 0) {
-      return res.status(400).json({ error: "prospects must be a non-empty array" });
+      return res
+        .status(400)
+        .json({ error: "prospects must be a non-empty array" });
     }
 
     const rows: ProspectInput[] = [];
     for (const p of prospects) {
       if (typeof p !== "object" || p === null) continue;
-      const { username, platform, displayName, followers, notes, email } = p as Record<string, unknown>;
+      const { username, platform, displayName, followers, notes, email } =
+        p as Record<string, unknown>;
       if (typeof username !== "string" || !username.trim()) continue;
-      const normalizedPlatform = typeof platform === "string" ? platform.toLowerCase() : "";
+      const normalizedPlatform =
+        typeof platform === "string" ? platform.toLowerCase() : "";
       rows.push({
-        platform: PLATFORMS.includes(normalizedPlatform) ? normalizedPlatform : "instagram",
+        platform: PLATFORMS.includes(normalizedPlatform)
+          ? normalizedPlatform
+          : "instagram",
         username: username.trim().replace(/^@/, ""),
         displayName: typeof displayName === "string" ? displayName : undefined,
         followers: typeof followers === "number" ? followers : undefined,
@@ -59,11 +68,19 @@ export function prospectsRouter(): Router {
     }
 
     if (rows.length === 0) {
-      return res.status(400).json({ error: "no valid rows (each needs at least a username)" });
+      return res
+        .status(400)
+        .json({ error: "no valid rows (each needs at least a username)" });
     }
 
     const inserted = bulkInsertProspects(rows);
-    res.status(201).json({ received: rows.length, inserted, skipped: rows.length - inserted });
+    res
+      .status(201)
+      .json({
+        received: rows.length,
+        inserted,
+        skipped: rows.length - inserted,
+      });
   });
 
   router.delete("/:id", (req, res) => {
@@ -77,7 +94,11 @@ export function prospectsRouter(): Router {
   // failure, the error is returned as-is so the UI can offer "mark
   // contacted manually" instead of pretending this always works.
   router.post("/:id/message", async (req, res) => {
-    const { accountId, text, templateId } = req.body as { accountId?: number; text?: string; templateId?: number };
+    const { accountId, text, templateId } = req.body as {
+      accountId?: number;
+      text?: string;
+      templateId?: number;
+    };
     if (!accountId || !text?.trim()) {
       return res.status(400).json({ error: "accountId and text are required" });
     }
@@ -86,10 +107,18 @@ export function prospectsRouter(): Router {
     if (!prospect) return res.status(404).json({ error: "prospect not found" });
 
     try {
-      const result = await sendProspectMessage(prospect, accountId, text.trim(), templateId);
+      const result = await sendProspectMessage(
+        prospect,
+        accountId,
+        text.trim(),
+        templateId,
+      );
       res.json(result);
     } catch (err) {
-      const message = err instanceof ProspectMessageError ? err.message : (err as Error).message;
+      const message =
+        err instanceof ProspectMessageError
+          ? err.message
+          : (err as Error).message;
       res.status(502).json({ error: message });
     }
   });
@@ -99,7 +128,11 @@ export function prospectsRouter(): Router {
   // themselves from the connected account's native app, and is just
   // logging that here — same pattern as TikTok/Twitch manual entries.
   router.post("/:id/mark-contacted", (req, res) => {
-    const { accountId, text, templateId } = req.body as { accountId?: number; text?: string; templateId?: number };
+    const { accountId, text, templateId } = req.body as {
+      accountId?: number;
+      text?: string;
+      templateId?: number;
+    };
     const prospect = getProspectById(Number(req.params.id));
     if (!prospect) return res.status(404).json({ error: "prospect not found" });
 
@@ -107,13 +140,18 @@ export function prospectsRouter(): Router {
     // to — TikTok/Twitch have no account concept, same as their existing
     // manual-only conversations.
     if (prospect.platform === "instagram") {
-      if (!accountId) return res.status(400).json({ error: "accountId is required for Instagram prospects" });
-      if (!getAccountById(accountId)) return res.status(400).json({ error: "connected account not found" });
+      if (!accountId)
+        return res
+          .status(400)
+          .json({ error: "accountId is required for Instagram prospects" });
+      if (!getAccountById(accountId))
+        return res.status(400).json({ error: "connected account not found" });
     }
     if (!text?.trim()) {
       return res.status(400).json({ error: "text is required" });
     }
-    const resolvedAccountId = prospect.platform === "instagram" ? accountId! : null;
+    const resolvedAccountId =
+      prospect.platform === "instagram" ? accountId! : null;
 
     // Without a resolved real ID, key the conversation on the username —
     // same fallback manual TikTok/Twitch conversations already use.
@@ -123,9 +161,17 @@ export function prospectsRouter(): Router {
       externalId,
       prospect.username,
       prospect.display_name ?? undefined,
-      resolvedAccountId ?? undefined
+      resolvedAccountId ?? undefined,
     );
-    insertMessage(conversation.id, "outbound", text.trim(), "manual", undefined, undefined, templateId);
+    insertMessage(
+      conversation.id,
+      "outbound",
+      text.trim(),
+      "manual",
+      undefined,
+      undefined,
+      templateId,
+    );
     markProspectContacted(prospect.id, resolvedAccountId, conversation.id);
 
     res.json({ conversationId: conversation.id });
@@ -140,7 +186,8 @@ export function prospectsRouter(): Router {
     };
     const prospect = getProspectById(Number(req.params.id));
     if (!prospect) return res.status(404).json({ error: "prospect not found" });
-    if (!handle?.trim()) return res.status(400).json({ error: "handle is required" });
+    if (!handle?.trim())
+      return res.status(400).json({ error: "handle is required" });
 
     const contact = upsertProspectContact(Number(req.params.id), {
       platform: prospect.platform,
