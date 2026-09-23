@@ -87,6 +87,10 @@ export interface ConversationRow {
   participant_handle: string;
   participant_name: string | null;
   participant_avatar_url: string | null;
+  // Only present on the list query in routes/conversations.ts (a preview
+  // join), not on rows returned by upsertConversation/getById elsewhere.
+  last_message_text?: string;
+  last_message_direction?: "inbound" | "outbound";
   status: string;
   last_message_at: string;
   created_at: string;

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Conversation, Message } from "../types";
+import type { Conversation, InstagramAccount, Message } from "../types";
 import { PlatformBadge } from "./PlatformBadge";
 import { Avatar } from "./Avatar";
 
@@ -7,12 +7,12 @@ interface Props {
   conversation: Conversation | null;
   messages: Message[];
   canSend: boolean;
-  accountLabel: (accountId: number | null) => string | null;
+  accountFor: (accountId: number | null) => InstagramAccount | null;
   onSend: (text: string) => Promise<void>;
   onBack: () => void;
 }
 
-export function ThreadView({ conversation, messages, canSend, accountLabel, onSend, onBack }: Props) {
+export function ThreadView({ conversation, messages, canSend, accountFor, onSend, onBack }: Props) {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
 
@@ -23,6 +23,8 @@ export function ThreadView({ conversation, messages, canSend, accountLabel, onSe
       </div>
     );
   }
+
+  const account = accountFor(conversation.account_id);
 
   const handleSend = async () => {
     if (!draft.trim()) return;
@@ -53,8 +55,13 @@ export function ThreadView({ conversation, messages, canSend, accountLabel, onSe
           </div>
         </div>
         <div className="thread-view__header-right">
-          {accountLabel(conversation.account_id) && (
-            <span className="thread-view__account">via @{accountLabel(conversation.account_id)}</span>
+          {account && (
+            <Avatar
+              src={account.profilePictureUrl}
+              label={account.username ?? account.igUserId}
+              title={`via @${account.username ?? account.igUserId}`}
+              size={22}
+            />
           )}
           <PlatformBadge platform={conversation.platform} />
         </div>

@@ -12,6 +12,7 @@ export default function App() {
   const [accounts, setAccounts] = useState<InstagramAccount[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [filter, setFilter] = useState<Platform | "all">("all");
+  const [accountFilter, setAccountFilter] = useState<number | "all">("all");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -49,10 +50,9 @@ export default function App() {
 
   const selectedConversation = conversations.find((c) => c.id === selectedId) ?? null;
 
-  const accountLabel = (accountId: number | null): string | null => {
+  const accountFor = (accountId: number | null): InstagramAccount | null => {
     if (accountId == null) return null;
-    const account = accounts.find((a) => a.id === accountId);
-    return account?.username ?? account?.igUserId ?? null;
+    return accounts.find((a) => a.id === accountId) ?? null;
   };
 
   const handleSend = async (text: string) => {
@@ -100,8 +100,11 @@ export default function App() {
             selectedId={selectedId}
             filter={filter}
             onFilterChange={setFilter}
+            accounts={accounts}
+            accountFilter={accountFilter}
+            onAccountFilterChange={setAccountFilter}
             onSelect={setSelectedId}
-            accountLabel={accountLabel}
+            accountFor={accountFor}
           />
           <ManualMessageForm onSubmit={handleManualAdd} />
         </aside>
@@ -113,7 +116,7 @@ export default function App() {
             canSend={
               selectedConversation?.platform === "instagram" && selectedConversation.account_id != null
             }
-            accountLabel={accountLabel}
+            accountFor={accountFor}
             onSend={handleSend}
             onBack={() => setSelectedId(null)}
           />

@@ -15,14 +15,20 @@ export function conversationsRouter(): Router {
 
   router.get("/", (req, res) => {
     const platform = req.query.platform;
+    // Correlated subqueries pull each conversation's most recent message
+    // for a list-view preview, without a separate round trip per row.
+    const selectWithPreview = `
+      SELECT c.*,
+        (SELECT m.text FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_message_text,
+        (SELECT m.direction FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_message_direction
+      FROM conversations c
+    `;
     const rows = platform
       ? db
-          .prepare<[string], ConversationRow>(
-            "SELECT * FROM conversations WHERE platform = ? ORDER BY last_message_at DESC"
-          )
+          .prepare<[string], ConversationRow>(`${selectWithPreview} WHERE c.platform = ? ORDER BY c.last_message_at DESC`)
           .all(String(platform))
       : db
-          .prepare<[], ConversationRow>("SELECT * FROM conversations ORDER BY last_message_at DESC")
+          .prepare<[], ConversationRow>(`${selectWithPreview} ORDER BY c.last_message_at DESC`)
           .all();
     res.json(rows);
   });

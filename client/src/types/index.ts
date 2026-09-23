@@ -11,6 +11,8 @@ export interface Conversation {
   status: string;
   last_message_at: string;
   created_at: string;
+  last_message_text?: string;
+  last_message_direction?: "inbound" | "outbound";
 }
 
 export interface Message {

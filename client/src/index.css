@@ -212,6 +212,27 @@ body {
   color: white;
 }
 
+.filter-btn--icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 50%;
+}
+
+.conversation-list__account-filter {
+  margin: 0 10px 10px;
+  background: var(--panel-alt);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  font-family: inherit;
+}
+
 .conversation-list__items {
   overflow-y: auto;
   flex: 1;
@@ -259,14 +280,20 @@ body {
   white-space: nowrap;
 }
 
-.conversation-item__handle {
+.conversation-item__badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.conversation-item__preview {
   font-size: 12px;
   color: var(--text-dim);
   margin-top: 2px;
-}
-
-.conversation-item__account {
-  opacity: 0.8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .thread-view__header-left {
@@ -289,18 +316,15 @@ body {
   margin-right: 8px;
 }
 
-.thread-view__account {
-  font-size: 11px;
-  color: var(--text-dim);
-}
 
 .platform-badge {
-  font-size: 10px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  text-transform: uppercase;
-  font-weight: 700;
-  letter-spacing: 0.03em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
 .platform-badge--instagram {
