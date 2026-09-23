@@ -285,6 +285,7 @@ function ProspectCard({
   const [contactName, setContactName] = useState("");
   const [contactRole, setContactRole] = useState("manager");
   const [contactError, setContactError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const [mergeTargetId, setMergeTargetId] = useState<number | "">("");
   const [mergeError, setMergeError] = useState<string | null>(null);
 
@@ -363,6 +364,33 @@ function ProspectCard({
     } catch (err) {
       setContactError(String(err));
     }
+  };
+
+  const handleCopyMessage = async () => {
+    if (!text.trim()) return;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text.trim());
+      } else {
+        const ta = document.createElement("textarea");
+        ta.value = text.trim();
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      // ignore copy errors — user can still paste manually
+    }
+  };
+
+  const handleOpenInstagram = () => {
+    const username = prospect.username?.replace(/^@/, "");
+    if (!username) return;
+    const url = `https://ig.me/m/${username}`;
+    window.open(url, "_blank", "noopener,noreferrer");
   };
 
   const handleMerge = async () => {
@@ -547,6 +575,22 @@ function ProspectCard({
                 >
                   Cancel
                 </button>
+                <button
+                  className="secondary"
+                  onClick={handleCopyMessage}
+                  disabled={!text.trim()}
+                >
+                  {copied ? "Copied!" : "Copy message"}
+                </button>
+                {isInstagram && (
+                  <button
+                    className="secondary"
+                    onClick={handleOpenInstagram}
+                    disabled={!prospect.username}
+                  >
+                    Open in Instagram
+                  </button>
+                )}
                 <button
                   className="secondary"
                   onClick={handleMarkManually}
