@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { BrowserRouter, NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { api } from "./api/client";
 import { ConversationList } from "./components/ConversationList";
 import { ThreadView } from "./components/ThreadView";
@@ -10,10 +11,28 @@ import { TemplatesPanel } from "./components/TemplatesPanel";
 import type { Conversation, InstagramAccount, Message, Platform } from "./types";
 import "./index.css";
 
-const VIEW_LABELS = { inbox: "JB", prospecting: "Prospecting", templates: "Templates" } as const;
+const VIEW_LABELS = { inbox: "Inbox", prospecting: "Prospecting", templates: "Templates" } as const;
+const BRAND_NAME = "JB";
 
-export default function App() {
-  const [view, setView] = useState<"inbox" | "prospecting" | "templates">("inbox");
+type View = keyof typeof VIEW_LABELS;
+
+function getViewFromPath(pathname: string): View {
+  if (pathname.startsWith("/prospecting")) return "prospecting";
+  if (pathname.startsWith("/templates")) return "templates";
+  return "inbox";
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <AppShell />
+    </BrowserRouter>
+  );
+}
+
+function AppShell() {
+  const location = useLocation();
+  const view = getViewFromPath(location.pathname);
   const [accounts, setAccounts] = useState<InstagramAccount[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [filter, setFilter] = useState<Platform | "all">("all");
@@ -81,26 +100,30 @@ export default function App() {
     <div className="app">
       <header className="app__header">
         <div className="app__header-left">
-          <h1>{VIEW_LABELS[view]}</h1>
-          <nav className="app__nav">
-            <button
-              className={view === "inbox" ? "nav-btn nav-btn--active" : "nav-btn"}
-              onClick={() => setView("inbox")}
+          <div className="app__brand" aria-label="JB brand">
+            <span className="app__brand-mark">{BRAND_NAME}</span>
+            <span className="app__brand-page">{VIEW_LABELS[view]}</span>
+          </div>
+
+          <nav className="app__nav" aria-label="Main navigation">
+            <NavLink
+              to="/inbox"
+              className={({ isActive }) => (isActive ? "nav-btn nav-btn--active" : "nav-btn")}
             >
               Inbox
-            </button>
-            <button
-              className={view === "prospecting" ? "nav-btn nav-btn--active" : "nav-btn"}
-              onClick={() => setView("prospecting")}
+            </NavLink>
+            <NavLink
+              to="/prospecting"
+              className={({ isActive }) => (isActive ? "nav-btn nav-btn--active" : "nav-btn")}
             >
               Prospecting
-            </button>
-            <button
-              className={view === "templates" ? "nav-btn nav-btn--active" : "nav-btn"}
-              onClick={() => setView("templates")}
+            </NavLink>
+            <NavLink
+              to="/templates"
+              className={({ isActive }) => (isActive ? "nav-btn nav-btn--active" : "nav-btn")}
             >
               Templates
-            </button>
+            </NavLink>
           </nav>
         </div>
         <div className="app__header-right">
@@ -112,41 +135,89 @@ export default function App() {
 
       {error && <div className="app__error">{error}</div>}
 
-      {view === "inbox" ? (
-        <div className={selectedId != null ? "app__body app__body--thread-open" : "app__body"}>
-          <aside className="app__sidebar">
-            <ConversationList
-              conversations={conversations}
-              selectedId={selectedId}
-              filter={filter}
-              onFilterChange={setFilter}
+      <Routes>
+        <Route path="/" element={<Navigate to="/inbox" replace />} />
+        <Route
+          path="/inbox"
+          element={
+            <InboxPage
               accounts={accounts}
+              conversations={conversations}
+              filter={filter}
               accountFilter={accountFilter}
+              selectedId={selectedId}
+              messages={messages}
+              selectedConversation={selectedConversation}
+              accountFor={accountFor}
+              onFilterChange={setFilter}
               onAccountFilterChange={setAccountFilter}
               onSelect={setSelectedId}
-              accountFor={accountFor}
-            />
-            <ManualMessageForm onSubmit={handleManualAdd} />
-          </aside>
-
-          <main className="app__main">
-            <ThreadView
-              conversation={selectedConversation}
-              messages={messages}
-              canSend={
-                selectedConversation?.platform === "instagram" && selectedConversation.account_id != null
-              }
-              accountFor={accountFor}
               onSend={handleSend}
+              onManualAdd={handleManualAdd}
               onBack={() => setSelectedId(null)}
             />
-          </main>
-        </div>
-      ) : view === "prospecting" ? (
-        <ProspectingPage accounts={accounts} />
-      ) : (
-        <TemplatesPanel />
-      )}
+          }
+        />
+        <Route path="/prospecting" element={<ProspectingPage accounts={accounts} />} />
+        <Route path="/templates" element={<TemplatesPanel />} />
+        <Route path="*" element={<Navigate to="/inbox" replace />} />
+      </Routes>
     </div>
   );
 }
+
+function InboxPage(props: {
+  accounts: InstagramAccount[];
+  conversations: Conversation[];
+  filter: Platform | "all";
+  accountFilter: number | "all";
+  selectedId: number | null;
+  messages: Message[];
+  selectedConversation: Conversation | null;
+  accountFor: (accountId: number | null) => InstagramAccount | null;
+  onFilterChange: (value: Platform | "all") => void;
+  onAccountFilterChange: (value: number | "all") => void;
+  onSelect: (id: number | null) => void;
+  onSend: (text: string) => Promise<void>;
+  onManualAdd: (input: {
+    platform: Platform;
+    participantHandle: string;
+    participantName?: string;
+    text: string;
+  }) => Promise<void>;
+  onBack: () => void;
+}) {
+  return (
+    <div className={props.selectedId != null ? "app__body app__body--thread-open" : "app__body"}>
+      <aside className="app__sidebar">
+        <ConversationList
+          conversations={props.conversations}
+          selectedId={props.selectedId}
+          filter={props.filter}
+          onFilterChange={props.onFilterChange}
+          accounts={props.accounts}
+          accountFilter={props.accountFilter}
+          onAccountFilterChange={props.onAccountFilterChange}
+          onSelect={props.onSelect}
+          accountFor={props.accountFor}
+        />
+        <ManualMessageForm onSubmit={props.onManualAdd} />
+      </aside>
+
+      <main className="app__main">
+        <ThreadView
+          conversation={props.selectedConversation}
+          messages={props.messages}
+          canSend={
+            props.selectedConversation?.platform === "instagram" && props.selectedConversation.account_id != null
+          }
+          accountFor={props.accountFor}
+          onSend={props.onSend}
+          onBack={props.onBack}
+        />
+      </main>
+    </div>
+  );
+}
+
+export default App;

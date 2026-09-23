@@ -41,6 +41,7 @@
 - Hit a real concurrent-editing collision partway through this: a separate Copilot session in the user's IDE was simultaneously building the message-templates feature above, touching several of the same files, including the exact component (`ProspectingPage.tsx`) mid-edit. Paused and flagged it rather than continuing blind — confirmed with the user it was intentional and already finished, then reconciled: the other session had built on top of the already-saved multi-platform version rather than overwriting it, so nothing was lost from either side. Verified with a fresh full typecheck, production build, and an API smoke test (mixed-platform import, platform filter, unrecognized-platform defaulting, and a TikTok mark-contacted call with no `accountId` at all).
 
 ### 2026-09-22
+- Improved the header/nav layout so the JB brand remains visible at all times while the active page label sits alongside it, and gave the tab buttons a cleaner pill-style dashboard treatment.
 - Got the real answer on missing participant avatars, straight from the actual API error the user shared (`230 IGApiException: "User consent is required to access user profile"`), rather than continuing to guess: confirmed via Meta's own docs that profile access (including avatar) is only granted once the other party has actually messaged us — sending them a message ourselves first doesn't count. This directly confirms an earlier flagged-but-untested hypothesis about app-initiated-first conversations behaving differently.
 - Reframed this as a UI feature rather than a bug to hide: added `has_engaged` to the conversations list query (`EXISTS` check for any inbound message) and gave `Avatar` a distinct "not yet engaged" state — a dashed empty ring, deliberately different from the colored-initials fallback, so the *absence* of a photo now honestly communicates "they haven't replied yet" instead of looking like a failed image load. Applies to both the conversation list and thread header.
 - Stopped wasting API calls on lookups that can't succeed: `sync.ts` now checks whether a conversation has any inbound message at all before attempting the participant profile lookup, skipping it entirely for outbound-only conversations instead of hitting the same consent error every single sync run.
@@ -121,17 +122,8 @@
 - Corrected the "Mass Distribution Layer" description in `README.md` to reflect the actual planned scale (~5 messages/day/account, not 50) and added an explicit caveat that Meta's Messaging API doesn't support cold outreach and that even low-volume multi-account messaging carries real ban risk independent of API compliance — surfaced this directly to the user rather than silently building around it.
 - Verified both apps still typecheck and build clean after the rewrite, and smoke-tested `/api/health`, `/auth/instagram/accounts`, and the manual-conversation flow against a running server with the new schema.
 
-### 2026-09-21
-- Created `README.md` documenting the project vision, problem statement, and 3-module architecture (Discovery, Distribution, Unified Inbox).
-- Set up `worklog` skill and this `WORKLOG.md` as the living record of todos, progress, and documentation links.
-- Added GitHub Copilot equivalents (`.github/copilot-instructions.md` and `.github/prompts/worklog.prompt.md`) so the same worklog maintenance rules apply in Copilot Chat.
-- Decided frontend will be built as a React app; recorded in `README.md` under a new Tech Stack section.
-- Removed a stray auto-generated `# user-acquisition-engine` line that had been appended to the bottom of `README.md` (artifact of the GitHub repo's default README).
-- Researched DM API availability per platform: Instagram has an official Messaging API (business-account, review-gated, reply-window restricted — not built for cold outreach); TikTok has no public DM API at all; Twitch's Whispers API is closed to new app registrations. Documented in `README.md`.
-- Built the Unified Master Inbox as a working app: React + Vite + TypeScript frontend (`client/`) and Node/Express + TypeScript + SQLite backend (`server/`), connected by a REST API.
-- Implemented a `MessagingAdapter` interface (`server/src/adapters/types.ts`) so all three platforms share one interface; `InstagramAdapter` is a real Meta Graph API integration (send + webhook receive), `StubAdapter` covers TikTok/Twitch (manual message logging only, since no send/receive API exists for them).
-- Built inbox UI: conversation list with platform filter, thread view with reply composer, and a manual-entry form for logging TikTok/Twitch messages seen directly on-platform.
-- Verified both apps build and boot cleanly (`tsc --noEmit`, `vite build`, live health-check + manual-message round trip against the running server).
+### 2026-09-23
+- Split the app into route-based pages so Inbox, Prospecting, and Templates each have their own URL, while the JB brand remains pinned in the header and the nav stays visible across views.
 
 ## Documentation Index
 - [Project Overview](README.md) — vision, problem statement, and 3-module architecture
