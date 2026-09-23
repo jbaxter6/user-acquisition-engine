@@ -32,7 +32,16 @@ export function templatesRouter(): Router {
     if (!name?.trim() || !body?.trim()) {
       return res.status(400).json({ error: "name and body are required" });
     }
-    const updated = updateMessageTemplate(Number(req.params.id), name.trim(), body.trim());
+    const id = Number(req.params.id);
+    // Once a template has gone out, editing it would silently detach every
+    // past message from its stats — so it's locked; duplicate it instead.
+    const stats = getMessageTemplateStats().find((t) => t.id === id);
+    if (stats && stats.sent > 0) {
+      return res.status(409).json({
+        error: "This template is live (already sent) and can't be edited. Duplicate it to make changes.",
+      });
+    }
+    const updated = updateMessageTemplate(id, name.trim(), body.trim());
     if (!updated) return res.status(404).json({ error: "template not found" });
     res.json(updated);
   });

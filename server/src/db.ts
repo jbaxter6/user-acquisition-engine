@@ -1172,29 +1172,125 @@ export interface MessageTemplateStats {
   sent: number;
   replied: number;
   reply_rate: number;
+  avg_response_hours: number | null;
 }
 
+const TOKEN_RE = /\{\{\s*[\w.]+\s*\}\}/g;
+
+function normalizeWhitespace(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
+}
+
+// A template matches a sent message when everything outside its {{tokens}}
+// is identical — tokens are the only part that ever varies between sends.
+function compileTemplate(body: string): { regex: RegExp; literalLength: number } {
+  const normalized = normalizeWhitespace(body);
+  const literals = normalized.split(TOKEN_RE);
+  const escaped = literals.map((part) =>
+    part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+  );
+  return {
+    regex: new RegExp(`^${escaped.join("[\\s\\S]+?")}$`),
+    literalLength: literals.join("").length,
+  };
+}
+
+function parseSqliteUtc(value: string): number {
+  return Date.parse(value.replace(" ", "T") + "Z");
+}
+
+// Hit rate is measured by scanning every thread in the unified inbox for
+// outbound messages that match a template (not just ones sent through the
+// app), so DMs sent natively and synced in count too. A template "hit" is a
+// thread where the prospect replied after the matching message.
 export function getMessageTemplateStats(): MessageTemplateStats[] {
-  return db
-    .prepare<[], MessageTemplateStats>(
-      `SELECT
-         t.id,
-         t.name,
-         t.body,
-         t.archived_at,
-         COUNT(m.id) AS sent,
-         COUNT(DISTINCT CASE WHEN EXISTS (
-           SELECT 1 FROM messages reply
-           WHERE reply.conversation_id = m.conversation_id AND reply.direction = 'inbound'
-         ) THEN m.conversation_id END) AS replied
-       FROM message_templates t
-       LEFT JOIN messages m ON m.template_id = t.id AND m.direction = 'outbound'
-       GROUP BY t.id
-       ORDER BY t.created_at DESC`,
+  const templates = db
+    .prepare<[], MessageTemplateRow>(
+      "SELECT * FROM message_templates ORDER BY created_at DESC",
     )
-    .all()
-    .map((row) => ({
-      ...row,
-      reply_rate: row.sent > 0 ? row.replied / row.sent : 0,
-    }));
+    .all();
+  const compiled = templates.map((t) => ({
+    id: t.id,
+    ...compileTemplate(t.body),
+  }));
+
+  const messages = db
+    .prepare<
+      [],
+      {
+        id: number;
+        conversation_id: number;
+        direction: "inbound" | "outbound";
+        text: string;
+        created_at: string;
+        template_id: number | null;
+      }
+    >(
+      "SELECT id, conversation_id, direction, text, created_at, template_id FROM messages ORDER BY conversation_id, created_at ASC, id ASC",
+    )
+    .all();
+
+  const byConversation = new Map<number, typeof messages>();
+  for (const m of messages) {
+    const list = byConversation.get(m.conversation_id);
+    if (list) list.push(m);
+    else byConversation.set(m.conversation_id, [m]);
+  }
+
+  const totals = new Map<
+    number,
+    { sent: number; replied: number; responseHours: number[] }
+  >(templates.map((t) => [t.id, { sent: 0, replied: 0, responseHours: [] }]));
+
+  for (const thread of byConversation.values()) {
+    // One count per template per thread: the first matching outbound message.
+    const counted = new Set<number>();
+    thread.forEach((m, index) => {
+      if (m.direction !== "outbound") return;
+
+      let matchId: number | null = null;
+      if (m.template_id != null && totals.has(m.template_id)) {
+        matchId = m.template_id;
+      } else {
+        const text = normalizeWhitespace(m.text);
+        let best = -1;
+        for (const c of compiled) {
+          if (c.literalLength > best && c.regex.test(text)) {
+            best = c.literalLength;
+            matchId = c.id;
+          }
+        }
+      }
+      if (matchId == null || counted.has(matchId)) return;
+      counted.add(matchId);
+
+      const total = totals.get(matchId)!;
+      total.sent++;
+      const reply = thread.slice(index + 1).find((r) => r.direction === "inbound");
+      if (reply) {
+        total.replied++;
+        const hours =
+          (parseSqliteUtc(reply.created_at) - parseSqliteUtc(m.created_at)) /
+          3_600_000;
+        if (Number.isFinite(hours)) total.responseHours.push(Math.max(0, hours));
+      }
+    });
+  }
+
+  return templates.map((t) => {
+    const total = totals.get(t.id)!;
+    return {
+      id: t.id,
+      name: t.name,
+      body: t.body,
+      archived_at: t.archived_at,
+      sent: total.sent,
+      replied: total.replied,
+      reply_rate: total.sent > 0 ? total.replied / total.sent : 0,
+      avg_response_hours: total.responseHours.length
+        ? total.responseHours.reduce((a, b) => a + b, 0) /
+          total.responseHours.length
+        : null,
+    };
+  });
 }

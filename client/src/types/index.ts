@@ -58,6 +58,7 @@ export interface MessageTemplateStats {
   sent: number;
   replied: number;
   reply_rate: number;
+  avg_response_hours: number | null;
 }
 
 export interface ProspectContact {
