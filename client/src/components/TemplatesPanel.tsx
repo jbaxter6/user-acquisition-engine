@@ -281,7 +281,6 @@ export function TemplatesPanel() {
                   <span className={`tpl-rate tpl-rate--${tier}`}>
                     {tier === "draft" ? "NEW DRAFT" : `${rate}% HIT RATE`}
                   </span>
-                  <span className="tpl-card__id">ID: #{String(t.id).padStart(2, "0")}</span>
                   <div className="tpl-card__menu">
                     <button
                       className="tpl-kebab"
@@ -443,21 +442,12 @@ export function TemplatesPanel() {
                       Duplicate
                     </button>
                   )}
-                  {t.sent === 0 ? (
-                    <button
-                      className="tpl-btn tpl-btn--muted"
-                      onClick={() => handleArchive(t.id)}
-                    >
-                      Archive
-                    </button>
-                  ) : (
-                    <button
-                      className="tpl-btn tpl-btn--accent"
-                      onClick={() => navigate("/prospecting")}
-                    >
-                      Use in Prospecting
-                    </button>
-                  )}
+                  <button
+                    className="tpl-btn tpl-btn--muted"
+                    onClick={() => handleArchive(t.id)}
+                  >
+                    Archive
+                  </button>
                 </div>
               </div>
             </article>
