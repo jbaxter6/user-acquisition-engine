@@ -1,4 +1,4 @@
-import { db, insertMessage, upsertAccount, upsertConversation, type AccountRow } from "./db.js";
+import { db, insertMessage, upsertAccount, upsertConversation, type AccountRow, type ConversationRow } from "./db.js";
 import { backfillParticipantAvatar } from "./instagramProfile.js";
 
 const GRAPH_API_VERSION = "v21.0";
@@ -95,9 +95,21 @@ export async function syncInstagramAccount(
       continue;
     }
     const { messages } = (await messagesRes.json()) as ConversationMessagesResponse;
+    const messageIds = messages?.data ?? [];
+    if (messageIds.length === 0) continue;
 
-    for (const { id: messageId } of messages?.data ?? []) {
-      if (messageExists(messageId)) continue;
+    // Resolve the conversation/participant once per conversation, from
+    // whichever message we actually fetch details for — not just from new
+    // messages. Skipping straight past already-synced messages here (the
+    // old behavior) meant avatar backfill, added after some conversations
+    // were already fully synced, could never run for them: every message
+    // "already existed," so the per-message detail fetch — the only place
+    // that resolves who the participant even is — never happened again.
+    let dbConversation: ConversationRow | null = null;
+
+    for (const { id: messageId } of messageIds) {
+      const alreadyStored = messageExists(messageId);
+      if (alreadyStored && dbConversation) continue;
 
       const detailUrl = new URL(`https://graph.instagram.com/${GRAPH_API_VERSION}/${messageId}`);
       detailUrl.searchParams.set("fields", "id,created_time,from,to,message");
@@ -115,22 +127,22 @@ export async function syncInstagramAccount(
       const participant = isOutbound ? detail.to.data[0] : detail.from;
       if (!participant) continue;
 
-      const dbConversation = upsertConversation(
+      dbConversation = upsertConversation(
         "instagram",
         participant.id,
         participant.username ?? participant.id,
         undefined,
         account.id
       );
-      insertMessage(
-        dbConversation.id,
-        isOutbound ? "outbound" : "inbound",
-        detail.message,
-        "api",
-        detail.id
-      );
+
+      if (!alreadyStored) {
+        insertMessage(dbConversation.id, isOutbound ? "outbound" : "inbound", detail.message, "api", detail.id);
+        newMessages++;
+      }
+    }
+
+    if (dbConversation) {
       await backfillParticipantAvatar(dbConversation, account.access_token);
-      newMessages++;
     }
   }
 

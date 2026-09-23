@@ -2,6 +2,7 @@ import type { Conversation, InstagramAccount, Platform } from "../types";
 import { PlatformBadge } from "./PlatformBadge";
 import { PlatformIcon } from "./PlatformIcon";
 import { Avatar } from "./Avatar";
+import { formatRelativeTime, parseServerDate } from "../lib/relativeTime";
 
 const PLATFORMS: Platform[] = ["instagram", "tiktok", "twitch"];
 
@@ -82,16 +83,21 @@ export function ConversationList({
                   <Avatar src={c.participant_avatar_url} label={c.participant_name || c.participant_handle} size={32} />
                   <span className="conversation-item__name">{c.participant_name || c.participant_handle}</span>
                 </span>
-                <span className="conversation-item__badges">
-                  {account && (
-                    <Avatar
-                      src={account.profilePictureUrl}
-                      label={account.username ?? account.igUserId}
-                      title={`via @${account.username ?? account.igUserId}`}
-                      size={18}
-                    />
-                  )}
-                  <PlatformBadge platform={c.platform} />
+                <span className="conversation-item__right">
+                  <span className="conversation-item__badges">
+                    {account && (
+                      <Avatar
+                        src={account.profilePictureUrl}
+                        label={account.username ?? account.igUserId}
+                        title={`via @${account.username ?? account.igUserId}`}
+                        size={18}
+                      />
+                    )}
+                    <PlatformBadge platform={c.platform} />
+                  </span>
+                  <span className="conversation-item__time" title={parseServerDate(c.last_message_at).toLocaleString()}>
+                    {formatRelativeTime(c.last_message_at)}
+                  </span>
                 </span>
               </div>
               <div className="conversation-item__preview">

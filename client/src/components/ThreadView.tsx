@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Conversation, InstagramAccount, Message } from "../types";
 import { PlatformBadge } from "./PlatformBadge";
 import { Avatar } from "./Avatar";
+import { formatRelativeTime, parseServerDate } from "../lib/relativeTime";
 
 interface Props {
   conversation: Conversation | null;
@@ -74,8 +75,8 @@ export function ThreadView({ conversation, messages, canSend, accountFor, onSend
             className={m.direction === "outbound" ? "message message--outbound" : "message message--inbound"}
           >
             <p>{m.text}</p>
-            <span className="message__meta">
-              {new Date(m.created_at).toLocaleString()}
+            <span className="message__meta" title={parseServerDate(m.created_at).toLocaleString()}>
+              {formatRelativeTime(m.created_at)}
               {m.source === "manual" && " · logged manually"}
             </span>
           </div>
