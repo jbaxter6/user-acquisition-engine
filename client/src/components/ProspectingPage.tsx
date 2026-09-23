@@ -446,7 +446,6 @@ export function ProspectingPage({ accounts }: Props) {
             <ProspectCard
               key={p.id}
               prospect={p}
-              accounts={accounts}
               templates={templates}
               allProspects={prospects}
               onChange={refresh}
@@ -640,13 +639,11 @@ function LinkPicker({
 
 function ProspectCard({
   prospect,
-  accounts,
   templates,
   allProspects,
   onChange,
 }: {
   prospect: Prospect;
-  accounts: InstagramAccount[];
   templates: MessageTemplate[];
   allProspects: Prospect[];
   onChange: () => void;
@@ -654,13 +651,8 @@ function ProspectCard({
   const navigate = useNavigate();
   const isInstagram = prospect.platform === "instagram";
   const [tab, setTab] = useState<"outreach" | "accounts">("outreach");
-  const [accountId, setAccountId] = useState<number | "">(
-    accounts[0]?.id ?? "",
-  );
   const [templateId, setTemplateId] = useState<number | "">("");
   const [text, setText] = useState("");
-  const [sending, setSending] = useState(false);
-  const [sendError, setSendError] = useState<string | null>(null);
   const [linkingChannel, setLinkingChannel] = useState(false);
   const [linkingManager, setLinkingManager] = useState(false);
 
@@ -693,26 +685,6 @@ function ProspectCard({
     if (id !== "") {
       const template = templates.find((t) => t.id === id);
       if (template) setText(template.body);
-    }
-  };
-
-  const handleSend = async () => {
-    if (!accountId || !text.trim()) return;
-    setSending(true);
-    setSendError(null);
-    try {
-      await api.messageProspect(
-        prospect.id,
-        accountId,
-        text.trim(),
-        templateId || undefined,
-      );
-      setText("");
-      onChange();
-    } catch (err) {
-      setSendError(String(err));
-    } finally {
-      setSending(false);
     }
   };
 
@@ -851,9 +823,22 @@ function ProspectCard({
                   ` · ${formatRelativeTime(prospect.first_outbound_message.created_at)}`}
               </span>
               {prospect.first_outbound_message ? (
-                <p className="prospect-card__initial-message">
-                  {prospect.first_outbound_message.text}
-                </p>
+                <>
+                  <span
+                    className={
+                      prospect.first_outbound_message.template_name
+                        ? "prospect-card__template-tag"
+                        : "prospect-card__template-tag prospect-card__template-tag--custom"
+                    }
+                  >
+                    {prospect.first_outbound_message.template_name
+                      ? `Template: ${prospect.first_outbound_message.template_name}`
+                      : "Not a template — custom message"}
+                  </span>
+                  <p className="prospect-card__initial-message">
+                    {prospect.first_outbound_message.text}
+                  </p>
+                </>
               ) : (
                 <p className="prospect-card__initial-message prospect-card__initial-message--empty">
                   No outbound message yet — they messaged you first.
@@ -904,10 +889,6 @@ function ProspectCard({
             </span>
           </div>
 
-          {sendError && (
-            <p className="composer-note">Send failed: {sendError}</p>
-          )}
-
           {isInstagram && (
             <div className="prospect-card__outreach-actions">
               <button
@@ -925,30 +906,7 @@ function ProspectCard({
             </div>
           )}
 
-          {isInstagram ? (
-            accounts.length > 0 ? (
-              <div className="prospect-card__send-row">
-                <select
-                  value={accountId}
-                  onChange={(e) => setAccountId(Number(e.target.value))}
-                >
-                  {accounts.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      @{a.username ?? a.igUserId}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  className="prospect-card__cta"
-                  onClick={handleSend}
-                  disabled={sending || !text.trim()}
-                >
-                  <PlatformIcon platform="instagram" size={15} />
-                  {sending ? "Sending..." : "Message with template"}
-                </button>
-              </div>
-            ) : null
-          ) : (
+          {!isInstagram && (
             <p className="composer-note">
               No {prospect.platform} account integration yet — send from that
               platform's app directly.

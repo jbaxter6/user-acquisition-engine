@@ -988,20 +988,27 @@ export function findConversationByHandle(
     .get(platform, normalized);
 }
 
-export function getFirstOutboundMessage(
-  conversationId: number,
-): { text: string; created_at: string } | undefined {
-  return db
+export function getFirstOutboundMessage(conversationId: number):
+  | { text: string; created_at: string; template_name: string | null }
+  | undefined {
+  const row = db
     .prepare<
       [number],
-      { text: string; created_at: string }
+      { text: string; created_at: string; template_id: number | null }
     >(
-      `SELECT text, created_at FROM messages
+      `SELECT text, created_at, template_id FROM messages
        WHERE conversation_id = ? AND direction = 'outbound'
        ORDER BY created_at ASC, id ASC
        LIMIT 1`,
     )
     .get(conversationId);
+  if (!row) return undefined;
+  const template = findMatchingTemplate(row.text, row.template_id);
+  return {
+    text: row.text,
+    created_at: row.created_at,
+    template_name: template?.name ?? null,
+  };
 }
 
 export function updateConversationAvatar(
@@ -1204,6 +1211,32 @@ function compileTemplate(body: string): { regex: RegExp; literalLength: number }
     regex: new RegExp(`^${escaped.join("[\\s\\S]+?")}$`),
     literalLength: literals.join("").length,
   };
+}
+
+// Which template (if any) a sent message came from: its recorded
+// template_id, otherwise the template whose fixed text it matches best.
+export function findMatchingTemplate(
+  text: string,
+  templateId?: number | null,
+): MessageTemplateRow | undefined {
+  const templates = db
+    .prepare<[], MessageTemplateRow>("SELECT * FROM message_templates")
+    .all();
+  if (templateId != null) {
+    const tagged = templates.find((t) => t.id === templateId);
+    if (tagged) return tagged;
+  }
+  const normalized = normalizeWhitespace(text);
+  let best: MessageTemplateRow | undefined;
+  let bestLength = -1;
+  for (const t of templates) {
+    const { regex, literalLength } = compileTemplate(t.body);
+    if (literalLength > bestLength && regex.test(normalized)) {
+      best = t;
+      bestLength = literalLength;
+    }
+  }
+  return best;
 }
 
 function parseSqliteUtc(value: string): number {
