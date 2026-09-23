@@ -17,11 +17,10 @@ export async function fetchParticipantProfile(
   url.searchParams.set("access_token", accessToken);
 
   const res = await fetch(url);
-  if (!res.ok) {
-    console.error(`Fetching participant profile ${igsid} failed:`, await res.text());
-    return null;
-  }
-  const data = (await res.json()) as { username?: string; profile_pic?: string };
+  const raw = await res.text();
+  console.log(`Participant profile lookup for ${igsid}:`, res.status, raw);
+  if (!res.ok) return null;
+  const data = JSON.parse(raw) as { username?: string; profile_pic?: string };
   return { username: data.username, profilePicUrl: data.profile_pic };
 }
 

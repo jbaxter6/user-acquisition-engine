@@ -51,22 +51,22 @@ export function ConversationList({
             <PlatformIcon platform={p} size={15} />
           </button>
         ))}
-      </div>
 
-      {accounts.length > 0 && (
-        <select
-          className="conversation-list__account-filter"
-          value={accountFilter}
-          onChange={(e) => onAccountFilterChange(e.target.value === "all" ? "all" : Number(e.target.value))}
-        >
-          <option value="all">All accounts</option>
-          {accounts.map((a) => (
-            <option key={a.id} value={a.id}>
-              @{a.username ?? a.igUserId}
-            </option>
-          ))}
-        </select>
-      )}
+        {accounts.length > 0 && (
+          <select
+            className="conversation-list__account-filter"
+            value={accountFilter}
+            onChange={(e) => onAccountFilterChange(e.target.value === "all" ? "all" : Number(e.target.value))}
+          >
+            <option value="all">All accounts</option>
+            {accounts.map((a) => (
+              <option key={a.id} value={a.id}>
+                @{a.username ?? a.igUserId}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
 
       <div className="conversation-list__items">
         {visible.length === 0 && <p className="empty-state">No conversations yet.</p>}

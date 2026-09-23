@@ -191,6 +191,7 @@ body {
 
 .conversation-list__filters {
   display: flex;
+  align-items: center;
   gap: 6px;
   padding: 10px;
   border-bottom: 1px solid var(--border);
@@ -223,7 +224,8 @@ body {
 }
 
 .conversation-list__account-filter {
-  margin: 0 10px 10px;
+  margin-left: auto;
+  max-width: 140px;
   background: var(--panel-alt);
   border: 1px solid var(--border);
   color: var(--text);
