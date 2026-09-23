@@ -57,7 +57,9 @@ export function ConversationList({
     <div className="conversation-list">
       <div className="conversation-list__filters">
         <button
-          className={filter === "all" ? "filter-btn filter-btn--active" : "filter-btn"}
+          className={
+            filter === "all" ? "filter-btn filter-btn--active" : "filter-btn"
+          }
           onClick={() => onFilterChange("all")}
         >
           All
@@ -65,7 +67,11 @@ export function ConversationList({
         {PLATFORMS.map((p) => (
           <button
             key={p}
-            className={p === filter ? "filter-btn filter-btn--icon filter-btn--active" : "filter-btn filter-btn--icon"}
+            className={
+              p === filter
+                ? "filter-btn filter-btn--icon filter-btn--active"
+                : "filter-btn filter-btn--icon"
+            }
             onClick={() => onFilterChange(p)}
             title={p}
             aria-label={`Filter by ${p}`}
@@ -78,7 +84,11 @@ export function ConversationList({
           <select
             className="conversation-list__account-filter"
             value={accountFilter}
-            onChange={(e) => onAccountFilterChange(e.target.value === "all" ? "all" : Number(e.target.value))}
+            onChange={(e) =>
+              onAccountFilterChange(
+                e.target.value === "all" ? "all" : Number(e.target.value),
+              )
+            }
           >
             <option value="all">All accounts</option>
             {accounts.map((a) => (
@@ -92,14 +102,22 @@ export function ConversationList({
 
       <div className="conversation-list__items">
         {visible.length === 0 && (
-          <p className="empty-state">{query ? "No conversations match your search." : "No conversations yet."}</p>
+          <p className="empty-state">
+            {query
+              ? "No conversations match your search."
+              : "No conversations yet."}
+          </p>
         )}
         {visible.map((c) => {
           const account = accountFor(c.account_id);
           return (
             <button
               key={c.id}
-              className={c.id === selectedId ? "conversation-item conversation-item--active" : "conversation-item"}
+              className={
+                c.id === selectedId
+                  ? "conversation-item conversation-item--active"
+                  : "conversation-item"
+              }
               onClick={() => onSelect(c.id)}
             >
               <div className="conversation-item__row">
@@ -110,7 +128,9 @@ export function ConversationList({
                     size={32}
                     engaged={Boolean(c.has_engaged)}
                   />
-                  <span className="conversation-item__name">{c.participant_name || c.participant_handle}</span>
+                  <span className="conversation-item__name">
+                    {c.participant_name || c.participant_handle}
+                  </span>
                 </span>
                 <span className="conversation-item__right">
                   <span className="conversation-item__badges">
@@ -124,7 +144,10 @@ export function ConversationList({
                     )}
                     <PlatformBadge platform={c.platform} />
                   </span>
-                  <span className="conversation-item__time" title={parseServerDate(c.last_message_at).toLocaleString()}>
+                  <span
+                    className="conversation-item__time"
+                    title={parseServerDate(c.last_message_at).toLocaleString()}
+                  >
                     {formatRelativeTime(c.last_message_at)}
                   </span>
                 </span>

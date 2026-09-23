@@ -33,20 +33,31 @@ function truncateToken(token: string | null | undefined): string {
 async function resolveUsernameToIgUserId(
   discovererIgUserId: string,
   accessToken: string,
-  username: string
+  username: string,
 ): Promise<string | null> {
   if (!accessToken || !accessToken.trim()) {
-    console.error(`Business Discovery lookup for @${username}: access token is empty or missing`);
+    console.error(
+      `Business Discovery lookup for @${username}: access token is empty or missing`,
+    );
     return null;
   }
 
-  const url = new URL(`https://graph.facebook.com/${GRAPH_API_VERSION}/${discovererIgUserId}`);
-  url.searchParams.set("fields", `business_discovery.username(${username}){id,username,is_business_account,profile_picture_url}`);
+  const url = new URL(
+    `https://graph.facebook.com/${GRAPH_API_VERSION}/${discovererIgUserId}`,
+  );
+  url.searchParams.set(
+    "fields",
+    `business_discovery.username(${username}){id,username,is_business_account,profile_picture_url}`,
+  );
   url.searchParams.set("access_token", accessToken);
 
   const res = await fetch(url);
   const raw = await res.text();
-  console.log(`Business Discovery lookup for @${username} (token: ${truncateToken(accessToken)}):`, res.status, raw);
+  console.log(
+    `Business Discovery lookup for @${username} (token: ${truncateToken(accessToken)}):`,
+    res.status,
+    raw,
+  );
   if (!res.ok) return null;
 
   const data = JSON.parse(raw) as {
@@ -62,7 +73,7 @@ async function resolveUsernameToIgUserId(
   if (!discovered?.id) return null;
   if (discovered.is_business_account === false) {
     throw new ProspectMessageError(
-      `@${username} is not a Business or Creator account, so it can't be messaged via the Instagram API. Use "Mark sent manually" instead.`
+      `@${username} is not a Business or Creator account, so it can't be messaged via the Instagram API. Use "Mark sent manually" instead.`,
     );
   }
 
@@ -84,31 +95,57 @@ export async function sendProspectMessage(
   prospect: ProspectRow,
   accountId: number,
   text: string,
-  templateId?: number
+  templateId?: number,
 ) {
   const account = getAccountById(accountId);
+  console.log("sendProspectMessage: retrieved account:", account);
   if (!account) throw new ProspectMessageError("Connected account not found.");
   if (!account.access_token || !account.access_token.trim()) {
-    console.error(`sendProspectMessage for @${prospect.username}: account @${account.username} has invalid token (${truncateToken(account.access_token)})`);
-    throw new ProspectMessageError(`Connected account @${account.username} has an invalid/empty access token. Reconnect the account via "Connect Instagram" to refresh it.`);
+    console.error(
+      `sendProspectMessage for @${prospect.username}: account @${account.username} has invalid token (${truncateToken(account.access_token)})`,
+    );
+    throw new ProspectMessageError(
+      `Connected account @${account.username} has an invalid/empty access token. Reconnect the account via "Connect Instagram" to refresh it.`,
+    );
   }
 
   let igUserId = prospect.resolved_ig_user_id;
   if (!igUserId) {
-    igUserId = await resolveUsernameToIgUserId(account.ig_user_id, account.access_token, prospect.username);
+    igUserId = await resolveUsernameToIgUserId(
+      account.ig_user_id,
+      account.access_token,
+      prospect.username,
+    );
     if (!igUserId) {
       throw new ProspectMessageError(
-        `Couldn't resolve @${prospect.username} to an Instagram account ID — they may not be a Business/Creator account, or the username may be wrong. Use "Mark sent manually" if you already sent it yourself.`
+        `Couldn't resolve @${prospect.username} to an Instagram account ID — they may not be a Business/Creator account, or the username may be wrong. Use "Mark sent manually" if you already sent it yourself.`,
       );
     }
     setProspectResolvedId(prospect.id, igUserId);
   }
 
-  const adapter = new InstagramAdapter(account.ig_user_id, account.access_token);
+  const adapter = new InstagramAdapter(
+    account.ig_user_id,
+    account.access_token,
+  );
   const result = await adapter.sendMessage(igUserId, text);
 
-  const conversation = upsertConversation("instagram", igUserId, prospect.username, prospect.display_name ?? undefined, accountId);
-  insertMessage(conversation.id, "outbound", text, "api", result.externalMessageId, undefined, templateId);
+  const conversation = upsertConversation(
+    "instagram",
+    igUserId,
+    prospect.username,
+    prospect.display_name ?? undefined,
+    accountId,
+  );
+  insertMessage(
+    conversation.id,
+    "outbound",
+    text,
+    "api",
+    result.externalMessageId,
+    undefined,
+    templateId,
+  );
   markProspectContacted(prospect.id, accountId, conversation.id);
 
   return { conversationId: conversation.id };
