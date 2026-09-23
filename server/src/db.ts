@@ -174,20 +174,61 @@ export function updateConversationAvatar(conversationId: number, avatarUrl: stri
   db.prepare("UPDATE conversations SET participant_avatar_url = ? WHERE id = ?").run(avatarUrl, conversationId);
 }
 
+export function getMessageByExternalId(externalMessageId: string): MessageRow | undefined {
+  return db
+    .prepare<[string], MessageRow>("SELECT * FROM messages WHERE external_message_id = ?")
+    .get(externalMessageId);
+}
+
+/** Repairs a message's timestamp — e.g. correcting rows that were backfilled with "now" before Sync tracked real send times. */
+export function updateMessageCreatedAt(messageId: number, createdAt: string): void {
+  db.prepare("UPDATE messages SET created_at = ? WHERE id = ?").run(createdAt, messageId);
+}
+
+/** Recomputes a conversation's last-activity time from its actual messages, rather than trusting incremental bumps. */
+export function recomputeConversationLastMessageAt(conversationId: number): void {
+  db.prepare(
+    `UPDATE conversations
+     SET last_message_at = COALESCE(
+       (SELECT MAX(created_at) FROM messages WHERE conversation_id = ?),
+       last_message_at
+     )
+     WHERE id = ?`
+  ).run(conversationId, conversationId);
+}
+
 export function insertMessage(
   conversationId: number,
   direction: "inbound" | "outbound",
   text: string,
   source: "api" | "manual" | "webhook",
-  externalMessageId?: string
+  externalMessageId?: string,
+  // When backfilling history (Sync), this should be the message's actual
+  // send time, not "now" — otherwise every synced message gets today's
+  // timestamp and both the displayed time and ordering (sorted by
+  // created_at) come out wrong. Omit for genuinely real-time inserts
+  // (webhook, manual, a reply just sent), where "now" is correct.
+  createdAt?: string
 ): MessageRow {
-  const result = db
-    .prepare(
-      "INSERT INTO messages (conversation_id, direction, text, source, external_message_id) VALUES (?, ?, ?, ?, ?)"
-    )
-    .run(conversationId, direction, text, source, externalMessageId ?? null);
+  const result = createdAt
+    ? db
+        .prepare(
+          "INSERT INTO messages (conversation_id, direction, text, source, external_message_id, created_at) VALUES (?, ?, ?, ?, ?, ?)"
+        )
+        .run(conversationId, direction, text, source, externalMessageId ?? null, createdAt)
+    : db
+        .prepare(
+          "INSERT INTO messages (conversation_id, direction, text, source, external_message_id) VALUES (?, ?, ?, ?, ?)"
+        )
+        .run(conversationId, direction, text, source, externalMessageId ?? null);
 
-  db.prepare("UPDATE conversations SET last_message_at = datetime('now') WHERE id = ?").run(
+  // MAX(a, b) here is SQLite's scalar 2-arg max, not the aggregate — picks
+  // the later of the two timestamps as plain zero-padded-text comparison,
+  // so backfilling an old message never regresses a conversation's
+  // last-activity time past something more recent it already had.
+  const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+  db.prepare("UPDATE conversations SET last_message_at = MAX(last_message_at, ?) WHERE id = ?").run(
+    createdAt ?? now,
     conversationId
   );
 

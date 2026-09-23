@@ -1,4 +1,13 @@
-import { db, insertMessage, upsertAccount, upsertConversation, type AccountRow, type ConversationRow } from "./db.js";
+import {
+  getMessageByExternalId,
+  insertMessage,
+  recomputeConversationLastMessageAt,
+  updateMessageCreatedAt,
+  upsertAccount,
+  upsertConversation,
+  type AccountRow,
+  type ConversationRow,
+} from "./db.js";
 import { backfillParticipantAvatar } from "./instagramProfile.js";
 
 const GRAPH_API_VERSION = "v21.0";
@@ -20,10 +29,12 @@ interface MessageDetailResponse {
   to: { data: Array<{ id: string; username?: string }> };
 }
 
-function messageExists(externalMessageId: string): boolean {
-  return !!db
-    .prepare("SELECT 1 FROM messages WHERE external_message_id = ? LIMIT 1")
-    .get(externalMessageId);
+// Normalizes Instagram's ISO 8601 timestamp (e.g. "2022-07-12T19:11:07+0000")
+// to the same "YYYY-MM-DD HH:MM:SS" UTC text format SQLite's datetime('now')
+// produces elsewhere, so plain string comparison still sorts correctly
+// regardless of which code path inserted a given row.
+function toSqliteUtc(isoTimestamp: string): string {
+  return new Date(isoTimestamp).toISOString().slice(0, 19).replace("T", " ");
 }
 
 /**
@@ -98,18 +109,19 @@ export async function syncInstagramAccount(
     const messageIds = messages?.data ?? [];
     if (messageIds.length === 0) continue;
 
-    // Resolve the conversation/participant once per conversation, from
-    // whichever message we actually fetch details for — not just from new
-    // messages. Skipping straight past already-synced messages here (the
-    // old behavior) meant avatar backfill, added after some conversations
-    // were already fully synced, could never run for them: every message
-    // "already existed," so the per-message detail fetch — the only place
-    // that resolves who the participant even is — never happened again.
+    // Fetch every message's detail every sync, not just new ones — needed
+    // both to resolve which participant/conversation a message belongs to
+    // (unconditionally skipping already-stored messages here previously
+    // meant avatar backfill could never run once a conversation was fully
+    // synced) and to repair any row whose created_at is wrong, e.g. from
+    // before Sync tracked real send times at all. More API calls per sync
+    // than a pure "only fetch new" approach, but this is a manually
+    // triggered action, not a poll, so the cost is acceptable for the
+    // correctness it buys.
     let dbConversation: ConversationRow | null = null;
 
     for (const { id: messageId } of messageIds) {
-      const alreadyStored = messageExists(messageId);
-      if (alreadyStored && dbConversation) continue;
+      const existing = getMessageByExternalId(messageId);
 
       const detailUrl = new URL(`https://graph.instagram.com/${GRAPH_API_VERSION}/${messageId}`);
       detailUrl.searchParams.set("fields", "id,created_time,from,to,message");
@@ -135,13 +147,27 @@ export async function syncInstagramAccount(
         account.id
       );
 
-      if (!alreadyStored) {
-        insertMessage(dbConversation.id, isOutbound ? "outbound" : "inbound", detail.message, "api", detail.id);
+      const correctCreatedAt = toSqliteUtc(detail.created_time);
+
+      if (existing) {
+        if (existing.created_at !== correctCreatedAt) {
+          updateMessageCreatedAt(existing.id, correctCreatedAt);
+        }
+      } else {
+        insertMessage(
+          dbConversation.id,
+          isOutbound ? "outbound" : "inbound",
+          detail.message,
+          "api",
+          detail.id,
+          correctCreatedAt
+        );
         newMessages++;
       }
     }
 
     if (dbConversation) {
+      recomputeConversationLastMessageAt(dbConversation.id);
       await backfillParticipantAvatar(dbConversation, account.access_token);
     }
   }

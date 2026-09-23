@@ -35,7 +35,7 @@ export function conversationsRouter(): Router {
 
   router.get("/:id/messages", (req, res) => {
     const rows = db
-      .prepare("SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC")
+      .prepare("SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC, id ASC")
       .all(req.params.id);
     res.json(rows);
   });
