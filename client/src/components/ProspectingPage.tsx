@@ -21,7 +21,19 @@ import {
 import { Avatar } from "./Avatar";
 import { PlatformBadge } from "./PlatformBadge";
 import { PlatformIcon } from "./PlatformIcon";
-import { IconX } from "./icons";
+import {
+  IconDownload,
+  IconFile,
+  IconFilter,
+  IconGrid,
+  IconList,
+  IconRefresh,
+  IconSearch,
+  IconShield,
+  IconUpload,
+  IconX,
+  Spinner,
+} from "./icons";
 import { formatRelativeTime } from "../lib/relativeTime";
 
 function scrollToProspectCard(id: number) {
@@ -61,12 +73,27 @@ const PLATFORM_FILTERS: Array<{ label: string; value: Platform | "all" }> = [
   { label: "Twitch", value: "twitch" },
 ];
 
+type SortKey = "recent" | "newest" | "name";
+const SORT_LABEL: Record<SortKey, string> = {
+  recent: "Recent Activity",
+  newest: "Newest",
+  name: "Name A–Z",
+};
+
+function activityTime(p: Prospect): number {
+  return Date.parse((p.contacted_at ?? p.created_at).replace(" ", "T") + "Z") || 0;
+}
+
 export function ProspectingPage({ accounts }: Props) {
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const [statusFilter, setStatusFilter] = useState<Prospect["status"] | "all">(
     "all",
   );
   const [platformFilter, setPlatformFilter] = useState<Platform | "all">("all");
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<SortKey>("recent");
+  const [view, setView] = useState<"grid" | "list">("grid");
+  const [syncing, setSyncing] = useState(false);
   const [sheet, setSheet] = useState<ParsedSheet | null>(null);
   const [mapping, setMapping] = useState<
     Partial<Record<ProspectField, string>>
@@ -77,27 +104,22 @@ export function ProspectingPage({ accounts }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
+  // Always loads the full list — the filter pills show per-status counts,
+  // so filtering/search/sort happen client-side.
   const refresh = () => {
     api
-      .listProspects({
-        status: statusFilter === "all" ? undefined : statusFilter,
-        platform: platformFilter === "all" ? undefined : platformFilter,
-      })
+      .listProspects({})
       .then(setProspects)
       .catch((e) => setError(String(e)));
   };
 
   useEffect(() => {
     refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, platformFilter]);
-
-  useEffect(() => {
     window.addEventListener("accounts-synced", refresh);
     return () => window.removeEventListener("accounts-synced", refresh);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, platformFilter]);
+  }, []);
 
   useEffect(() => {
     api
@@ -105,6 +127,30 @@ export function ProspectingPage({ accounts }: Props) {
       .then(setTemplates)
       .catch((e) => setError(String(e)));
   }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        searchRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const handleSyncAll = async () => {
+    if (syncing || accounts.length === 0) return;
+    setSyncing(true);
+    try {
+      await Promise.allSettled(
+        accounts.map((a) => api.syncInstagramAccount(a.id)),
+      );
+      refresh();
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const handleFile = async (file: File) => {
     setImportResult(null);
@@ -141,35 +187,188 @@ export function ProspectingPage({ accounts }: Props) {
     }
   };
 
+  const countFor = (status: Prospect["status"] | "all") =>
+    status === "all"
+      ? prospects.length
+      : prospects.filter((p) => p.status === status).length;
+
+  const query = search.trim().toLowerCase();
+  const visible = prospects
+    .filter((p) => statusFilter === "all" || p.status === statusFilter)
+    .filter((p) => platformFilter === "all" || p.platform === platformFilter)
+    .filter(
+      (p) =>
+        !query ||
+        p.username.toLowerCase().includes(query) ||
+        (p.display_name ?? "").toLowerCase().includes(query) ||
+        (p.notes ?? "").toLowerCase().includes(query),
+    )
+    .sort((a, b) => {
+      if (sort === "name")
+        return (a.display_name || a.username).localeCompare(
+          b.display_name || b.username,
+        );
+      if (sort === "newest")
+        return (
+          Date.parse(b.created_at.replace(" ", "T") + "Z") -
+          Date.parse(a.created_at.replace(" ", "T") + "Z")
+        );
+      return activityTime(b) - activityTime(a);
+    });
+
   return (
     <div className="prospecting">
-      <section className="prospecting__import">
-        <h2>Import prospects</h2>
-        <p className="prospecting__hint">
-          Upload an Excel/CSV sheet — map its columns below, then import.
-          Duplicate username+platform pairs are skipped automatically. If your
-          sheet doesn't have a platform column, everything imports as the
-          default platform below.
-        </p>
-        <div className="prospecting__import-actions">
+      <section className="prospecting-toolbar">
+        <div className="prospecting-toolbar__row prospecting-toolbar__import">
+          <span className="prospecting-toolbar__label">
+            <span className="prospecting-toolbar__label-icon">
+              <IconFile size={15} />
+            </span>
+            Import:
+          </span>
           <input
             ref={fileInputRef}
             type="file"
             accept=".xlsx,.xls,.csv"
+            hidden
             onChange={(e) => {
               const file = e.target.files?.[0];
               if (file) handleFile(file);
             }}
           />
           <button
-            className="secondary"
+            className="toolbar-btn toolbar-btn--primary"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <IconUpload size={15} /> Upload CSV / Excel
+          </button>
+          <button
+            className="toolbar-btn toolbar-btn--ghost"
             onClick={() => downloadProspectTemplate()}
           >
-            Download template
+            <IconDownload size={14} /> Template
           </button>
+          <span className="toolbar-chip">
+            <IconShield size={14} /> Auto-skips duplicates
+          </span>
+
+          <div className="prospecting-toolbar__stats">
+            <span>
+              Pipeline: <strong>{prospects.length}</strong>
+            </span>
+            <span className="prospecting-toolbar__divider" />
+            <span>
+              Awaiting Reply:{" "}
+              <strong className="prospecting-toolbar__warn">
+                {countFor("contacted")}
+              </strong>
+            </span>
+            <span className="prospecting-toolbar__divider" />
+            <button
+              className="toolbar-link"
+              onClick={handleSyncAll}
+              disabled={syncing || accounts.length === 0}
+              title={
+                accounts.length === 0
+                  ? "Connect an Instagram account first"
+                  : "Sync all connected accounts"
+              }
+            >
+              {syncing ? <Spinner size={14} /> : <IconRefresh size={14} />} Sync
+              All
+            </button>
+          </div>
         </div>
 
-        {sheet && (
+        <div className="prospecting-toolbar__row prospecting-toolbar__filters">
+          <div className="filter-pills">
+            {STATUS_FILTERS.map((f) => (
+              <button
+                key={f.value}
+                className={
+                  f.value === statusFilter
+                    ? "filter-pill filter-pill--active"
+                    : "filter-pill"
+                }
+                onClick={() => setStatusFilter(f.value)}
+              >
+                {f.label}
+                <span
+                  className={`filter-pill__count filter-pill__count--${f.value}`}
+                >
+                  {countFor(f.value)}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <label className="toolbar-select">
+            <IconGrid size={14} />
+            <select
+              value={platformFilter}
+              onChange={(e) =>
+                setPlatformFilter(e.target.value as Platform | "all")
+              }
+            >
+              {PLATFORM_FILTERS.map((f) => (
+                <option key={f.value} value={f.value}>
+                  {f.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div className="prospecting-toolbar__spacer" />
+
+          <label className="toolbar-search">
+            <IconSearch size={15} />
+            <input
+              ref={searchRef}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search handle, name, brand"
+            />
+            <kbd>⌘K</kbd>
+          </label>
+
+          <label className="toolbar-select">
+            <IconFilter size={14} />
+            <span className="toolbar-select__prefix">Sort:</span>
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as SortKey)}
+            >
+              {(Object.keys(SORT_LABEL) as SortKey[]).map((k) => (
+                <option key={k} value={k}>
+                  {SORT_LABEL[k]}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div className="view-toggle">
+            <button
+              className={view === "grid" ? "view-toggle--active" : ""}
+              onClick={() => setView("grid")}
+              title="Grid view"
+              aria-label="Grid view"
+            >
+              <IconGrid size={16} />
+            </button>
+            <button
+              className={view === "list" ? "view-toggle--active" : ""}
+              onClick={() => setView("list")}
+              title="List view"
+              aria-label="List view"
+            >
+              <IconList size={16} />
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {sheet && (
+        <section className="prospecting__import">
           <div className="prospecting__mapping">
             <p className="prospecting__hint">
               {sheet.rows.length} row(s) found. Map each field to a column:
@@ -222,50 +421,28 @@ export function ProspectingPage({ accounts }: Props) {
                 : `Import ${sheet.rows.length} row(s)`}
             </button>
           </div>
-        )}
+        </section>
+      )}
 
-        {importResult && <p className="prospecting__hint">{importResult}</p>}
-      </section>
-
+      {importResult && <p className="prospecting__hint">{importResult}</p>}
       {error && <div className="app__error">{error}</div>}
 
       <section className="prospecting__list">
-        <div className="prospecting__filters">
-          {STATUS_FILTERS.map((f) => (
-            <button
-              key={f.value}
-              className={
-                f.value === statusFilter
-                  ? "filter-btn filter-btn--active"
-                  : "filter-btn"
-              }
-              onClick={() => setStatusFilter(f.value)}
-            >
-              {f.label}
-            </button>
-          ))}
-          <select
-            className="conversation-list__account-filter"
-            value={platformFilter}
-            onChange={(e) =>
-              setPlatformFilter(e.target.value as Platform | "all")
-            }
-          >
-            {PLATFORM_FILTERS.map((f) => (
-              <option key={f.value} value={f.value}>
-                {f.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="prospecting__cards">
-          {prospects.length === 0 && (
+        <div
+          className={
+            view === "list"
+              ? "prospecting__cards prospecting__cards--list"
+              : "prospecting__cards"
+          }
+        >
+          {visible.length === 0 && (
             <p className="empty-state">
-              No prospects yet — import a sheet to get started.
+              {prospects.length === 0
+                ? "No prospects yet — import a sheet to get started."
+                : "No prospects match your filters."}
             </p>
           )}
-          {prospects.map((p) => (
+          {visible.map((p) => (
             <ProspectCard
               key={p.id}
               prospect={p}
