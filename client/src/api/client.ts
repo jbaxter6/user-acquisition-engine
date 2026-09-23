@@ -1,4 +1,13 @@
-import type { Conversation, HealthResponse, InstagramAccount, Message, Platform, Prospect } from "../types";
+import type {
+  Conversation,
+  HealthResponse,
+  InstagramAccount,
+  Message,
+  MessageTemplate,
+  MessageTemplateStats,
+  Platform,
+  Prospect,
+} from "../types";
 import type { MappedProspect } from "../lib/prospectImport";
 
 // In dev, client/.env.local points this at the separate server on :4000.
@@ -57,8 +66,13 @@ export const api = {
       body: JSON.stringify(input),
     }),
 
-  listProspects: (filters?: { status?: string }) =>
-    request<Prospect[]>(`/api/prospects${filters?.status ? `?status=${filters.status}` : ""}`),
+  listProspects: (filters?: { status?: string; platform?: Platform }) => {
+    const params = new URLSearchParams();
+    if (filters?.status) params.set("status", filters.status);
+    if (filters?.platform) params.set("platform", filters.platform);
+    const qs = params.toString();
+    return request<Prospect[]>(`/api/prospects${qs ? `?${qs}` : ""}`);
+  },
 
   bulkImportProspects: (prospects: MappedProspect[]) =>
     request<{ received: number; inserted: number; skipped: number }>("/api/prospects/bulk", {
@@ -68,15 +82,33 @@ export const api = {
 
   deleteProspect: (id: number) => request<{ ok: true }>(`/api/prospects/${id}`, { method: "DELETE" }),
 
-  messageProspect: (id: number, accountId: number, text: string) =>
+  messageProspect: (id: number, accountId: number, text: string, templateId?: number) =>
     request<{ conversationId: number }>(`/api/prospects/${id}/message`, {
       method: "POST",
-      body: JSON.stringify({ accountId, text }),
+      body: JSON.stringify({ accountId, text, templateId }),
     }),
 
-  markProspectContactedManually: (id: number, accountId: number, text: string) =>
+  markProspectContactedManually: (id: number, accountId: number | null, text: string, templateId?: number) =>
     request<{ conversationId: number }>(`/api/prospects/${id}/mark-contacted`, {
       method: "POST",
-      body: JSON.stringify({ accountId, text }),
+      body: JSON.stringify({ accountId, text, templateId }),
     }),
+
+  listTemplates: () => request<MessageTemplate[]>("/api/templates"),
+
+  templateStats: () => request<MessageTemplateStats[]>("/api/templates/stats"),
+
+  createTemplate: (name: string, body: string) =>
+    request<MessageTemplate>("/api/templates", {
+      method: "POST",
+      body: JSON.stringify({ name, body }),
+    }),
+
+  updateTemplate: (id: number, name: string, body: string) =>
+    request<MessageTemplate>(`/api/templates/${id}`, {
+      method: "PUT",
+      body: JSON.stringify({ name, body }),
+    }),
+
+  archiveTemplate: (id: number) => request<{ ok: true }>(`/api/templates/${id}`, { method: "DELETE" }),
 };

@@ -53,6 +53,18 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
+  -- Reusable outreach copy, picked from when messaging a prospect, so we
+  -- can compare reply rates across different pitches (see
+  -- getMessageTemplateStats below). Archiving instead of deleting keeps
+  -- past stats/messages.template_id references meaningful.
+  CREATE TABLE IF NOT EXISTS message_templates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    body TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    archived_at TEXT
+  );
+
   -- A separate pipeline from conversations: rows land here from an Excel
   -- import (and, on the roadmap, automated discovery) before anyone has
   -- actually reached out. Only becomes a real conversation once "contacted."
@@ -84,6 +96,7 @@ db.exec(`
 for (const migration of [
   "ALTER TABLE accounts ADD COLUMN profile_picture_url TEXT",
   "ALTER TABLE conversations ADD COLUMN participant_avatar_url TEXT",
+  "ALTER TABLE messages ADD COLUMN template_id INTEGER REFERENCES message_templates(id)",
 ]) {
   try {
     db.exec(migration);
@@ -127,7 +140,16 @@ export interface MessageRow {
   text: string;
   source: "api" | "manual" | "webhook";
   external_message_id: string | null;
+  template_id: number | null;
   created_at: string;
+}
+
+export interface MessageTemplateRow {
+  id: number;
+  name: string;
+  body: string;
+  created_at: string;
+  archived_at: string | null;
 }
 
 export interface ProspectRow {
@@ -210,7 +232,10 @@ export function setProspectResolvedId(id: number, igUserId: string): void {
   db.prepare("UPDATE prospects SET resolved_ig_user_id = ? WHERE id = ?").run(igUserId, id);
 }
 
-export function markProspectContacted(id: number, accountId: number, conversationId: number): void {
+// accountId is only meaningful for Instagram prospects, which have a
+// connected account to attribute the contact to — TikTok/Twitch have no
+// such account concept (same as their manual-only conversations).
+export function markProspectContacted(id: number, accountId: number | null, conversationId: number): void {
   db.prepare(
     "UPDATE prospects SET status = 'contacted', account_id = ?, conversation_id = ?, contacted_at = datetime('now') WHERE id = ?"
   ).run(accountId, conversationId, id);
@@ -331,19 +356,22 @@ export function insertMessage(
   // timestamp and both the displayed time and ordering (sorted by
   // created_at) come out wrong. Omit for genuinely real-time inserts
   // (webhook, manual, a reply just sent), where "now" is correct.
-  createdAt?: string
+  createdAt?: string,
+  // Which template (if any) this outbound message was composed from —
+  // powers getMessageTemplateStats' reply-rate comparison.
+  templateId?: number
 ): MessageRow {
   const result = createdAt
     ? db
         .prepare(
-          "INSERT INTO messages (conversation_id, direction, text, source, external_message_id, created_at) VALUES (?, ?, ?, ?, ?, ?)"
+          "INSERT INTO messages (conversation_id, direction, text, source, external_message_id, created_at, template_id) VALUES (?, ?, ?, ?, ?, ?, ?)"
         )
-        .run(conversationId, direction, text, source, externalMessageId ?? null, createdAt)
+        .run(conversationId, direction, text, source, externalMessageId ?? null, createdAt, templateId ?? null)
     : db
         .prepare(
-          "INSERT INTO messages (conversation_id, direction, text, source, external_message_id) VALUES (?, ?, ?, ?, ?)"
+          "INSERT INTO messages (conversation_id, direction, text, source, external_message_id, template_id) VALUES (?, ?, ?, ?, ?, ?)"
         )
-        .run(conversationId, direction, text, source, externalMessageId ?? null);
+        .run(conversationId, direction, text, source, externalMessageId ?? null, templateId ?? null);
 
   // MAX(a, b) here is SQLite's scalar 2-arg max, not the aggregate — picks
   // the later of the two timestamps as plain zero-padded-text comparison,
@@ -358,4 +386,70 @@ export function insertMessage(
   return db
     .prepare<[number], MessageRow>("SELECT * FROM messages WHERE id = ?")
     .get(result.lastInsertRowid as number)!;
+}
+
+export function listMessageTemplates(includeArchived = false): MessageTemplateRow[] {
+  const where = includeArchived ? "" : "WHERE archived_at IS NULL";
+  return db
+    .prepare<[], MessageTemplateRow>(`SELECT * FROM message_templates ${where} ORDER BY created_at DESC`)
+    .all();
+}
+
+export function getMessageTemplateById(id: number): MessageTemplateRow | undefined {
+  return db.prepare<[number], MessageTemplateRow>("SELECT * FROM message_templates WHERE id = ?").get(id);
+}
+
+export function createMessageTemplate(name: string, body: string): MessageTemplateRow {
+  const result = db.prepare("INSERT INTO message_templates (name, body) VALUES (?, ?)").run(name, body);
+  return getMessageTemplateById(result.lastInsertRowid as number)!;
+}
+
+export function updateMessageTemplate(id: number, name: string, body: string): MessageTemplateRow | undefined {
+  db.prepare("UPDATE message_templates SET name = ?, body = ? WHERE id = ?").run(name, body, id);
+  return getMessageTemplateById(id);
+}
+
+// Archived rather than deleted, so messages already sent from a template
+// keep a meaningful template_id and stay in the effectiveness stats.
+export function archiveMessageTemplate(id: number): void {
+  db.prepare("UPDATE message_templates SET archived_at = datetime('now') WHERE id = ?").run(id);
+}
+
+export interface MessageTemplateStats {
+  id: number;
+  name: string;
+  body: string;
+  archived_at: string | null;
+  sent: number;
+  replied: number;
+  reply_rate: number;
+}
+
+/**
+ * Effectiveness per template: how many cold-outreach sends it was used
+ * for, and how many of those conversations ever got an inbound reply.
+ * "Replied" counts the conversation once regardless of how many inbound
+ * messages followed — the question is whether that pitch landed, not
+ * how long the thread ran.
+ */
+export function getMessageTemplateStats(): MessageTemplateStats[] {
+  return db
+    .prepare<[], MessageTemplateStats>(
+      `SELECT
+         t.id,
+         t.name,
+         t.body,
+         t.archived_at,
+         COUNT(m.id) AS sent,
+         COUNT(DISTINCT CASE WHEN EXISTS (
+           SELECT 1 FROM messages reply
+           WHERE reply.conversation_id = m.conversation_id AND reply.direction = 'inbound'
+         ) THEN m.conversation_id END) AS replied
+       FROM message_templates t
+       LEFT JOIN messages m ON m.template_id = t.id AND m.direction = 'outbound'
+       GROUP BY t.id
+       ORDER BY t.created_at DESC`
+    )
+    .all()
+    .map((row) => ({ ...row, reply_rate: row.sent > 0 ? row.replied / row.sent : 0 }));
 }

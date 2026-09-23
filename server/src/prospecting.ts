@@ -51,7 +51,12 @@ export class ProspectMessageError extends Error {}
  * fallback (send from the native app, then mark contacted) rather than
  * treating a failure as unrecoverable.
  */
-export async function sendProspectMessage(prospect: ProspectRow, accountId: number, text: string) {
+export async function sendProspectMessage(
+  prospect: ProspectRow,
+  accountId: number,
+  text: string,
+  templateId?: number
+) {
   const account = getAccountById(accountId);
   if (!account) throw new ProspectMessageError("Connected account not found.");
 
@@ -70,7 +75,7 @@ export async function sendProspectMessage(prospect: ProspectRow, accountId: numb
   const result = await adapter.sendMessage(igUserId, text);
 
   const conversation = upsertConversation("instagram", igUserId, prospect.username, prospect.display_name ?? undefined, accountId);
-  insertMessage(conversation.id, "outbound", text, "api", result.externalMessageId);
+  insertMessage(conversation.id, "outbound", text, "api", result.externalMessageId, undefined, templateId);
   markProspectContacted(prospect.id, accountId, conversation.id);
 
   return { conversationId: conversation.id };

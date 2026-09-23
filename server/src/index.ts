@@ -9,6 +9,7 @@ import { conversationsRouter } from "./routes/conversations.js";
 import { webhooksRouter } from "./routes/webhooks.js";
 import { authRouter } from "./routes/auth.js";
 import { prospectsRouter } from "./routes/prospects.js";
+import { templatesRouter } from "./routes/templates.js";
 import { siteAuth } from "./siteAuth.js";
 import "./db.js";
 
@@ -50,6 +51,7 @@ app.get("/api/health", (_req, res) => {
 
 app.use("/api/conversations", conversationsRouter());
 app.use("/api/prospects", prospectsRouter());
+app.use("/api/templates", templatesRouter());
 app.use("/auth", authRouter());
 
 // In production, serve the built React app from the same origin/process —

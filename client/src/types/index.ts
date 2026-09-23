@@ -42,6 +42,24 @@ export interface InstagramAccount {
   connectedAt: string;
 }
 
+export interface MessageTemplate {
+  id: number;
+  name: string;
+  body: string;
+  created_at: string;
+  archived_at: string | null;
+}
+
+export interface MessageTemplateStats {
+  id: number;
+  name: string;
+  body: string;
+  archived_at: string | null;
+  sent: number;
+  replied: number;
+  reply_rate: number;
+}
+
 export interface Prospect {
   id: number;
   platform: Platform;

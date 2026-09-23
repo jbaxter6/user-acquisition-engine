@@ -5,11 +5,14 @@ import { ThreadView } from "./components/ThreadView";
 import { ManualMessageForm } from "./components/ManualMessageForm";
 import { AccountConnection } from "./components/AccountConnection";
 import { ProspectingPage } from "./components/ProspectingPage";
+import { TemplatesPanel } from "./components/TemplatesPanel";
 import type { Conversation, HealthResponse, InstagramAccount, Message, Platform } from "./types";
 import "./index.css";
 
+const VIEW_LABELS = { inbox: "Unified Master Inbox", prospecting: "Prospecting", templates: "Templates" } as const;
+
 export default function App() {
-  const [view, setView] = useState<"inbox" | "prospecting">("inbox");
+  const [view, setView] = useState<"inbox" | "prospecting" | "templates">("inbox");
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [accounts, setAccounts] = useState<InstagramAccount[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -79,7 +82,7 @@ export default function App() {
     <div className="app">
       <header className="app__header">
         <div className="app__header-left">
-          <h1>{view === "inbox" ? "Unified Master Inbox" : "Prospecting"}</h1>
+          <h1>{VIEW_LABELS[view]}</h1>
           <nav className="app__nav">
             <button
               className={view === "inbox" ? "nav-btn nav-btn--active" : "nav-btn"}
@@ -92,6 +95,12 @@ export default function App() {
               onClick={() => setView("prospecting")}
             >
               Prospecting
+            </button>
+            <button
+              className={view === "templates" ? "nav-btn nav-btn--active" : "nav-btn"}
+              onClick={() => setView("templates")}
+            >
+              Templates
             </button>
           </nav>
         </div>
@@ -141,8 +150,10 @@ export default function App() {
             />
           </main>
         </div>
-      ) : (
+      ) : view === "prospecting" ? (
         <ProspectingPage accounts={accounts} />
+      ) : (
+        <TemplatesPanel />
       )}
     </div>
   );

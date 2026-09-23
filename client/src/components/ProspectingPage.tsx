@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
-import type { InstagramAccount, Prospect } from "../types";
+import type { InstagramAccount, MessageTemplate, Platform, Prospect } from "../types";
 import {
   applyMapping,
   autoMapColumns,
+  downloadProspectTemplate,
   FIELD_LABELS,
   parseSpreadsheet,
   PROSPECT_FIELDS,
@@ -12,6 +13,7 @@ import {
   type ProspectField,
 } from "../lib/prospectImport";
 import { Avatar } from "./Avatar";
+import { PlatformBadge } from "./PlatformBadge";
 
 interface Props {
   accounts: InstagramAccount[];
@@ -25,19 +27,32 @@ const STATUS_FILTERS: Array<{ label: string; value: Prospect["status"] | "all" }
   { label: "Closed", value: "closed" },
 ];
 
+const PLATFORM_FILTERS: Array<{ label: string; value: Platform | "all" }> = [
+  { label: "All platforms", value: "all" },
+  { label: "Instagram", value: "instagram" },
+  { label: "TikTok", value: "tiktok" },
+  { label: "Twitch", value: "twitch" },
+];
+
 export function ProspectingPage({ accounts }: Props) {
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const [statusFilter, setStatusFilter] = useState<Prospect["status"] | "all">("all");
+  const [platformFilter, setPlatformFilter] = useState<Platform | "all">("all");
   const [sheet, setSheet] = useState<ParsedSheet | null>(null);
   const [mapping, setMapping] = useState<Partial<Record<ProspectField, string>>>({});
+  const [defaultPlatform, setDefaultPlatform] = useState<Platform>("instagram");
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const refresh = () => {
     api
-      .listProspects(statusFilter === "all" ? undefined : { status: statusFilter })
+      .listProspects({
+        status: statusFilter === "all" ? undefined : statusFilter,
+        platform: platformFilter === "all" ? undefined : platformFilter,
+      })
       .then(setProspects)
       .catch((e) => setError(String(e)));
   };
@@ -45,7 +60,11 @@ export function ProspectingPage({ accounts }: Props) {
   useEffect(() => {
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter]);
+  }, [statusFilter, platformFilter]);
+
+  useEffect(() => {
+    api.listTemplates().then(setTemplates).catch((e) => setError(String(e)));
+  }, []);
 
   const handleFile = async (file: File) => {
     setImportResult(null);
@@ -57,7 +76,7 @@ export function ProspectingPage({ accounts }: Props) {
 
   const handleImport = async () => {
     if (!sheet) return;
-    const mapped: MappedProspect[] = applyMapping(sheet.rows, mapping);
+    const mapped: MappedProspect[] = applyMapping(sheet.rows, mapping, defaultPlatform);
     if (mapped.length === 0) {
       setImportResult("No valid rows — make sure a Username column is mapped.");
       return;
@@ -81,22 +100,38 @@ export function ProspectingPage({ accounts }: Props) {
       <section className="prospecting__import">
         <h2>Import prospects</h2>
         <p className="prospecting__hint">
-          Upload an Excel/CSV sheet — map its columns below, then import. Duplicate usernames are skipped
-          automatically.
+          Upload an Excel/CSV sheet — map its columns below, then import. Duplicate username+platform pairs
+          are skipped automatically. If your sheet doesn't have a platform column, everything imports as the
+          default platform below.
         </p>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".xlsx,.xls,.csv"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) handleFile(file);
-          }}
-        />
+        <div className="prospecting__import-actions">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleFile(file);
+            }}
+          />
+          <button className="secondary" onClick={() => downloadProspectTemplate()}>
+            Download template
+          </button>
+        </div>
 
         {sheet && (
           <div className="prospecting__mapping">
             <p className="prospecting__hint">{sheet.rows.length} row(s) found. Map each field to a column:</p>
+
+            <label className="prospecting__mapping-row">
+              <span>Default platform (used when no Platform column is mapped, or a row's value isn't recognized)</span>
+              <select value={defaultPlatform} onChange={(e) => setDefaultPlatform(e.target.value as Platform)}>
+                <option value="instagram">Instagram</option>
+                <option value="tiktok">TikTok</option>
+                <option value="twitch">Twitch</option>
+              </select>
+            </label>
+
             <div className="prospecting__mapping-grid">
               {PROSPECT_FIELDS.map((field) => (
                 <label key={field} className="prospecting__mapping-row">
@@ -139,12 +174,23 @@ export function ProspectingPage({ accounts }: Props) {
               {f.label}
             </button>
           ))}
+          <select
+            className="conversation-list__account-filter"
+            value={platformFilter}
+            onChange={(e) => setPlatformFilter(e.target.value as Platform | "all")}
+          >
+            {PLATFORM_FILTERS.map((f) => (
+              <option key={f.value} value={f.value}>
+                {f.label}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="prospecting__cards">
           {prospects.length === 0 && <p className="empty-state">No prospects yet — import a sheet to get started.</p>}
           {prospects.map((p) => (
-            <ProspectCard key={p.id} prospect={p} accounts={accounts} onChange={refresh} />
+            <ProspectCard key={p.id} prospect={p} accounts={accounts} templates={templates} onChange={refresh} />
           ))}
         </div>
       </section>
@@ -155,24 +201,39 @@ export function ProspectingPage({ accounts }: Props) {
 function ProspectCard({
   prospect,
   accounts,
+  templates,
   onChange,
 }: {
   prospect: Prospect;
   accounts: InstagramAccount[];
+  templates: MessageTemplate[];
   onChange: () => void;
 }) {
+  const isInstagram = prospect.platform === "instagram";
   const [composing, setComposing] = useState(false);
   const [accountId, setAccountId] = useState<number | "">(accounts[0]?.id ?? "");
+  const [templateId, setTemplateId] = useState<number | "">("");
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+
+  const canOpenComposer = isInstagram ? accounts.length > 0 : true;
+
+  const handleTemplatePick = (value: string) => {
+    const id = value ? Number(value) : "";
+    setTemplateId(id);
+    if (id !== "") {
+      const template = templates.find((t) => t.id === id);
+      if (template) setText(template.body);
+    }
+  };
 
   const handleSend = async () => {
     if (!accountId || !text.trim()) return;
     setSending(true);
     setSendError(null);
     try {
-      await api.messageProspect(prospect.id, accountId, text.trim());
+      await api.messageProspect(prospect.id, accountId, text.trim(), templateId || undefined);
       setComposing(false);
       setText("");
       onChange();
@@ -184,10 +245,16 @@ function ProspectCard({
   };
 
   const handleMarkManually = async () => {
-    if (!accountId || !text.trim()) return;
+    if (!text.trim()) return;
+    if (isInstagram && !accountId) return;
     setSending(true);
     try {
-      await api.markProspectContactedManually(prospect.id, accountId, text.trim());
+      await api.markProspectContactedManually(
+        prospect.id,
+        isInstagram ? (accountId as number) : null,
+        text.trim(),
+        templateId || undefined
+      );
       setComposing(false);
       setText("");
       setSendError(null);
@@ -207,6 +274,7 @@ function ProspectCard({
           <span className="prospect-card__name">{prospect.display_name || `@${prospect.username}`}</span>
           <span className="prospect-card__handle">@{prospect.username}</span>
         </div>
+        <PlatformBadge platform={prospect.platform} />
         <span className={`prospect-card__status prospect-card__status--${prospect.status}`}>{prospect.status}</span>
       </div>
 
@@ -218,22 +286,44 @@ function ProspectCard({
       {prospect.status === "new" && (
         <>
           {!composing ? (
-            <button onClick={() => setComposing(true)} disabled={accounts.length === 0}>
-              {accounts.length === 0 ? "Connect an account first" : "Message"}
+            <button onClick={() => setComposing(true)} disabled={!canOpenComposer}>
+              {!canOpenComposer ? "Connect an account first" : "Message"}
             </button>
           ) : (
             <div className="prospect-card__composer">
-              <select value={accountId} onChange={(e) => setAccountId(Number(e.target.value))}>
-                {accounts.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    @{a.username ?? a.igUserId}
-                  </option>
-                ))}
-              </select>
-              <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} placeholder="Write a message..." />
+              {isInstagram ? (
+                <select value={accountId} onChange={(e) => setAccountId(Number(e.target.value))}>
+                  {accounts.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      @{a.username ?? a.igUserId}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <p className="composer-note">
+                  No {prospect.platform} account integration yet — send this from that platform's app
+                  directly, then log it here.
+                </p>
+              )}
+              {templates.length > 0 && (
+                <select value={templateId} onChange={(e) => handleTemplatePick(e.target.value)}>
+                  <option value="">— write from scratch —</option>
+                  {templates.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <textarea
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                rows={2}
+                placeholder="Write a message..."
+              />
               {sendError && (
                 <p className="composer-note">
-                  Send failed: {sendError} — you can send it yourself from Instagram and mark it below instead.
+                  Send failed: {sendError} — you can send it yourself from the app and mark it below instead.
                 </p>
               )}
               <div className="prospect-card__composer-actions">
@@ -243,9 +333,11 @@ function ProspectCard({
                 <button className="secondary" onClick={handleMarkManually} disabled={sending || !text.trim()}>
                   Mark sent manually
                 </button>
-                <button onClick={handleSend} disabled={sending || !text.trim()}>
-                  {sending ? "Sending..." : "Send via API"}
-                </button>
+                {isInstagram && (
+                  <button onClick={handleSend} disabled={sending || !text.trim()}>
+                    {sending ? "Sending..." : "Send via API"}
+                  </button>
+                )}
               </div>
             </div>
           )}

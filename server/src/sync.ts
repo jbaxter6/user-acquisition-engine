@@ -133,7 +133,12 @@ export async function syncInstagramAccount(
         console.error(`fetching message ${messageId} failed:`, await detailRes.text());
         continue;
       }
-      const detail = (await detailRes.json()) as MessageDetailResponse;
+      const detailRaw = await detailRes.text();
+      console.log(
+        `Message detail for ${messageId} (existing db row: ${existing?.id ?? "none"}):`,
+        detailRaw
+      );
+      const detail = JSON.parse(detailRaw) as MessageDetailResponse;
       if (!detail.message) continue;
 
       const isOutbound = detail.from.id === account.ig_user_id;
