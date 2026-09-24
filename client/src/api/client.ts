@@ -77,12 +77,32 @@ export const api = {
       },
     ),
 
-  listProspects: (filters?: { status?: string; platform?: Platform }) => {
-    const params = new URLSearchParams();
-    if (filters?.status) params.set("status", filters.status);
-    if (filters?.platform) params.set("platform", filters.platform);
-    const qs = params.toString();
-    return request<Prospect[]>(`/api/prospects${qs ? `?${qs}` : ""}`);
+  listProspects: (params: {
+    status?: string;
+    platform?: Platform;
+    q?: string;
+    sort?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const qs = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) {
+      if (value !== undefined && value !== "") qs.set(key, String(value));
+    }
+    const query = qs.toString();
+    return request<{ items: Prospect[]; total: number }>(
+      `/api/prospects${query ? `?${query}` : ""}`,
+    );
+  },
+
+  prospectCounts: (params: { platform?: Platform; q?: string } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.platform) qs.set("platform", params.platform);
+    if (params.q) qs.set("q", params.q);
+    const query = qs.toString();
+    return request<Record<"all" | "new" | "contacted" | "replied" | "closed", number>>(
+      `/api/prospects/counts${query ? `?${query}` : ""}`,
+    );
   },
 
   bulkImportProspects: (prospects: MappedProspect[]) =>

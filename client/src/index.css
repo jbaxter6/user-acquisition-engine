@@ -1828,6 +1828,12 @@ button:disabled {
 }
 
 .prospect-card__initial-message {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  overflow: hidden;
+  overflow-wrap: anywhere;
   margin: 0;
   padding: 10px 12px;
   border-radius: 8px;
@@ -2487,4 +2493,78 @@ button:disabled {
   color: #f5b731;
   background: rgba(245, 183, 49, 0.12);
   border-color: rgba(245, 183, 49, 0.35);
+}
+
+.prospecting__sentinel {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+.prospecting__loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Status chips hang off the card's top-right edge */
+.prospect-card {
+  position: relative;
+}
+
+.prospect-card .prospect-card__pills {
+  position: absolute;
+  top: 0;
+  right: 14px;
+  transform: translateY(-50%);
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  gap: 6px;
+  max-width: calc(100% - 28px);
+  z-index: 1;
+}
+
+.prospect-card .prospect-card__pills .pill {
+  background: #1b1f29;
+  border: 1px solid var(--border);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  white-space: nowrap;
+}
+
+.prospect-card .prospect-card__pills .pill--info,
+.prospect-card .prospect-card__pills .pill--link,
+.prospect-card .prospect-card__pills .pill--status-contacted {
+  border-color: rgba(91, 140, 255, 0.4);
+}
+
+.prospect-card .prospect-card__pills .pill--status-replied {
+  border-color: rgba(76, 175, 80, 0.45);
+}
+
+.prospect-card .prospect-card__pills .pill--link:hover {
+  background: #232a3d;
+}
+
+.prospecting__cards {
+  row-gap: 26px;
+  padding-top: 10px;
+}
+
+.prospect-card__about {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.prospect-card__about .prospect-card__notes {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
 }

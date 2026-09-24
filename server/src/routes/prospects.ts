@@ -1,10 +1,12 @@
 import { Router } from "express";
 import {
   bulkInsertProspects,
+  countProspectsByStatus,
   deleteProspect,
   ensureProspectForParticipant,
   findConversationByHandle,
   getAccountById,
+  getConversationAvatarInfo,
   getFirstOutboundMessage,
   getProspectById,
   insertMessage,
@@ -20,6 +22,7 @@ import {
   upsertConversation,
   upsertProspectContact,
   type ProspectInput,
+  type ProspectSort,
 } from "../db.js";
 import { ProspectMessageError, sendProspectMessage } from "../prospecting.js";
 
@@ -29,13 +32,21 @@ export function prospectsRouter(): Router {
   const router = Router();
 
   router.get("/", (req, res) => {
-    const { platform, status } = req.query as {
-      platform?: string;
-      status?: string;
-    };
-    const prospects = listProspects({ platform, status });
-    res.json(
-      prospects.map((prospect) => {
+    const { platform, status, q, sort, limit, offset } = req.query as Record<
+      string,
+      string | undefined
+    >;
+    const { items, total } = listProspects({
+      platform,
+      status,
+      q,
+      sort: sort as ProspectSort | undefined,
+      limit: limit ? Number(limit) : undefined,
+      offset: offset ? Number(offset) : undefined,
+    });
+    res.json({
+      total,
+      items: items.map((prospect) => {
         // Catches a prospect who already has a real inbox thread (e.g.
         // synced from a webhook under their resolved platform ID) even
         // though prospect.conversation_id is only set once they've been
@@ -44,6 +55,10 @@ export function prospectsRouter(): Router {
           prospect.conversation_id ??
           findConversationByHandle(prospect.platform, prospect.username)?.id ??
           null;
+        const avatar =
+          existingConversationId != null
+            ? getConversationAvatarInfo(existingConversationId)
+            : undefined;
         return {
           ...prospect,
           channels: listProspectChannels(prospect.id),
@@ -54,9 +69,17 @@ export function prospectsRouter(): Router {
             existingConversationId != null
               ? (getFirstOutboundMessage(existingConversationId) ?? null)
               : null,
+          avatar_url: avatar?.avatar_url ?? null,
+          // No thread yet also counts as "hasn't engaged", like the inbox.
+          has_engaged: avatar?.has_engaged ?? false,
         };
       }),
-    );
+    });
+  });
+
+  router.get("/counts", (req, res) => {
+    const { platform, q } = req.query as Record<string, string | undefined>;
+    res.json(countProspectsByStatus({ platform, q }));
   });
 
   // Expects rows already parsed/column-mapped client-side (the Excel file

@@ -209,6 +209,16 @@ try {
   console.error("Manager-link reverse-relationship migration failed:", err);
 }
 
+// One-time cleanup (safe every startup): older auto-created prospects got a
+// boilerplate note that showed up on their cards; clear it.
+try {
+  db.prepare(
+    "UPDATE prospects SET notes = NULL WHERE notes IN ('Auto-created from outbound message', 'Auto-created from inbound message')",
+  ).run();
+} catch (err) {
+  console.error("Auto-created note cleanup failed:", err);
+}
+
 export interface AccountRow {
   id: number;
   platform: string;
@@ -305,9 +315,18 @@ export interface ProspectInput {
   source?: string;
 }
 
-export function listProspects(
-  filters: { platform?: string; status?: string } = {},
-): ProspectRow[] {
+export type ProspectSort = "recent" | "newest" | "name";
+
+export interface ProspectFilters {
+  platform?: string;
+  status?: string;
+  q?: string;
+}
+
+function prospectWhere(filters: ProspectFilters): {
+  where: string;
+  params: string[];
+} {
   const clauses: string[] = [];
   const params: string[] = [];
   if (filters.platform) {
@@ -318,13 +337,71 @@ export function listProspects(
     clauses.push("status = ?");
     params.push(filters.status);
   }
-  const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
-  return db
+  const q = filters.q?.trim().replace(/^@/, "");
+  if (q) {
+    const like = `%${q.replace(/[\\%_]/g, "\\$&")}%`;
+    clauses.push(
+      "(username LIKE ? ESCAPE '\\' OR display_name LIKE ? ESCAPE '\\' OR notes LIKE ? ESCAPE '\\')",
+    );
+    params.push(like, like, like);
+  }
+  return {
+    where: clauses.length ? `WHERE ${clauses.join(" AND ")}` : "",
+    params,
+  };
+}
+
+const PROSPECT_ORDER: Record<ProspectSort, string> = {
+  recent: "COALESCE(contacted_at, created_at) DESC, id DESC",
+  newest: "created_at DESC, id DESC",
+  name: "LOWER(COALESCE(NULLIF(display_name, ''), username)) ASC, id ASC",
+};
+
+export function listProspects(
+  filters: ProspectFilters & {
+    sort?: ProspectSort;
+    limit?: number;
+    offset?: number;
+  } = {},
+): { items: ProspectRow[]; total: number } {
+  const { where, params } = prospectWhere(filters);
+  const order = PROSPECT_ORDER[filters.sort ?? "recent"] ?? PROSPECT_ORDER.recent;
+  const limit = Math.min(Math.max(filters.limit ?? 24, 1), 200);
+  const offset = Math.max(filters.offset ?? 0, 0);
+
+  const items = db
+    .prepare<
+      (string | number)[],
+      ProspectRow
+    >(`SELECT * FROM prospects ${where} ORDER BY ${order} LIMIT ? OFFSET ?`)
+    .all(...params, limit, offset);
+  const { total } = db
     .prepare<
       string[],
-      ProspectRow
-    >(`SELECT * FROM prospects ${where} ORDER BY created_at DESC`)
+      { total: number }
+    >(`SELECT COUNT(*) AS total FROM prospects ${where}`)
+    .get(...params)!;
+  return { items, total };
+}
+
+// Per-status counts for the filter pills. Honors platform/search but
+// deliberately ignores the status filter so every pill shows its own count.
+export function countProspectsByStatus(
+  filters: Omit<ProspectFilters, "status"> = {},
+): Record<"all" | "new" | "contacted" | "replied" | "closed", number> {
+  const { where, params } = prospectWhere(filters);
+  const rows = db
+    .prepare<
+      string[],
+      { status: string; n: number }
+    >(`SELECT status, COUNT(*) AS n FROM prospects ${where} GROUP BY status`)
     .all(...params);
+  const counts = { all: 0, new: 0, contacted: 0, replied: 0, closed: 0 };
+  for (const { status, n } of rows) {
+    if (status in counts) counts[status as keyof typeof counts] = n;
+    counts.all += n;
+  }
+  return counts;
 }
 
 export function getProspectById(id: number): ProspectRow | undefined {
@@ -436,9 +513,7 @@ export function ensureProspectForParticipant(input: {
         input.name ?? null,
         input.source ?? (outbound ? "outbound_message" : "inbound_message"),
         status,
-        outbound
-          ? "Auto-created from outbound message"
-          : "Auto-created from inbound message",
+        null,
       );
     prospect = getProspectById(result.lastInsertRowid as number)!;
   } else if (input.name && !prospect.display_name) {
@@ -994,6 +1069,24 @@ export function findConversationByHandle(
        LIMIT 1`,
     )
     .get(platform, normalized);
+}
+
+// What the inbox shows for a participant's avatar: the stored photo URL and
+// whether they've ever messaged us (Meta withholds the photo until they do).
+export function getConversationAvatarInfo(
+  conversationId: number,
+): { avatar_url: string | null; has_engaged: boolean } | undefined {
+  const row = db
+    .prepare<
+      [number],
+      { avatar_url: string | null; has_engaged: number }
+    >(
+      `SELECT c.participant_avatar_url AS avatar_url,
+              EXISTS(SELECT 1 FROM messages m WHERE m.conversation_id = c.id AND m.direction = 'inbound') AS has_engaged
+       FROM conversations c WHERE c.id = ?`,
+    )
+    .get(conversationId);
+  return row && { avatar_url: row.avatar_url, has_engaged: Boolean(row.has_engaged) };
 }
 
 export function getFirstOutboundMessage(conversationId: number):

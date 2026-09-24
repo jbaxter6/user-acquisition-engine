@@ -36,12 +36,22 @@ import {
 } from "./icons";
 import { formatRelativeTime } from "../lib/relativeTime";
 
-function scrollToProspectCard(id: number) {
+function highlightProspectCard(id: number): boolean {
   const el = document.getElementById(`prospect-card-${id}`);
-  if (!el) return;
+  if (!el) return false;
   el.scrollIntoView({ behavior: "smooth", block: "center" });
   el.classList.add("prospect-card--highlight");
   setTimeout(() => el.classList.remove("prospect-card--highlight"), 1500);
+  return true;
+}
+
+// Cards load in pages, so the target may not be in the DOM yet; the page
+// listens for this event and narrows the list to that prospect if needed.
+function scrollToProspectCard(id: number, username: string) {
+  if (highlightProspectCard(id)) return;
+  window.dispatchEvent(
+    new CustomEvent("reveal-prospect", { detail: { id, username } }),
+  );
 }
 
 const STATUS_LABEL: Record<Prospect["status"], string> = {
@@ -61,7 +71,7 @@ const STATUS_FILTERS: Array<{
 }> = [
   { label: "All", value: "all" },
   { label: "New", value: "new" },
-  { label: "Contacted", value: "contacted" },
+  { label: "Awaiting Reply", value: "contacted" },
   { label: "Replied", value: "replied" },
   { label: "Closed", value: "closed" },
 ];
@@ -80,9 +90,7 @@ const SORT_LABEL: Record<SortKey, string> = {
   name: "Name A–Z",
 };
 
-function activityTime(p: Prospect): number {
-  return Date.parse((p.contacted_at ?? p.created_at).replace(" ", "T") + "Z") || 0;
-}
+const PAGE_SIZE = 24;
 
 export function ProspectingPage({ accounts }: Props) {
   const [prospects, setProspects] = useState<Prospect[]>([]);
@@ -106,20 +114,131 @@ export function ProspectingPage({ accounts }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  // Always loads the full list — the filter pills show per-status counts,
-  // so filtering/search/sort happen client-side.
-  const refresh = () => {
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [counts, setCounts] = useState({
+    all: 0,
+    new: 0,
+    contacted: 0,
+    replied: 0,
+    closed: 0,
+  });
+  const [pipeline, setPipeline] = useState({ all: 0, contacted: 0 });
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const requestRef = useRef(0);
+  const prospectsRef = useRef<Prospect[]>([]);
+  prospectsRef.current = prospects;
+  const revealRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(search.trim()), 250);
+    return () => clearTimeout(id);
+  }, [search]);
+
+  const queryParams = () => ({
+    status: statusFilter === "all" ? undefined : statusFilter,
+    platform: platformFilter === "all" ? undefined : platformFilter,
+    q: debouncedSearch || undefined,
+    sort,
+  });
+
+  // Loads `limit` rows from `offset`; offset 0 replaces the list, anything
+  // else appends. Stale responses (filters changed mid-flight) are dropped.
+  const load = async (offset: number, limit = PAGE_SIZE) => {
+    const requestId = ++requestRef.current;
+    setLoading(true);
+    try {
+      const page = await api.listProspects({ ...queryParams(), limit, offset });
+      if (requestId !== requestRef.current) return;
+      setTotal(page.total);
+      setProspects((current) =>
+        offset === 0 ? page.items : [...current, ...page.items],
+      );
+    } catch (e) {
+      if (requestId === requestRef.current) setError(String(e));
+    } finally {
+      if (requestId === requestRef.current) setLoading(false);
+    }
+  };
+
+  const loadCounts = () => {
     api
-      .listProspects({})
-      .then(setProspects)
-      .catch((e) => setError(String(e)));
+      .prospectCounts({
+        platform: platformFilter === "all" ? undefined : platformFilter,
+        q: debouncedSearch || undefined,
+      })
+      .then(setCounts)
+      .catch(() => {});
+    api
+      .prospectCounts()
+      .then((c) => setPipeline({ all: c.all, contacted: c.contacted }))
+      .catch(() => {});
+  };
+
+  // After an edit/sync, re-fetch everything already on screen so the
+  // scroll position and loaded pages survive.
+  const refresh = () => {
+    void load(0, Math.max(prospectsRef.current.length, PAGE_SIZE));
+    loadCounts();
   };
 
   useEffect(() => {
-    refresh();
+    void load(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter, platformFilter, debouncedSearch, sort]);
+
+  useEffect(() => {
+    loadCounts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [platformFilter, debouncedSearch]);
+
+  useEffect(() => {
     window.addEventListener("accounts-synced", refresh);
     return () => window.removeEventListener("accounts-synced", refresh);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter, platformFilter, debouncedSearch, sort]);
+
+  const hasMore = prospects.length < total;
+
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !loading && hasMore) {
+          void load(prospectsRef.current.length);
+        }
+      },
+      // Root is the page's own scroll container so the margin pre-loads
+      // the next page before the user reaches the bottom.
+      { root: el.closest(".prospecting"), rootMargin: "400px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, hasMore, statusFilter, platformFilter, debouncedSearch, sort]);
+
+  // "View card" on a linked prospect that hasn't been loaded yet: clear the
+  // filters and search for it so it's guaranteed to be on the first page.
+  useEffect(() => {
+    const onReveal = (e: Event) => {
+      const { id, username } = (e as CustomEvent<{ id: number; username: string }>)
+        .detail;
+      revealRef.current = id;
+      setStatusFilter("all");
+      setPlatformFilter("all");
+      setSearch(username);
+      setDebouncedSearch(username);
+    };
+    window.addEventListener("reveal-prospect", onReveal);
+    return () => window.removeEventListener("reveal-prospect", onReveal);
   }, []);
+
+  useEffect(() => {
+    if (revealRef.current == null) return;
+    if (highlightProspectCard(revealRef.current)) revealRef.current = null;
+  }, [prospects]);
 
   useEffect(() => {
     api
@@ -187,34 +306,7 @@ export function ProspectingPage({ accounts }: Props) {
     }
   };
 
-  const countFor = (status: Prospect["status"] | "all") =>
-    status === "all"
-      ? prospects.length
-      : prospects.filter((p) => p.status === status).length;
-
-  const query = search.trim().toLowerCase();
-  const visible = prospects
-    .filter((p) => statusFilter === "all" || p.status === statusFilter)
-    .filter((p) => platformFilter === "all" || p.platform === platformFilter)
-    .filter(
-      (p) =>
-        !query ||
-        p.username.toLowerCase().includes(query) ||
-        (p.display_name ?? "").toLowerCase().includes(query) ||
-        (p.notes ?? "").toLowerCase().includes(query),
-    )
-    .sort((a, b) => {
-      if (sort === "name")
-        return (a.display_name || a.username).localeCompare(
-          b.display_name || b.username,
-        );
-      if (sort === "newest")
-        return (
-          Date.parse(b.created_at.replace(" ", "T") + "Z") -
-          Date.parse(a.created_at.replace(" ", "T") + "Z")
-        );
-      return activityTime(b) - activityTime(a);
-    });
+  const countFor = (status: Prospect["status"] | "all") => counts[status];
 
   return (
     <div className="prospecting">
@@ -254,13 +346,13 @@ export function ProspectingPage({ accounts }: Props) {
 
           <div className="prospecting-toolbar__stats">
             <span>
-              Pipeline: <strong>{prospects.length}</strong>
+              Pipeline: <strong>{pipeline.all}</strong>
             </span>
             <span className="prospecting-toolbar__divider" />
             <span>
               Awaiting Reply:{" "}
               <strong className="prospecting-toolbar__warn">
-                {countFor("contacted")}
+                {pipeline.contacted}
               </strong>
             </span>
             <span className="prospecting-toolbar__divider" />
@@ -435,22 +527,33 @@ export function ProspectingPage({ accounts }: Props) {
               : "prospecting__cards"
           }
         >
-          {visible.length === 0 && (
+          {!loading && prospects.length === 0 && (
             <p className="empty-state">
-              {prospects.length === 0
+              {pipeline.all === 0
                 ? "No prospects yet — import a sheet to get started."
                 : "No prospects match your filters."}
             </p>
           )}
-          {visible.map((p) => (
+          {prospects.map((p) => (
             <ProspectCard
               key={p.id}
               prospect={p}
               templates={templates}
-              allProspects={prospects}
               onChange={refresh}
             />
           ))}
+        </div>
+        <div ref={sentinelRef} className="prospecting__sentinel">
+          {loading && prospects.length > 0 && (
+            <span className="prospecting__loading">
+              <Spinner size={14} /> Loading more…
+            </span>
+          )}
+          {!hasMore && prospects.length > 0 && (
+            <span className="prospecting__end">
+              Showing all {total} prospect{total === 1 ? "" : "s"}
+            </span>
+          )}
         </div>
       </section>
     </div>
@@ -467,13 +570,11 @@ const ROLE_OPTIONS = [
 ];
 
 function LinkPicker({
-  allProspects,
   excludeKeys,
   showRole,
   onSubmit,
   onCancel,
 }: {
-  allProspects: Prospect[];
   excludeKeys: Set<string>;
   showRole: boolean;
   onSubmit: (input: {
@@ -491,22 +592,46 @@ function LinkPicker({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const queryTrimmed = query.trim().toLowerCase();
-  const matches = queryTrimmed
-    ? allProspects
-        .filter(
-          (candidate) =>
-            !excludeKeys.has(
-              `${candidate.platform}:${candidate.username.toLowerCase()}`,
-            ),
-        )
-        .filter(
-          (candidate) =>
-            candidate.username.toLowerCase().includes(queryTrimmed) ||
-            (candidate.display_name ?? "").toLowerCase().includes(queryTrimmed),
-        )
-        .slice(0, 6)
-    : [];
+  const queryTrimmed = query.trim();
+  const [candidates, setCandidates] = useState<Prospect[]>([]);
+  const [searching, setSearching] = useState(false);
+
+  // Searches the whole prospect table server-side (not just what's loaded on
+  // the page); over-fetches a little since already-linked ones are dropped.
+  useEffect(() => {
+    if (!queryTrimmed) {
+      setCandidates([]);
+      return;
+    }
+    let cancelled = false;
+    setSearching(true);
+    const id = setTimeout(() => {
+      api
+        .listProspects({ q: queryTrimmed, limit: 20, sort: "name" })
+        .then((page) => {
+          if (!cancelled) setCandidates(page.items);
+        })
+        .catch(() => {
+          if (!cancelled) setCandidates([]);
+        })
+        .finally(() => {
+          if (!cancelled) setSearching(false);
+        });
+    }, 200);
+    return () => {
+      cancelled = true;
+      clearTimeout(id);
+    };
+  }, [queryTrimmed]);
+
+  const matches = candidates
+    .filter(
+      (candidate) =>
+        !excludeKeys.has(
+          `${candidate.platform}:${candidate.username.toLowerCase()}`,
+        ),
+    )
+    .slice(0, 6);
 
   const submit = async (p: Platform, u: string) => {
     if (!u.trim()) return;
@@ -574,7 +699,7 @@ function LinkPicker({
             <ul className="prospect-card__link-results">
               {matches.length === 0 ? (
                 <li className="prospect-card__link-empty">
-                  No matching prospects.
+                  {searching ? "Searching…" : "No matching prospects."}
                 </li>
               ) : (
                 matches.map((candidate) => (
@@ -640,12 +765,10 @@ function LinkPicker({
 function ProspectCard({
   prospect,
   templates,
-  allProspects,
   onChange,
 }: {
   prospect: Prospect;
   templates: MessageTemplate[];
-  allProspects: Prospect[];
   onChange: () => void;
 }) {
   const navigate = useNavigate();
@@ -741,9 +864,10 @@ function ProspectCard({
       <div className="prospect-card__header">
         <span className="prospect-card__avatar-wrap">
           <Avatar
-            src={null}
+            src={prospect.avatar_url ?? null}
             label={prospect.display_name || prospect.username}
-            size={40}
+            size={32}
+            engaged={Boolean(prospect.has_engaged)}
           />
           <span className="prospect-card__avatar-badge">
             <PlatformIcon platform={prospect.platform} size={10} />
@@ -777,17 +901,22 @@ function ProspectCard({
         <span className={`pill pill--status-${prospect.status}`}>
           {STATUS_LABEL[prospect.status]}
         </span>
-        {existingConversationId != null && (
-          <button
-            className="pill pill--link"
-            onClick={() =>
-              navigate(`/inbox?conversationId=${existingConversationId}`)
-            }
-          >
-            Open conversation
-          </button>
-        )}
       </div>
+
+      {(prospect.followers != null || prospect.notes) && (
+        <div className="prospect-card__about">
+          {prospect.followers != null && (
+            <p className="prospect-card__meta">
+              {prospect.followers.toLocaleString()} followers
+            </p>
+          )}
+          {prospect.notes && (
+            <p className="prospect-card__notes" title={prospect.notes}>
+              {prospect.notes}
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="prospect-card__tabs">
         <button
@@ -814,15 +943,6 @@ function ProspectCard({
 
       {tab === "outreach" ? (
         <div className="prospect-card__outreach">
-          {prospect.followers != null && (
-            <p className="prospect-card__meta">
-              {prospect.followers.toLocaleString()} followers
-            </p>
-          )}
-          {prospect.notes && (
-            <p className="prospect-card__notes">{prospect.notes}</p>
-          )}
-
           {existingConversationId != null ? (
             <div className="prospect-card__existing-thread">
               <span className="prospect-card__existing-label">
@@ -839,11 +959,13 @@ function ProspectCard({
                         : "prospect-card__template-tag prospect-card__template-tag--custom"
                     }
                   >
-                    {prospect.first_outbound_message.template_name
-                      ? `Template: ${prospect.first_outbound_message.template_name}`
-                      : "Not a template — custom message"}
+                    {prospect.first_outbound_message.template_name ??
+                      "Custom Message"}
                   </span>
-                  <p className="prospect-card__initial-message">
+                  <p
+                    className="prospect-card__initial-message"
+                    title="Open the inbox thread to read the full message"
+                  >
                     {prospect.first_outbound_message.text}
                   </p>
                 </>
@@ -961,7 +1083,7 @@ function ProspectCard({
                   </span>
                   <button
                     className="secondary"
-                    onClick={() => scrollToProspectCard(link.id)}
+                    onClick={() => scrollToProspectCard(link.id, link.username)}
                   >
                     View card
                   </button>
@@ -991,7 +1113,6 @@ function ProspectCard({
 
           {linkingChannel && (
             <LinkPicker
-              allProspects={allProspects}
               excludeKeys={tiedKeys}
               showRole={false}
               onCancel={() => setLinkingChannel(false)}
@@ -1045,7 +1166,7 @@ function ProspectCard({
                   </span>
                   <button
                     className="secondary"
-                    onClick={() => scrollToProspectCard(link.id)}
+                    onClick={() => scrollToProspectCard(link.id, link.username)}
                   >
                     View card
                   </button>
@@ -1098,7 +1219,6 @@ function ProspectCard({
 
           {linkingManager && (
             <LinkPicker
-              allProspects={allProspects}
               excludeKeys={managerKeys}
               showRole={true}
               onCancel={() => setLinkingManager(false)}
@@ -1135,7 +1255,7 @@ function ProspectCard({
                       </span>
                       <button
                         className="secondary"
-                        onClick={() => scrollToProspectCard(link.id)}
+                        onClick={() => scrollToProspectCard(link.id, link.username)}
                       >
                         View card
                       </button>
