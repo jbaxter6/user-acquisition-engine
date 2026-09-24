@@ -10,12 +10,15 @@ import type {
 import {
   applyMapping,
   autoMapColumns,
+  detectWideLayout,
   downloadProspectTemplate,
+  expandWideRows,
   FIELD_LABELS,
   parseSpreadsheet,
   PROSPECT_FIELDS,
   type MappedProspect,
   type ParsedSheet,
+  type WideExpansion,
   type ProspectField,
 } from "../lib/prospectImport";
 import { Avatar } from "./Avatar";
@@ -114,6 +117,9 @@ export function ProspectingPage({ accounts }: Props) {
   const [mapping, setMapping] = useState<
     Partial<Record<ProspectField, string>>
   >({});
+  // Set when the sheet is one-row-per-creator (Instagram/TikTok/... columns);
+  // then there's nothing to map, just a summary and Import.
+  const [wide, setWide] = useState<WideExpansion | null>(null);
   const [defaultPlatform, setDefaultPlatform] = useState<Platform>("instagram");
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<string | null>(null);
@@ -285,26 +291,32 @@ export function ProspectingPage({ accounts }: Props) {
     const parsed = await parseSpreadsheet(buffer);
     setSheet(parsed);
     setMapping(autoMapColumns(parsed.headers));
+    const layout = detectWideLayout(parsed.headers);
+    setWide(layout ? expandWideRows(parsed.rows, layout) : null);
   };
 
   const handleImport = async () => {
     if (!sheet) return;
-    const mapped: MappedProspect[] = applyMapping(
-      sheet.rows,
-      mapping,
-      defaultPlatform,
-    );
+    const mapped: MappedProspect[] = wide
+      ? wide.prospects
+      : applyMapping(sheet.rows, mapping, defaultPlatform);
     if (mapped.length === 0) {
-      setImportResult("No valid rows — make sure a Username column is mapped.");
+      setImportResult(
+        wide
+          ? "No valid rows — none of the social links had a usable handle."
+          : "No valid rows — make sure a Username column is mapped.",
+      );
       return;
     }
     setImporting(true);
     try {
       const result = await api.bulkImportProspects(mapped);
       setImportResult(
-        `Imported ${result.inserted} new prospect(s), skipped ${result.skipped} already on file.`,
+        `Imported ${result.inserted} new prospect(s), skipped ${result.skipped} already on file.` +
+          (result.linked ? ` Linked ${result.linked} cross-platform pair(s).` : ""),
       );
       setSheet(null);
+      setWide(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
       refresh();
     } catch (err) {
@@ -466,7 +478,27 @@ export function ProspectingPage({ accounts }: Props) {
         </div>
       </section>
 
-      {sheet && (
+      {sheet && wide && (
+        <section className="prospecting__import">
+          <div className="prospecting__mapping">
+            <p className="prospecting__hint">
+              One-row-per-creator sheet detected: {wide.creators} creator(s) →{" "}
+              {wide.prospects.length} prospect(s) ({wide.byPlatform.instagram}{" "}
+              Instagram, {wide.byPlatform.tiktok} TikTok, {wide.byPlatform.twitch}{" "}
+              Twitch). Each creator's profiles are linked together. YouTube links
+              are kept in the notes.
+            </p>
+            <button onClick={handleImport} disabled={importing || wide.prospects.length === 0}>
+              {importing ? "Importing..." : `Import ${wide.prospects.length} prospect(s)`}
+            </button>{" "}
+            <button onClick={() => setWide(null)} disabled={importing}>
+              Map columns manually instead
+            </button>
+          </div>
+        </section>
+      )}
+
+      {sheet && !wide && (
         <section className="prospecting__import">
           <div className="prospecting__mapping">
             <p className="prospecting__hint">

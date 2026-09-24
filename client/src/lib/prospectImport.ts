@@ -82,17 +82,120 @@ export interface MappedProspect {
   followers?: number;
   notes?: string;
   email?: string;
+  // Rows sharing a group are the same person on different platforms; the
+  // server links their cards together.
+  group?: string;
 }
 
-const TEMPLATE_HEADERS = ["username", "platform", "name", "followers", "notes", "email"];
+// One row per creator with a column per social — the same layout the
+// recruits sheets (war/recruits) come in.
+const TEMPLATE_HEADERS = ["Name", "Profile URL", "Instagram", "TikTok", "YouTube", "Twitch", "Email"];
 const TEMPLATE_EXAMPLE_ROW = [
-  "ratemytrack_dj",
-  "instagram",
   "DJ Test",
-  "45000",
-  "does rate my track segments",
+  "https://example.com/djtest",
+  "https://instagram.com/ratemytrack_dj",
+  "https://www.tiktok.com/@ratemytrack_dj",
+  "",
+  "",
   "",
 ];
+
+// ---- "One row per creator" layout (Instagram / TikTok / ... URL columns) ----
+
+export interface WideLayout {
+  instagram?: string;
+  tiktok?: string;
+  twitch?: string;
+  youtube?: string;
+  name?: string;
+  profileUrl?: string;
+  email?: string;
+}
+
+const WIDE_HEADERS: Record<keyof WideLayout, RegExp> = {
+  instagram: /^(instagram|ig)$/i,
+  tiktok: /^tik-?tok$/i,
+  twitch: /^twitch$/i,
+  youtube: /^you-?tube$/i,
+  name: /^(name|display[_ ]?name|full[_ ]?name)$/i,
+  profileUrl: /^profile[_ ]?url$/i,
+  email: /^e-?mail$/i,
+};
+
+/** Returns the column layout if the sheet has per-platform social columns, else null. */
+export function detectWideLayout(headers: string[]): WideLayout | null {
+  const layout: WideLayout = {};
+  for (const key of Object.keys(WIDE_HEADERS) as (keyof WideLayout)[]) {
+    const match = headers.find((h) => WIDE_HEADERS[key].test(h.trim()));
+    if (match) layout[key] = match;
+  }
+  const hasSocial = layout.instagram || layout.tiktok || layout.twitch || layout.youtube;
+  return hasSocial ? layout : null;
+}
+
+const RESERVED_PATHS = new Set([
+  "p", "reel", "reels", "explore", "stories", "accounts", "video", "channel", "tv", "share", "t", "user",
+]);
+const SOCIAL_HOST = /(instagram\.com|tiktok\.com|twitch\.tv)/i;
+
+/** Pulls the handle out of a profile URL (or a bare @handle). Empty string if there isn't one. */
+export function handleFromUrl(raw: unknown): string {
+  const value = String(raw ?? "").trim();
+  if (!value) return "";
+  if (!SOCIAL_HOST.test(value)) return value.replace(/^@/, "").split(/[/?#\s]/)[0];
+  try {
+    const url = new URL(/^https?:\/\//i.test(value) ? value : `https://${value}`);
+    const first = url.pathname.split("/").filter(Boolean)[0] ?? "";
+    const handle = decodeURIComponent(first).replace(/^@/, "");
+    return handle && !RESERVED_PATHS.has(handle.toLowerCase()) ? handle : "";
+  } catch {
+    return "";
+  }
+}
+
+export interface WideExpansion {
+  prospects: MappedProspect[];
+  creators: number;
+  byPlatform: Record<Platform, number>;
+}
+
+/** Turns one-row-per-creator into one prospect per platform, tied together by a shared group. */
+export function expandWideRows(rows: Record<string, unknown>[], layout: WideLayout): WideExpansion {
+  const prospects: MappedProspect[] = [];
+  const byPlatform: Record<Platform, number> = { instagram: 0, tiktok: 0, twitch: 0 };
+  let creators = 0;
+  const cell = (row: Record<string, unknown>, col?: string) =>
+    col ? String(row[col] ?? "").trim() : "";
+
+  rows.forEach((row, index) => {
+    const name = cell(row, layout.name);
+    const profileUrl = cell(row, layout.profileUrl);
+    const email = cell(row, layout.email);
+    const youtube = cell(row, layout.youtube);
+    // Profile URL is only used to group a creator's rows, not stored.
+    const notes = youtube ? `YouTube: ${youtube}` : "";
+    const group = profileUrl || name || `row-${index}`;
+
+    let found = 0;
+    for (const platform of ["instagram", "tiktok", "twitch"] as const) {
+      const username = handleFromUrl(cell(row, layout[platform]));
+      if (!username) continue;
+      found++;
+      byPlatform[platform]++;
+      prospects.push({
+        username,
+        platform,
+        displayName: name || undefined,
+        notes: notes || undefined,
+        email: email || undefined,
+        group,
+      });
+    }
+    if (found > 0) creators++;
+  });
+
+  return { prospects, creators, byPlatform };
+}
 
 /** Generates and downloads a starter .xlsx with the recognized column headers, so people don't have to guess them. */
 export async function downloadProspectTemplate(): Promise<void> {
