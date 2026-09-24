@@ -1,26 +1,3 @@
-# We Built This for the Fight
-
-This is the blade we sharpen before the battle.
-
-We gather the names, read the room, and turn noise into motion.
-We find the right creators, speak with purpose, and keep every thread alive long enough to become a story worth telling.
-
-This is not a pile of tools.
-It is a field kit for the war of attention.
-
-A single engine for:
-- finding the right creators
-- tracking conversations across platforms
-- sending the right message at the right time
-- keeping the whole campaign in one place, clear and ready
-
-We do not chase everything.
-We aim for the signal.
-We move with intent.
-We win the next conversation.
-
----
-
 # Omnichannel Creator Acquisition Engine
 
 A centralized, programmatic outbound engine for discovering, contacting, and managing conversations with music streamers/creators across Instagram, TikTok, and Twitch — without manually operating each platform or risking main brand accounts.
