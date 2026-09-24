@@ -11,7 +11,7 @@ import { webhooksRouter } from "./routes/webhooks.js";
 import { authRouter } from "./routes/auth.js";
 import { prospectsRouter } from "./routes/prospects.js";
 import { templatesRouter } from "./routes/templates.js";
-import { sessionRouter, siteAuth } from "./siteAuth.js";
+import { isSignedOutVisitor, sessionRouter, siteAuth } from "./siteAuth.js";
 import "./db.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -50,6 +50,26 @@ const privacyHtmlPath = path.resolve(
 );
 app.get(["/privacy", "/privacy.html"], (_req, res) => {
   res.sendFile(privacyHtmlPath);
+});
+
+// Public company/product page. Platform reviewers (Meta, TikTok) need to see
+// what the business does without logging in, so `/about` is always public and
+// `/` shows it to anyone who isn't signed in. Team members with a session
+// fall through to the app; the sign-in form lives at `/login`.
+const aboutHtmlPath = path.resolve(
+  __dirname,
+  "..",
+  "..",
+  "client",
+  "public",
+  "about.html",
+);
+app.get(["/about", "/about.html"], (_req, res) => {
+  res.sendFile(aboutHtmlPath);
+});
+app.get("/", (req, res, next) => {
+  if (isSignedOutVisitor(req)) return res.sendFile(aboutHtmlPath);
+  next();
 });
 
 // Also before the gate: TikTok redirects here after authorization. Inert

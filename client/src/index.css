@@ -2903,3 +2903,9 @@ button:disabled {
   color: var(--text);
   border-bottom-color: var(--text-dim);
 }
+
+.login__links {
+  position: relative;
+  display: flex;
+  gap: 22px;
+}

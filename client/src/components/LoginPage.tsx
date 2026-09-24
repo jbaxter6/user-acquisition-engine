@@ -89,6 +89,10 @@ export function LoginPage({ onSuccess }: { onSuccess: () => void }) {
         <p className="login__footer">Smooth Media Technologies LLC</p>
       </form>
 
+      <span className="login__links">
+        <a className="login__privacy" href={`${api.baseUrl}/about`}>
+          About Smooth
+        </a>
       <a
         className="login__privacy"
         href={`${api.baseUrl}/privacy`}
@@ -97,6 +101,7 @@ export function LoginPage({ onSuccess }: { onSuccess: () => void }) {
       >
         Privacy Policy
       </a>
+      </span>
     </main>
   );
 }

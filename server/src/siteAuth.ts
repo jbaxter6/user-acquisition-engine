@@ -77,6 +77,13 @@ function isAuthenticated(req: Request, password: string): boolean {
   return tokenIsValid(password, readCookie(req, COOKIE_NAME));
 }
 
+// True when SITE_PASSWORD is set and this request has no valid session, i.e.
+// a visitor who should see the public About page instead of the app.
+export function isSignedOutVisitor(req: Request): boolean {
+  const password = process.env.SITE_PASSWORD;
+  return Boolean(password) && !isAuthenticated(req, password!);
+}
+
 // Failed-login throttle, per client IP (in-memory: fine for one process).
 const failures = new Map<string, { count: number; lockedUntil: number }>();
 
