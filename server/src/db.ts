@@ -219,6 +219,31 @@ try {
   console.error("Auto-created note cleanup failed:", err);
 }
 
+// contacted_at should be when the first message actually went out, not when
+// Sync first noticed it. Sets it from each linked thread's earliest outbound
+// message (all threads when no id is given). Safe to re-run.
+export function syncProspectContactedAt(conversationId?: number): void {
+  db.prepare(
+    `UPDATE prospects
+     SET contacted_at = (
+       SELECT MIN(m.created_at) FROM messages m
+       WHERE m.conversation_id = prospects.conversation_id AND m.direction = 'outbound'
+     )
+     WHERE conversation_id IS NOT NULL
+       ${conversationId != null ? "AND conversation_id = ?" : ""}
+       AND EXISTS (
+         SELECT 1 FROM messages m
+         WHERE m.conversation_id = prospects.conversation_id AND m.direction = 'outbound'
+       )`,
+  ).run(...(conversationId != null ? [conversationId] : []));
+}
+
+try {
+  syncProspectContactedAt();
+} catch (err) {
+  console.error("contacted_at backfill failed:", err);
+}
+
 export interface AccountRow {
   id: number;
   platform: string;

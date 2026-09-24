@@ -55,7 +55,7 @@ function scrollToProspectCard(id: number, username: string) {
 }
 
 const STATUS_LABEL: Record<Prospect["status"], string> = {
-  new: "New",
+  new: "Not Contacted",
   contacted: "Messaged",
   replied: "Responded",
   closed: "Closed",
@@ -70,7 +70,7 @@ const STATUS_FILTERS: Array<{
   value: Prospect["status"] | "all";
 }> = [
   { label: "All", value: "all" },
-  { label: "New", value: "new" },
+  { label: "Not Contacted", value: "new" },
   { label: "Awaiting Reply", value: "contacted" },
   { label: "Replied", value: "replied" },
   { label: "Closed", value: "closed" },
@@ -893,9 +893,14 @@ function ProspectCard({
       </div>
 
       <div className="prospect-card__pills">
-        {prospect.contacted_at && (
+        {(prospect.first_outbound_message?.created_at ??
+          prospect.contacted_at) && (
           <span className="pill pill--info">
-            Messaged · {formatRelativeTime(prospect.contacted_at)}
+            Messaged ·{" "}
+            {formatRelativeTime(
+              (prospect.first_outbound_message?.created_at ??
+                prospect.contacted_at)!,
+            )}
           </span>
         )}
         <span className={`pill pill--status-${prospect.status}`}>
@@ -938,6 +943,9 @@ function ProspectCard({
           onClick={() => setTab("accounts")}
         >
           Connected Accounts
+          {links.length > 0 && (
+            <span className="prospect-tab__count">({links.length})</span>
+          )}
         </button>
       </div>
 
@@ -962,17 +970,19 @@ function ProspectCard({
                     {prospect.first_outbound_message.template_name ??
                       "Custom Message"}
                   </span>
-                  <p
+                  <div
                     className="prospect-card__initial-message"
                     title="Open the inbox thread to read the full message"
                   >
-                    {prospect.first_outbound_message.text}
-                  </p>
+                    <span className="prospect-card__initial-text">
+                      {prospect.first_outbound_message.text}
+                    </span>
+                  </div>
                 </>
               ) : (
-                <p className="prospect-card__initial-message prospect-card__initial-message--empty">
+                <div className="prospect-card__initial-message prospect-card__initial-message--empty">
                   No outbound message yet — they messaged you first.
-                </p>
+                </div>
               )}
               <button
                 className="prospect-card__cta"

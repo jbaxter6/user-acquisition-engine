@@ -1828,21 +1828,25 @@ button:disabled {
 }
 
 .prospect-card__initial-message {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 4;
-  line-clamp: 4;
-  overflow: hidden;
-  overflow-wrap: anywhere;
-  margin: 0;
   padding: 10px 12px;
   border-radius: 8px;
   background: var(--panel-alt);
   border: 1px solid var(--border);
   font-size: 13px;
   line-height: 1.45;
-  white-space: pre-wrap;
   color: var(--text);
+}
+
+/* Clamp on an inner element with no padding, so a partial fifth line can't
+   peek into the box's bottom padding. */
+.prospect-card__initial-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .prospect-card__initial-message--empty {
@@ -2567,4 +2571,80 @@ button:disabled {
   line-clamp: 2;
   overflow: hidden;
   overflow-wrap: anywhere;
+}
+
+/* Prospect grid: 3 cards wide on desktop */
+.prospecting__cards {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 1200px) {
+  .prospecting__cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .prospecting__cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+.prospecting__cards.prospecting__cards--list {
+  grid-template-columns: 1fr;
+}
+
+.prospect-tab__count {
+  margin-left: 5px;
+  font-weight: 600;
+  color: #7aa2ff;
+}
+
+/* "Not Contacted": fresh and ready for first outreach */
+.pill--status-new {
+  color: #22d3ee;
+  background: rgba(34, 211, 238, 0.12);
+}
+
+.prospect-card .prospect-card__pills .pill--status-new {
+  border-color: rgba(34, 211, 238, 0.5);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35), 0 0 10px rgba(34, 211, 238, 0.18);
+}
+
+.filter-pill__count--new {
+  background: rgba(34, 211, 238, 0.16);
+  color: #22d3ee;
+}
+
+.filter-pill--new-active,
+.filter-pill:has(.filter-pill__count--new).filter-pill--active {
+  border-color: rgba(34, 211, 238, 0.5);
+  background: rgba(34, 211, 238, 0.1);
+}
+
+/* Template / Custom Message chip overlays the top-right edge of its box */
+.prospect-card__existing-thread {
+  position: relative;
+  margin-top: 6px;
+}
+
+.prospect-card__existing-thread .prospect-card__template-tag {
+  position: absolute;
+  top: 0;
+  right: 10px;
+  transform: translateY(-50%);
+  align-self: auto;
+  max-width: calc(100% - 20px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background-color: #1b1f29;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+/* Compact initial-message preview */
+.prospect-card__initial-message {
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.4;
 }

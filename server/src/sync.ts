@@ -1,6 +1,7 @@
 import {
   conversationHasInboundMessage,
   ensureProspectForParticipant,
+  syncProspectContactedAt,
   findMessageByContent,
   getMessageByExternalId,
   insertMessage,
@@ -219,6 +220,7 @@ export async function syncInstagramAccount(
 
     if (dbConversation) {
       recomputeConversationLastMessageAt(dbConversation.id);
+      syncProspectContactedAt(dbConversation.id);
       // Meta withholds profile access (avatar included) until the other
       // party has actually messaged us — an outbound-only conversation
       // will always fail this lookup, so skip it rather than burn an API
