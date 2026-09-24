@@ -23,7 +23,7 @@
     line-height: 1.65;
   }
   a { color: var(--accent); }
-  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+  .wrap { max-width: 1480px; margin: 0 auto; padding: 0 24px; }
 
   header.site {
     border-bottom: 1px solid var(--line);
@@ -63,13 +63,6 @@
     text-decoration: none;
   }
   nav.site a:hover { color: var(--ink); }
-  nav.site a.signin {
-    color: #fff;
-    padding: 8px 16px;
-    border-radius: 9px;
-    background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  }
-  nav.site a.signin:hover { color: #fff; filter: brightness(1.08); }
 
   .hero {
     padding: 84px 0 72px;
@@ -135,7 +128,7 @@
   @media (max-width: 860px) {
     h1 { font-size: 34px; }
     .grid, .two { grid-template-columns: 1fr; }
-    nav.site a:not(.signin) { display: none; }
+    nav.site a { display: none; }
   }
 </style>
 </head>
@@ -147,7 +140,6 @@
         <a href="#what-we-do">What we do</a>
         <a href="#mailbox">The Mailbox</a>
         <a href="/privacy">Privacy Policy</a>
-        <a class="signin" href="/login">Team sign in</a>
       </nav>
     </div>
   </header>
@@ -240,8 +232,7 @@
         <p class="sub">
           The Mailbox is used only by our own authorized team members. It is not
           open for public sign up and does not connect accounts that belong to
-          other businesses. Access requires a password, and the sign-in link
-          above is for our team.
+          other businesses. Access requires a password.
         </p>
         <p class="sub" style="margin-bottom:0">
           To learn how we handle information, read our
@@ -268,7 +259,6 @@
       <span>
         <a href="/about">About</a>
         <a href="/privacy">Privacy Policy</a>
-        <a href="/login">Team sign in</a>
       </span>
     </div>
   </footer>
