@@ -1,0 +1,47 @@
+[
+  {
+    "name": "tiktok-music-producers",
+    "source": "tiktok",
+    "category": "music producer",
+    "min": 20000,
+    "max": 200000,
+    "limit": 50,
+    "keywords": ["beats", "producer"]
+  },
+  {
+    "name": "tiktok-rate-my-track",
+    "source": "tiktok",
+    "category": "rate my track",
+    "min": 20000,
+    "max": 200000,
+    "limit": 50,
+    "keywords": []
+  },
+  {
+    "name": "twitch-music-feedback",
+    "source": "twitch",
+    "category": "Music",
+    "min": 20000,
+    "max": 200000,
+    "limit": 100,
+    "keywords": ["rate", "feedback", "review"]
+  },
+  {
+    "name": "tiktok-live-music-reviews",
+    "source": "tiktok-live",
+    "category": "music reviews",
+    "min": 20000,
+    "max": 200000,
+    "limit": 50,
+    "keywords": []
+  },
+  {
+    "name": "instagram-music-reviews",
+    "source": "instagram",
+    "category": "music reviews",
+    "min": 20000,
+    "max": 200000,
+    "limit": 50,
+    "keywords": []
+  }
+]
