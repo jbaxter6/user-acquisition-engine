@@ -24,6 +24,7 @@ export function saveProspects(strategyId, prospects) {
   const file = path.join(OUTPUT_DIR, `${slug}-${stamp}.xlsx`);
 
   const rows = prospects.map((p) => ({
+    Username: p.username ?? '',
     Name: p.name ?? '',
     'Profile URL': p.profileUrl ?? '',
     Instagram: p.instagram ?? '',

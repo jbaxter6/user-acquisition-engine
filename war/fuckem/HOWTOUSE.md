@@ -17,6 +17,7 @@ cp .env.example .env    # then fill in the OPP*_URL values
 cd war/fuckem
 npm run opp1      # runs every strategy in every OPP folder
 npm run opp1strat1    # runs just OPP1/strat-1
+npm run opp1strat2    # runs just OPP1/strat-2 (search-bar strategy)
 ```
 
 ## Adding a new script
