@@ -1,4 +1,4 @@
-export type Platform = "instagram" | "tiktok" | "twitch";
+export type Platform = "instagram" | "tiktok" | "twitch" | "youtube";
 
 export class UnsupportedOperationError extends Error {
   constructor(platform: Platform, operation: string) {

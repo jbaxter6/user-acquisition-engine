@@ -10,7 +10,7 @@ import { getInstagramAdapterForAccount, getStubAdapters } from "../adapters/inde
 import { StubAdapter } from "../adapters/stub.js";
 import type { MessagingAdapter, Platform } from "../adapters/types.js";
 
-const PLATFORMS: Platform[] = ["instagram", "tiktok", "twitch"];
+const PLATFORMS: Platform[] = ["instagram", "tiktok", "twitch", "youtube"];
 
 function isPlatform(value: unknown): value is Platform {
   return typeof value === "string" && (PLATFORMS as string[]).includes(value);
@@ -72,7 +72,7 @@ export function conversationsRouter(): Router {
         ? getInstagramAdapterForAccount(conversation.account_id)
         : new StubAdapter("instagram");
     } else {
-      adapter = getStubAdapters()[conversation.platform as "tiktok" | "twitch"];
+      adapter = getStubAdapters()[conversation.platform as Exclude<Platform, "instagram">];
     }
 
     if (adapter.canSend) {

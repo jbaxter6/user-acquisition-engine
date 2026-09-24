@@ -66,6 +66,8 @@ const PLATFORM_VALUES: Record<string, Platform> = {
   tt: "tiktok",
   twitch: "twitch",
   ttv: "twitch",
+  youtube: "youtube",
+  yt: "youtube",
 };
 
 export function normalizePlatform(value: unknown, fallback: Platform): Platform {
@@ -82,17 +84,12 @@ export interface MappedProspect {
   followers?: number;
   notes?: string;
   email?: string;
-  // Rows sharing a group are the same person on different platforms; the
-  // server links their cards together.
-  group?: string;
 }
 
 // One row per creator with a column per social — the same layout the
 // recruits sheets (war/recruits) come in.
-const TEMPLATE_HEADERS = ["Name", "Profile URL", "Instagram", "TikTok", "YouTube", "Twitch", "Email"];
+const TEMPLATE_HEADERS = ["Instagram", "TikTok", "YouTube", "Twitch", "Email"];
 const TEMPLATE_EXAMPLE_ROW = [
-  "DJ Test",
-  "https://example.com/djtest",
   "https://instagram.com/ratemytrack_dj",
   "https://www.tiktok.com/@ratemytrack_dj",
   "",
@@ -107,8 +104,6 @@ export interface WideLayout {
   tiktok?: string;
   twitch?: string;
   youtube?: string;
-  name?: string;
-  profileUrl?: string;
   email?: string;
 }
 
@@ -117,8 +112,6 @@ const WIDE_HEADERS: Record<keyof WideLayout, RegExp> = {
   tiktok: /^tik-?tok$/i,
   twitch: /^twitch$/i,
   youtube: /^you-?tube$/i,
-  name: /^(name|display[_ ]?name|full[_ ]?name)$/i,
-  profileUrl: /^profile[_ ]?url$/i,
   email: /^e-?mail$/i,
 };
 
@@ -136,16 +129,22 @@ export function detectWideLayout(headers: string[]): WideLayout | null {
 const RESERVED_PATHS = new Set([
   "p", "reel", "reels", "explore", "stories", "accounts", "video", "channel", "tv", "share", "t", "user",
 ]);
-const SOCIAL_HOST = /(instagram\.com|tiktok\.com|twitch\.tv)/i;
+const SOCIAL_HOST = /(instagram\.com|tiktok\.com|twitch\.tv|youtube\.com|youtu\.be)/i;
 
 /** Pulls the handle out of a profile URL (or a bare @handle). Empty string if there isn't one. */
 export function handleFromUrl(raw: unknown): string {
   const value = String(raw ?? "").trim();
   if (!value) return "";
-  if (!SOCIAL_HOST.test(value)) return value.replace(/^@/, "").split(/[/?#\s]/)[0];
+  if (!SOCIAL_HOST.test(value)) {
+    // A bare @handle is fine; any other URL/path isn't a social profile.
+    return /[/:]/.test(value) ? "" : value.replace(/^@/, "").split(/[?#\s]/)[0];
+  }
   try {
     const url = new URL(/^https?:\/\//i.test(value) ? value : `https://${value}`);
-    const first = url.pathname.split("/").filter(Boolean)[0] ?? "";
+    const parts = url.pathname.split("/").filter(Boolean);
+    // YouTube: /@handle, /channel/<id>, /c/<name>, /user/<name>
+    const isYouTube = /youtube\.com|youtu\.be/i.test(url.hostname);
+    const first = (isYouTube && /^(channel|c|user)$/i.test(parts[0] ?? "") ? parts[1] : parts[0]) ?? "";
     const handle = decodeURIComponent(first).replace(/^@/, "");
     return handle && !RESERVED_PATHS.has(handle.toLowerCase()) ? handle : "";
   } catch {
@@ -159,25 +158,19 @@ export interface WideExpansion {
   byPlatform: Record<Platform, number>;
 }
 
-/** Turns one-row-per-creator into one prospect per platform, tied together by a shared group. */
+/** Turns one-row-per-creator into one prospect per platform link. */
 export function expandWideRows(rows: Record<string, unknown>[], layout: WideLayout): WideExpansion {
   const prospects: MappedProspect[] = [];
-  const byPlatform: Record<Platform, number> = { instagram: 0, tiktok: 0, twitch: 0 };
+  const byPlatform: Record<Platform, number> = { instagram: 0, tiktok: 0, twitch: 0, youtube: 0 };
   let creators = 0;
   const cell = (row: Record<string, unknown>, col?: string) =>
     col ? String(row[col] ?? "").trim() : "";
 
-  rows.forEach((row, index) => {
-    const name = cell(row, layout.name);
-    const profileUrl = cell(row, layout.profileUrl);
+  rows.forEach((row) => {
     const email = cell(row, layout.email);
-    const youtube = cell(row, layout.youtube);
-    // Profile URL is only used to group a creator's rows, not stored.
-    const notes = youtube ? `YouTube: ${youtube}` : "";
-    const group = profileUrl || name || `row-${index}`;
 
     let found = 0;
-    for (const platform of ["instagram", "tiktok", "twitch"] as const) {
+    for (const platform of ["instagram", "tiktok", "twitch", "youtube"] as const) {
       const username = handleFromUrl(cell(row, layout[platform]));
       if (!username) continue;
       found++;
@@ -185,10 +178,7 @@ export function expandWideRows(rows: Record<string, unknown>[], layout: WideLayo
       prospects.push({
         username,
         platform,
-        displayName: name || undefined,
-        notes: notes || undefined,
         email: email || undefined,
-        group,
       });
     }
     if (found > 0) creators++;

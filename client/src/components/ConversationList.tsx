@@ -4,7 +4,7 @@ import { PlatformIcon } from "./PlatformIcon";
 import { Avatar } from "./Avatar";
 import { formatRelativeTime, parseServerDate } from "../lib/relativeTime";
 
-const PLATFORMS: Platform[] = ["instagram", "tiktok", "twitch"];
+const PLATFORMS: Platform[] = ["instagram", "tiktok", "twitch", "youtube"];
 
 interface Props {
   conversations: Conversation[];

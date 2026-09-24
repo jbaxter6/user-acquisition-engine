@@ -5,6 +5,7 @@ import { getAccountById, listAccounts } from "../db.js";
 
 const tiktok = new StubAdapter("tiktok");
 const twitch = new StubAdapter("twitch");
+const youtube = new StubAdapter("youtube");
 
 /**
  * Builds an Instagram adapter scoped to one connected account (main or
@@ -17,9 +18,9 @@ export function getInstagramAdapterForAccount(accountId: number): MessagingAdapt
   return new InstagramAdapter(account.ig_user_id, account.access_token);
 }
 
-/** Non-account-scoped adapters for platforms with no login flow (TikTok, Twitch). */
+/** Non-account-scoped adapters for platforms with no login flow (TikTok, Twitch, YouTube). */
 export function getStubAdapters(): Record<Exclude<Platform, "instagram">, MessagingAdapter> {
-  return { tiktok, twitch };
+  return { tiktok, twitch, youtube };
 }
 
 export function instagramAccountCount(): number {

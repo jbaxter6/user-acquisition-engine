@@ -24,14 +24,10 @@ export function saveProspects(strategyId, prospects) {
   const file = path.join(OUTPUT_DIR, `${slug}-${stamp}.xlsx`);
 
   const rows = prospects.map((p) => ({
-    Username: p.username ?? '',
-    Name: p.name ?? '',
-    'Profile URL': p.profileUrl ?? '',
     Instagram: p.instagram ?? '',
     TikTok: p.tiktok ?? '',
     YouTube: p.youtube ?? '',
     Twitch: p.twitch ?? '',
-    Source: p.sourcePage ?? '',
   }));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Prospects');

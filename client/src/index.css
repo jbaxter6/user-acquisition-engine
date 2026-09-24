@@ -9,6 +9,7 @@
   --instagram: #e1306c;
   --tiktok: #25f4ee;
   --twitch: #9146ff;
+  --youtube: #ff0033;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color-scheme: dark;
 }
@@ -524,6 +525,11 @@ body.is-resizing {
 .platform-badge--twitch {
   background: rgba(145, 70, 255, 0.15);
   color: var(--twitch);
+}
+
+.platform-badge--youtube {
+  background: rgba(255, 0, 51, 0.15);
+  color: var(--youtube);
 }
 
 .empty-state {

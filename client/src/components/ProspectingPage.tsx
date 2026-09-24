@@ -57,10 +57,20 @@ function scrollToProspectCard(id: number, username: string) {
   );
 }
 
+// YouTube handles are stored bare ("mychannel"); channel IDs ("UC" + 22
+// chars) have no @-handle form and need the /channel/ path.
+function youtubeChannelUrl(username: string): string {
+  const id = username.replace(/^@/, "");
+  return /^UC[\w-]{22}$/.test(id)
+    ? `https://www.youtube.com/channel/${id}`
+    : `https://www.youtube.com/@${encodeURIComponent(id)}`;
+}
+
 function profileUrl(platform: Platform, username: string): string {
   const handle = encodeURIComponent(username.replace(/^@/, ""));
   if (platform === "tiktok") return `https://www.tiktok.com/@${handle}`;
   if (platform === "twitch") return `https://www.twitch.tv/${handle}`;
+  if (platform === "youtube") return youtubeChannelUrl(username);
   return `https://www.instagram.com/${handle}/`;
 }
 
@@ -90,6 +100,7 @@ const PLATFORM_FILTERS: Array<{ label: string; value: Platform | "all" }> = [
   { label: "Instagram", value: "instagram" },
   { label: "TikTok", value: "tiktok" },
   { label: "Twitch", value: "twitch" },
+  { label: "YouTube", value: "youtube" },
 ];
 
 type SortKey = "recent" | "newest" | "name";
@@ -312,8 +323,7 @@ export function ProspectingPage({ accounts }: Props) {
     try {
       const result = await api.bulkImportProspects(mapped);
       setImportResult(
-        `Imported ${result.inserted} new prospect(s), skipped ${result.skipped} already on file.` +
-          (result.linked ? ` Linked ${result.linked} cross-platform pair(s).` : ""),
+        `Imported ${result.inserted} new prospect(s), skipped ${result.skipped} already on file.`,
       );
       setSheet(null);
       setWide(null);
@@ -485,8 +495,7 @@ export function ProspectingPage({ accounts }: Props) {
               One-row-per-creator sheet detected: {wide.creators} creator(s) →{" "}
               {wide.prospects.length} prospect(s) ({wide.byPlatform.instagram}{" "}
               Instagram, {wide.byPlatform.tiktok} TikTok, {wide.byPlatform.twitch}{" "}
-              Twitch). Each creator's profiles are linked together. YouTube links
-              are kept in the notes.
+              Twitch, {wide.byPlatform.youtube} YouTube).
             </p>
             <button onClick={handleImport} disabled={importing || wide.prospects.length === 0}>
               {importing ? "Importing..." : `Import ${wide.prospects.length} prospect(s)`}
@@ -517,6 +526,7 @@ export function ProspectingPage({ accounts }: Props) {
                 <option value="instagram">Instagram</option>
                 <option value="tiktok">TikTok</option>
                 <option value="twitch">Twitch</option>
+                <option value="youtube">YouTube</option>
               </select>
             </label>
 
@@ -775,6 +785,7 @@ function LinkPicker({
             <option value="instagram">Instagram</option>
             <option value="tiktok">TikTok</option>
             <option value="twitch">Twitch</option>
+            <option value="youtube">YouTube</option>
           </select>
           <input
             value={username}
@@ -863,6 +874,8 @@ function ProspectCard({
   const DM_LINKS: Partial<Record<Platform, { label: string; url: (u: string) => string }>> = {
     instagram: { label: "Instagram", url: (u) => `https://ig.me/m/${u}` },
     tiktok: { label: "TikTok", url: (u) => `https://www.tiktok.com/@${u}` },
+    // YouTube has no DMs; the About tab is where creators list a business email.
+    youtube: { label: "YouTube", url: (u) => `${youtubeChannelUrl(u)}/about` },
   };
   const dmLink = DM_LINKS[prospect.platform];
 
@@ -1121,7 +1134,9 @@ function ProspectCard({
                     ? "Select a template first"
                     : prospect.platform === "tiktok"
                       ? "Copies the template text, then opens their TikTok profile — tap Message and paste"
-                      : "Copies the template text, then opens the DM"
+                      : prospect.platform === "youtube"
+                        ? "Copies the template text, then opens their channel's About tab (business email / contact)"
+                        : "Copies the template text, then opens the DM"
                 }
               >
                 Copy &amp; open in {dmLink.label}
@@ -1155,7 +1170,7 @@ function ProspectCard({
                 No social accounts tied yet
               </p>
               <p className="prospecting__hint">
-                Link additional Instagram, TikTok, or Twitch handles to sync
+                Link additional Instagram, TikTok, Twitch, or YouTube handles to sync
                 cross-platform communication.
               </p>
             </button>

@@ -10,8 +10,6 @@ import {
   getConversationAvatarInfo,
   getFirstOutboundMessage,
   getProspectById,
-  getProspectByUsername,
-  linkProspects,
   insertMessage,
   linkProspectChannel,
   linkProspectManager,
@@ -29,7 +27,7 @@ import {
   type ProspectSort,
 } from "../db.js";
 
-const PLATFORMS = ["instagram", "tiktok", "twitch"];
+const PLATFORMS = ["instagram", "tiktok", "twitch", "youtube"];
 
 export function prospectsRouter(): Router {
   const router = Router();
@@ -123,11 +121,9 @@ export function prospectsRouter(): Router {
     }
 
     const rows: ProspectInput[] = [];
-    // Rows sharing a `group` are one person on several platforms.
-    const groups = new Map<string, { platform: string; username: string }[]>();
     for (const p of prospects) {
       if (typeof p !== "object" || p === null) continue;
-      const { username, platform, displayName, followers, notes, email, group } =
+      const { username, platform, displayName, followers, notes, email } =
         p as Record<string, unknown>;
       if (typeof username !== "string" || !username.trim()) continue;
       const normalizedPlatform =
@@ -143,11 +139,6 @@ export function prospectsRouter(): Router {
         email: typeof email === "string" ? email : undefined,
       };
       rows.push(row);
-      if (typeof group === "string" && group) {
-        const members = groups.get(group) ?? [];
-        members.push({ platform: row.platform, username: row.username });
-        groups.set(group, members);
-      }
     }
 
     if (rows.length === 0) {
@@ -158,29 +149,12 @@ export function prospectsRouter(): Router {
 
     const inserted = bulkInsertProspects(rows);
 
-    // Tie each person's cards together (including ones that already
-    // existed, so re-importing a sheet still links them).
-    let linked = 0;
-    for (const members of groups.values()) {
-      const ids = members
-        .map((m) => getProspectByUsername(m.platform, m.username)?.id)
-        .filter((id): id is number => id != null);
-      for (let i = 0; i < ids.length; i++) {
-        for (let j = i + 1; j < ids.length; j++) {
-          if (ids[i] === ids[j]) continue;
-          linkProspects(ids[i], ids[j]);
-          linked++;
-        }
-      }
-    }
-
     res
       .status(201)
       .json({
         received: rows.length,
         inserted,
         skipped: rows.length - inserted,
-        linked,
       });
   });
 

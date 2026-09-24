@@ -90,6 +90,7 @@ app.get("/api/health", (_req, res) => {
       },
       tiktok: { canSend: false },
       twitch: { canSend: false },
+      youtube: { canSend: false },
     },
   });
 });

@@ -5,6 +5,7 @@ const LABELS: Record<Platform, string> = {
   instagram: "Instagram",
   tiktok: "TikTok",
   twitch: "Twitch",
+  youtube: "YouTube",
 };
 
 export function PlatformBadge({ platform }: { platform: Platform }) {
