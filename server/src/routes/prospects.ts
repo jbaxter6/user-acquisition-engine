@@ -15,6 +15,7 @@ import {
   linkProspectManager,
   listProspectChannels,
   listProspectContacts,
+  listProspectHandles,
   listProspectLinks,
   listProspects,
   markProspectContacted,
@@ -99,6 +100,10 @@ export function prospectsRouter(): Router {
         };
       }),
     });
+  });
+
+  router.get("/handles", (_req, res) => {
+    res.json(listProspectHandles());
   });
 
   router.get("/counts", (req, res) => {

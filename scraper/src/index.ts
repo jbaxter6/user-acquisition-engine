@@ -3,6 +3,7 @@ import { mkdirSync, readFileSync } from "node:fs";
 import { scrapeTwitch } from "./sources/twitch.js";
 import { scrapeTikTok, scrapeTikTokLive } from "./sources/tiktok.js";
 import { scrapeInstagram } from "./sources/instagram.js";
+import { loadKnown, rememberScraped } from "./known.js";
 import type { Prospect, SourceOptions } from "./types.js";
 
 interface Search extends Partial<Omit<SourceOptions, "minFollowers" | "maxFollowers">> {
@@ -75,6 +76,7 @@ if (process.argv.includes("--all")) {
   ];
 }
 
+const known = process.argv.includes("--no-dedupe") ? new Set<string>() : await loadKnown();
 mkdirSync("output", { recursive: true });
 const date = new Date().toISOString().slice(0, 10);
 const combined = new Map<string, Prospect>();
@@ -93,8 +95,10 @@ for (const s of toRun) {
       maxFollowers: s.max ?? 200000,
       limit: s.limit ?? 100,
       keywords: (s.keywords ?? []).map((k) => k.toLowerCase()),
+      skip: known,
     });
     writeSheet(`output/${s.name}-${date}.xlsx`, prospects);
+    rememberScraped(known, prospects);
     for (const p of prospects) combined.set(`${p.platform}:${p.username}`, p);
   } catch (err) {
     console.error(`${s.name} failed:`, err instanceof Error ? err.message : err);

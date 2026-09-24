@@ -61,6 +61,7 @@ export async function scrapeTwitch(opts: SourceOptions): Promise<Prospect[]> {
   const out: Prospect[] = [];
   for (const s of seen.values()) {
     if (out.length >= opts.limit) break;
+    if (opts.skip?.has(`twitch:${s.login.toLowerCase()}`)) continue;
     const f = await get<{ total: number }>("/channels/followers", { broadcaster_id: s.userId, first: "1" });
     if (f.total < opts.minFollowers || f.total > opts.maxFollowers) continue;
     const u = await get<{ data: { description: string }[] }>("/users", { id: s.userId });

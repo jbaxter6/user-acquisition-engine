@@ -73,6 +73,7 @@ async function scrape(tab: "user" | "live", opts: SourceOptions): Promise<Prospe
 
     for (const handle of handles) {
       if (out.length >= opts.limit) break;
+      if (opts.skip?.has(`tiktok:${handle.toLowerCase()}`)) continue;
       await humanDelay();
       const p = await readProfile(page, handle);
       if (!p) {

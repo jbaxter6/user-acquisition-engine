@@ -376,6 +376,16 @@ function prospectWhere(filters: ProspectFilters): {
   };
 }
 
+// Just platform + username for every prospect — lets the local scraper skip
+// people we already have without paging through full prospect rows.
+export function listProspectHandles(): { platform: string; username: string }[] {
+  return db
+    .prepare<[], { platform: string; username: string }>(
+      "SELECT platform, username FROM prospects",
+    )
+    .all();
+}
+
 const PROSPECT_ORDER: Record<ProspectSort, string> = {
   recent: "COALESCE(contacted_at, created_at) DESC, id DESC",
   newest: "created_at DESC, id DESC",

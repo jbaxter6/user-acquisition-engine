@@ -45,6 +45,10 @@ npm run scrape -- --source twitch --category "Music" --limit 50 --keywords "rate
 
 Flags: `--source` (tiktok|tiktok-live|instagram|twitch), `--category` (search term), `--min`/`--max` (followers), `--limit`, `--keywords` (comma-separated, matched against bio/stream title).
 
+## Skipping people we already have
+
+Every run skips handles already in `seen.json` (everyone this machine scraped) and, if `OUTREACH_URL` and `SITE_PASSWORD` are set in `.env`, everyone already in the prod database. Add `--no-dedupe` to a command to turn this off.
+
 ## Adding a new search
 
 1. Add an entry to `searches.json` (copy an existing one).

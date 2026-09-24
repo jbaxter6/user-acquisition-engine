@@ -14,4 +14,6 @@ export interface SourceOptions {
   maxFollowers: number;
   limit: number;
   keywords: string[];
+  // "platform:lowercased-username" of people we already have; skip them.
+  skip?: Set<string>;
 }

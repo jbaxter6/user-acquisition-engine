@@ -93,6 +93,7 @@ export async function scrapeInstagram(opts: SourceOptions): Promise<Prospect[]> 
 
     for (const handle of handles) {
       if (out.length >= opts.limit) break;
+      if (opts.skip?.has(`instagram:${handle.toLowerCase()}`)) continue;
       await humanDelay();
       const prof = await readProfile(page, handle);
       if (!prof) {
