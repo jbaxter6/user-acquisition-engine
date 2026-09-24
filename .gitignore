@@ -5,3 +5,4 @@ dist/
 server/data/
 *.log
 .DS_Store
+war/recruits/

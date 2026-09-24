@@ -77,7 +77,9 @@ if (process.argv.includes("--all")) {
 }
 
 const known = process.argv.includes("--no-dedupe") ? new Set<string>() : await loadKnown();
-mkdirSync("output", { recursive: true });
+// Sheets land in war/recruits (sibling of this scraper folder); override with OUTPUT_DIR.
+const outDir = process.env.OUTPUT_DIR ?? "../recruits";
+mkdirSync(outDir, { recursive: true });
 const date = new Date().toISOString().slice(0, 10);
 const combined = new Map<string, Prospect>();
 
@@ -97,7 +99,7 @@ for (const s of toRun) {
       keywords: (s.keywords ?? []).map((k) => k.toLowerCase()),
       skip: known,
     });
-    writeSheet(`output/${s.name}-${date}.xlsx`, prospects);
+    writeSheet(`${outDir}/${s.name}-${date}.xlsx`, prospects);
     rememberScraped(known, prospects);
     for (const p of prospects) combined.set(`${p.platform}:${p.username}`, p);
   } catch (err) {
@@ -105,4 +107,4 @@ for (const s of toRun) {
   }
 }
 
-if (toRun.length > 1) writeSheet(`output/combined-${date}.xlsx`, [...combined.values()]);
+if (toRun.length > 1) writeSheet(`${outDir}/combined-${date}.xlsx`, [...combined.values()]);
