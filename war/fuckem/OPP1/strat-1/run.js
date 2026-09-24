@@ -1,4 +1,6 @@
 import { chromium } from 'playwright';
+import { fileURLToPath } from 'node:url';
+import { saveProspects } from '../../lib/saveProspects.js';
 
 function assertTargetUrl() {
   const value = (process.env.OPP1_URL || '').trim();
@@ -190,4 +192,14 @@ export async function runStrategy() {
   } finally {
     await browser.close();
   }
+}
+
+// `npm run opp1strat1` runs this file directly: scrape, then save to war/recruits.
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  runStrategy()
+    .then((result) => saveProspects('OPP1/strat-1', result.prospects))
+    .catch((error) => {
+      console.error(error instanceof Error ? error.message : error);
+      process.exit(1);
+    });
 }

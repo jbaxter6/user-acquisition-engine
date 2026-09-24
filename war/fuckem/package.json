@@ -4,10 +4,11 @@
   "type": "module",
   "scripts": {
     "opp1": "node --env-file=.env run-opp1.js",
-    "strat1": "node --env-file=.env OPP1/strat-1/run.js"
+    "opp1strat1": "node --env-file=.env OPP1/strat-1/run.js"
   },
   "dependencies": {
-    "playwright": "^1.63.0"
+    "playwright": "^1.63.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "tsx": "^4.19.0",

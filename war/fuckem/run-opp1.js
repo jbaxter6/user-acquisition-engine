@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { saveProspects } from './lib/saveProspects.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -35,7 +36,9 @@ export async function runOpp1() {
       }
 
       const strategyResult = await mod.runStrategy();
-      results.push({ strategy: `${oppName}/${strategyName}`, ...strategyResult });
+      const strategyId = `${oppName}/${strategyName}`;
+      const file = saveProspects(strategyId, strategyResult.prospects ?? []);
+      results.push({ strategy: strategyId, file, ...strategyResult });
     }
   }
 
