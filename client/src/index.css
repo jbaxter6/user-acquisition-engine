@@ -2648,3 +2648,58 @@ button:disabled {
   font-size: 12px;
   line-height: 1.4;
 }
+
+/* Chips (sending account avatar + template) overlay the box's top-right */
+.prospect-card__thread-chips {
+  position: absolute;
+  top: 0;
+  right: 10px;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100% - 20px);
+  z-index: 1;
+}
+
+.prospect-card__thread-chips .avatar {
+  box-shadow: 0 0 0 2px #1b1f29, 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.prospect-card__existing-thread .prospect-card__thread-chips .prospect-card__template-tag {
+  position: static;
+  transform: none;
+  max-width: none;
+  min-width: 0;
+}
+
+/* More room between prospect cards */
+.prospecting__cards {
+  column-gap: 26px;
+  row-gap: 44px;
+}
+
+.prospect-card__outreach .prospect-card__existing-thread + .prospect-card__existing-thread {
+  margin-top: 14px;
+}
+
+/* Subtle "Continue in inbox" */
+.prospect-card__existing-thread .prospect-card__cta {
+  flex: none;
+  background: transparent;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  box-shadow: none;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.prospect-card__existing-thread .prospect-card__cta:hover {
+  color: var(--text);
+  border-color: rgba(91, 140, 255, 0.5);
+  background: rgba(91, 140, 255, 0.08);
+  filter: none;
+}

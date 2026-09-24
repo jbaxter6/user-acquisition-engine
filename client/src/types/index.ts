@@ -104,6 +104,22 @@ export interface ProspectLink {
   relationship: string;
 }
 
+export interface ProspectThread {
+  conversation_id: number;
+  account: {
+    id: number;
+    username: string | null;
+    profile_picture_url: string | null;
+  } | null;
+  first_outbound: {
+    text: string;
+    created_at: string;
+    template_name: string | null;
+  } | null;
+  avatar_url: string | null;
+  has_engaged: boolean;
+}
+
 export interface Prospect {
   id: number;
   platform: Platform;
@@ -124,6 +140,9 @@ export interface Prospect {
   existing_conversation_id?: number | null;
   avatar_url?: string | null;
   has_engaged?: boolean;
+  // One entry per conversation with this person (one per connected account
+  // that has messaged them), oldest first.
+  threads?: ProspectThread[];
   first_outbound_message?: {
     text: string;
     created_at: string;

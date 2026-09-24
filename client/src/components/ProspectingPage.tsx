@@ -54,6 +54,13 @@ function scrollToProspectCard(id: number, username: string) {
   );
 }
 
+function profileUrl(platform: Platform, username: string): string {
+  const handle = encodeURIComponent(username.replace(/^@/, ""));
+  if (platform === "tiktok") return `https://www.tiktok.com/@${handle}`;
+  if (platform === "twitch") return `https://www.twitch.tv/${handle}`;
+  return `https://www.instagram.com/${handle}/`;
+}
+
 const STATUS_LABEL: Record<Prospect["status"], string> = {
   new: "Not Contacted",
   contacted: "Messaged",
@@ -91,6 +98,7 @@ const SORT_LABEL: Record<SortKey, string> = {
 };
 
 const PAGE_SIZE = 24;
+const MAX_THREADS_SHOWN = 3;
 
 export function ProspectingPage({ accounts }: Props) {
   const [prospects, setProspects] = useState<Prospect[]>([]);
@@ -772,13 +780,15 @@ function ProspectCard({
   onChange: () => void;
 }) {
   const navigate = useNavigate();
-  const isInstagram = prospect.platform === "instagram";
   const [tab, setTab] = useState<"outreach" | "accounts">("outreach");
   const [templateId, setTemplateId] = useState<number | "">("");
   const [text, setText] = useState("");
   const [linkingChannel, setLinkingChannel] = useState(false);
   const [linkingManager, setLinkingManager] = useState(false);
 
+  const outboundThreads = (prospect.threads ?? []).filter(
+    (t) => t.first_outbound,
+  );
   const existingConversationId =
     prospect.existing_conversation_id ?? prospect.conversation_id ?? null;
 
@@ -879,11 +889,7 @@ function ProspectCard({
           </span>
           <a
             className="prospect-card__handle"
-            href={
-              isInstagram
-                ? `https://instagram.com/${prospect.username}`
-                : undefined
-            }
+            href={profileUrl(prospect.platform, prospect.username)}
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -952,47 +958,87 @@ function ProspectCard({
       {tab === "outreach" ? (
         <div className="prospect-card__outreach">
           {existingConversationId != null ? (
-            <div className="prospect-card__existing-thread">
-              <span className="prospect-card__existing-label">
-                Initial outbound message
-                {prospect.first_outbound_message &&
-                  ` · ${formatRelativeTime(prospect.first_outbound_message.created_at)}`}
-              </span>
-              {prospect.first_outbound_message ? (
-                <>
-                  <span
-                    className={
-                      prospect.first_outbound_message.template_name
-                        ? "prospect-card__template-tag"
-                        : "prospect-card__template-tag prospect-card__template-tag--custom"
+            <>
+              {outboundThreads.length === 0 && (
+                <div className="prospect-card__existing-thread">
+                  <div className="prospect-card__initial-message prospect-card__initial-message--empty">
+                    No outbound message yet — they messaged you first.
+                  </div>
+                  <button
+                    className="prospect-card__cta"
+                    onClick={() =>
+                      navigate(`/inbox?conversationId=${existingConversationId}`)
                     }
                   >
-                    {prospect.first_outbound_message.template_name ??
-                      "Custom Message"}
-                  </span>
-                  <div
-                    className="prospect-card__initial-message"
-                    title="Open the inbox thread to read the full message"
-                  >
-                    <span className="prospect-card__initial-text">
-                      {prospect.first_outbound_message.text}
-                    </span>
-                  </div>
-                </>
-              ) : (
-                <div className="prospect-card__initial-message prospect-card__initial-message--empty">
-                  No outbound message yet — they messaged you first.
+                    Continue in inbox
+                  </button>
                 </div>
               )}
-              <button
-                className="prospect-card__cta"
-                onClick={() =>
-                  navigate(`/inbox?conversationId=${existingConversationId}`)
-                }
-              >
-                Continue in inbox
-              </button>
-            </div>
+              {outboundThreads.slice(0, MAX_THREADS_SHOWN).map((thread) => {
+                const first = thread.first_outbound!;
+                const accountName = thread.account?.username
+                  ? `@${thread.account.username}`
+                  : null;
+                return (
+                  <div
+                    key={thread.conversation_id}
+                    className="prospect-card__existing-thread"
+                  >
+                    <div className="prospect-card__thread-chips">
+                      {thread.account && (
+                        <Avatar
+                          src={thread.account.profile_picture_url}
+                          label={thread.account.username ?? "Account"}
+                          title={
+                            accountName
+                              ? `Sent from ${accountName}`
+                              : "Sent from a connected account"
+                          }
+                          size={22}
+                        />
+                      )}
+                      <span
+                        className={
+                          first.template_name
+                            ? "prospect-card__template-tag"
+                            : "prospect-card__template-tag prospect-card__template-tag--custom"
+                        }
+                      >
+                        {first.template_name ?? "Custom Message"}
+                      </span>
+                    </div>
+                    <span className="prospect-card__existing-label">
+                      Initial outbound message
+                      {accountName && ` from ${accountName}`}
+                      {` · ${formatRelativeTime(first.created_at)}`}
+                    </span>
+                    <div
+                      className="prospect-card__initial-message"
+                      title="Open the inbox thread to read the full message"
+                    >
+                      <span className="prospect-card__initial-text">
+                        {first.text}
+                      </span>
+                    </div>
+                    <button
+                      className="prospect-card__cta"
+                      onClick={() =>
+                        navigate(`/inbox?conversationId=${thread.conversation_id}`)
+                      }
+                    >
+                      Continue in inbox
+                    </button>
+                  </div>
+                );
+              })}
+              {outboundThreads.length > MAX_THREADS_SHOWN && (
+                <p className="composer-note">
+                  +{outboundThreads.length - MAX_THREADS_SHOWN} more thread
+                  {outboundThreads.length - MAX_THREADS_SHOWN === 1 ? "" : "s"}{" "}
+                  from other accounts — see them in the inbox.
+                </p>
+              )}
+            </>
           ) : (
             <>
           {templates.length > 0 ? (

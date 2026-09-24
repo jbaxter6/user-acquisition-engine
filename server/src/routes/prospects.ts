@@ -6,6 +6,7 @@ import {
   ensureProspectForParticipant,
   findConversationByHandle,
   getAccountById,
+  listConversationsByHandle,
   getConversationAvatarInfo,
   getFirstOutboundMessage,
   getProspectById,
@@ -47,31 +48,54 @@ export function prospectsRouter(): Router {
     res.json({
       total,
       items: items.map((prospect) => {
-        // Catches a prospect who already has a real inbox thread (e.g.
-        // synced from a webhook under their resolved platform ID) even
-        // though prospect.conversation_id is only set once they've been
-        // "contacted" through this pipeline specifically.
+        // Every thread with this person (one per connected account that has
+        // messaged them), each with the account that sent its first message.
+        const conversations = listConversationsByHandle(
+          prospect.platform,
+          prospect.username,
+        );
+        const threads = conversations
+          .map((conversation) => {
+            const first = getFirstOutboundMessage(conversation.id) ?? null;
+            const account =
+              conversation.account_id != null
+                ? getAccountById(conversation.account_id)
+                : undefined;
+            const info = getConversationAvatarInfo(conversation.id);
+            return {
+              conversation_id: conversation.id,
+              account: account
+                ? {
+                    id: account.id,
+                    username: account.username,
+                    profile_picture_url: account.profile_picture_url,
+                  }
+                : null,
+              first_outbound: first,
+              avatar_url: info?.avatar_url ?? null,
+              has_engaged: info?.has_engaged ?? false,
+            };
+          })
+          .sort((a, b) =>
+            (a.first_outbound?.created_at ?? "9999").localeCompare(
+              b.first_outbound?.created_at ?? "9999",
+            ),
+          );
+        const earliestOutbound =
+          threads.find((t) => t.first_outbound)?.first_outbound ?? null;
         const existingConversationId =
-          prospect.conversation_id ??
-          findConversationByHandle(prospect.platform, prospect.username)?.id ??
-          null;
-        const avatar =
-          existingConversationId != null
-            ? getConversationAvatarInfo(existingConversationId)
-            : undefined;
+          prospect.conversation_id ?? threads[0]?.conversation_id ?? null;
         return {
           ...prospect,
           channels: listProspectChannels(prospect.id),
           contacts: listProspectContacts(prospect.id),
           links: listProspectLinks(prospect.id),
           existing_conversation_id: existingConversationId,
-          first_outbound_message:
-            existingConversationId != null
-              ? (getFirstOutboundMessage(existingConversationId) ?? null)
-              : null,
-          avatar_url: avatar?.avatar_url ?? null,
+          threads,
+          first_outbound_message: earliestOutbound,
+          avatar_url: threads.find((t) => t.avatar_url)?.avatar_url ?? null,
           // No thread yet also counts as "hasn't engaged", like the inbox.
-          has_engaged: avatar?.has_engaged ?? false,
+          has_engaged: threads.some((t) => t.has_engaged),
         };
       }),
     });

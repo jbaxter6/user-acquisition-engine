@@ -1096,6 +1096,25 @@ export function findConversationByHandle(
     .get(platform, normalized);
 }
 
+// Every thread with this person — one per connected account that has talked
+// to them — oldest first. A prospect can be messaged from several accounts.
+export function listConversationsByHandle(
+  platform: string,
+  handle: string,
+): ConversationRow[] {
+  const normalized = handle.trim().replace(/^@/, "");
+  return db
+    .prepare<
+      [string, string],
+      ConversationRow
+    >(
+      `SELECT * FROM conversations
+       WHERE platform = ? AND LOWER(participant_handle) = LOWER(?)
+       ORDER BY created_at ASC, id ASC`,
+    )
+    .all(platform, normalized);
+}
+
 // What the inbox shows for a participant's avatar: the stored photo URL and
 // whether they've ever messaged us (Meta withholds the photo until they do).
 export function getConversationAvatarInfo(
