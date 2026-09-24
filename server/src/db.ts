@@ -907,22 +907,30 @@ export function upsertAccount(input: {
   username?: string;
   profilePictureUrl?: string;
   accessToken: string;
+  platform?: string;
 }): AccountRow {
+  const platform = input.platform ?? "instagram";
   db.prepare(
     `INSERT INTO accounts (platform, ig_user_id, username, profile_picture_url, access_token)
-     VALUES ('instagram', ?, ?, ?, ?)
+     VALUES (?, ?, ?, ?, ?)
      ON CONFLICT(platform, ig_user_id) DO UPDATE SET
        username = excluded.username,
        profile_picture_url = excluded.profile_picture_url,
        access_token = excluded.access_token`,
   ).run(
+    platform,
     input.igUserId,
     input.username ?? null,
     input.profilePictureUrl ?? null,
     input.accessToken,
   );
 
-  return getAccountByIgUserId(input.igUserId)!;
+  return db
+    .prepare<
+      [string, string],
+      AccountRow
+    >("SELECT * FROM accounts WHERE platform = ? AND ig_user_id = ?")
+    .get(platform, input.igUserId)!;
 }
 
 export function deleteAccount(id: number): void {

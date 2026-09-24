@@ -1,3 +1,4 @@
+import { tiktokCallback, tiktokLoginRouter } from "./routes/tiktok.js";
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
@@ -42,6 +43,10 @@ app.get(["/privacy", "/privacy.html"], (_req, res) => {
   res.sendFile(privacyHtmlPath);
 });
 
+// Also before the gate: TikTok redirects here after authorization. Inert
+// without a state token issued by the (gated) /auth/tiktok/login route.
+app.get("/auth/tiktok/callback", tiktokCallback);
+
 app.use(siteAuth());
 
 app.get("/api/health", (_req, res) => {
@@ -63,6 +68,7 @@ app.use("/api/conversations", conversationsRouter());
 app.use("/api/prospects", prospectsRouter());
 app.use("/api/templates", templatesRouter());
 app.use("/auth", authRouter());
+app.use("/auth/tiktok", tiktokLoginRouter());
 
 // In production, serve the built React app from the same origin/process —
 // avoids a separate static host, CORS, and a second URL to keep in sync

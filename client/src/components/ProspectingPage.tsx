@@ -688,13 +688,21 @@ function ProspectCard({
     }
   };
 
-  const handleOpenInstagram = () => {
+  // Instagram has a true DM deep link. TikTok doesn't (to our knowledge), so
+  // this lands on the profile, one click from its Message button.
+  const DM_LINKS: Partial<Record<Platform, { label: string; url: (u: string) => string }>> = {
+    instagram: { label: "Instagram", url: (u) => `https://ig.me/m/${u}` },
+    tiktok: { label: "TikTok", url: (u) => `https://www.tiktok.com/@${u}` },
+  };
+  const dmLink = DM_LINKS[prospect.platform];
+
+  const handleOpenDm = () => {
     const username = prospect.username?.replace(/^@/, "");
-    if (!username || !text.trim()) return;
+    if (!dmLink || !username || !text.trim()) return;
     // Kick off the clipboard write without awaiting so window.open still
     // runs inside the click's user-gesture window (Safari blocks it otherwise).
     navigator.clipboard?.writeText(text.trim()).catch(() => {});
-    window.open(`https://ig.me/m/${username}`, "_blank", "noopener,noreferrer");
+    window.open(dmLink.url(username), "_blank", "noopener,noreferrer");
   };
 
   const handleLinkChannel = async ({
@@ -889,24 +897,26 @@ function ProspectCard({
             </span>
           </div>
 
-          {isInstagram && (
+          {dmLink && (
             <div className="prospect-card__outreach-actions">
               <button
                 className="prospect-card__open-btn"
-                onClick={handleOpenInstagram}
+                onClick={handleOpenDm}
                 disabled={!prospect.username || templateId === "" || !text.trim()}
                 title={
                   templateId === ""
                     ? "Select a template first"
-                    : "Copies the template text, then opens the DM"
+                    : prospect.platform === "tiktok"
+                      ? "Copies the template text, then opens their TikTok profile — tap Message and paste"
+                      : "Copies the template text, then opens the DM"
                 }
               >
-                Copy &amp; open in Instagram
+                Copy &amp; open in {dmLink.label}
               </button>
             </div>
           )}
 
-          {!isInstagram && (
+          {!dmLink && (
             <p className="composer-note">
               No {prospect.platform} account integration yet — send from that
               platform's app directly.
