@@ -143,17 +143,6 @@ export const api = {
   deleteProspect: (id: number) =>
     request<{ ok: true }>(`/api/prospects/${id}`, { method: "DELETE" }),
 
-  messageProspect: (
-    id: number,
-    accountId: number,
-    text: string,
-    templateId?: number,
-  ) =>
-    request<{ conversationId: number }>(`/api/prospects/${id}/message`, {
-      method: "POST",
-      body: JSON.stringify({ accountId, text, templateId }),
-    }),
-
   markProspectContactedManually: (
     id: number,
     accountId: number | null,

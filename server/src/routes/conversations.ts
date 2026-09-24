@@ -1,5 +1,11 @@
 import { Router } from "express";
-import { db, insertMessage, upsertConversation, type ConversationRow } from "../db.js";
+import {
+  conversationHasInboundMessage,
+  db,
+  insertMessage,
+  upsertConversation,
+  type ConversationRow,
+} from "../db.js";
 import { getInstagramAdapterForAccount, getStubAdapters } from "../adapters/index.js";
 import { StubAdapter } from "../adapters/stub.js";
 import type { MessagingAdapter, Platform } from "../adapters/types.js";
@@ -70,6 +76,12 @@ export function conversationsRouter(): Router {
     }
 
     if (adapter.canSend) {
+      // API replies are only allowed once the other person has messaged us.
+      if (!conversationHasInboundMessage(conversation.id)) {
+        return res.status(403).json({
+          error: "You can reply once they've messaged you first.",
+        });
+      }
       try {
         const result = await adapter.sendMessage(conversation.external_id, text);
         const message = insertMessage(conversation.id, "outbound", text, "api", result.externalMessageId);

@@ -26,7 +26,6 @@ import {
   type ProspectInput,
   type ProspectSort,
 } from "../db.js";
-import { ProspectMessageError, sendProspectMessage } from "../prospecting.js";
 
 const PLATFORMS = ["instagram", "tiktok", "twitch"];
 
@@ -160,41 +159,6 @@ export function prospectsRouter(): Router {
   router.delete("/:id", (req, res) => {
     deleteProspect(Number(req.params.id));
     res.json({ ok: true });
-  });
-
-  // Attempts a real first-contact send via the API. This is expected to
-  // fail for genuinely cold outreach in many cases — Meta's Messaging API
-  // is built around responding within an existing conversation. On
-  // failure, the error is returned as-is so the UI can offer "mark
-  // contacted manually" instead of pretending this always works.
-  router.post("/:id/message", async (req, res) => {
-    const { accountId, text, templateId } = req.body as {
-      accountId?: number;
-      text?: string;
-      templateId?: number;
-    };
-    if (!accountId || !text?.trim()) {
-      return res.status(400).json({ error: "accountId and text are required" });
-    }
-
-    const prospect = getProspectById(Number(req.params.id));
-    if (!prospect) return res.status(404).json({ error: "prospect not found" });
-
-    try {
-      const result = await sendProspectMessage(
-        prospect,
-        accountId,
-        text.trim(),
-        templateId,
-      );
-      res.json(result);
-    } catch (err) {
-      const message =
-        err instanceof ProspectMessageError
-          ? err.message
-          : (err as Error).message;
-      res.status(502).json({ error: message });
-    }
   });
 
   // Fallback for when a real API send fails (e.g. outside the messaging

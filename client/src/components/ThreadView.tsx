@@ -26,6 +26,8 @@ export function ThreadView({ conversation, messages, canSend, accountFor, onSend
   }
 
   const account = accountFor(conversation.account_id);
+  // API replies are only allowed once the other person has messaged us.
+  const awaitingReply = canSend && !conversation.has_engaged;
 
   const handleSend = async () => {
     if (!draft.trim()) return;
@@ -85,6 +87,11 @@ export function ThreadView({ conversation, messages, canSend, accountFor, onSend
       </div>
 
       <div className="thread-view__composer">
+        {awaitingReply && (
+          <p className="composer-note">
+            You can reply once they've messaged you first. Until then this conversation is read-only.
+          </p>
+        )}
         {!canSend && (
           <p className="composer-note">
             No API access for {conversation.platform} yet — sending here just logs that you replied on
@@ -96,8 +103,9 @@ export function ThreadView({ conversation, messages, canSend, accountFor, onSend
           onChange={(e) => setDraft(e.target.value)}
           placeholder="Write a reply..."
           rows={2}
+          disabled={awaitingReply}
         />
-        <button onClick={handleSend} disabled={sending || !draft.trim()}>
+        <button onClick={handleSend} disabled={awaitingReply || sending || !draft.trim()}>
           {sending ? "Sending..." : "Send"}
         </button>
       </div>
