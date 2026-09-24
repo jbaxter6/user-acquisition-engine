@@ -25,13 +25,13 @@ export function LoginPage({ onSuccess }: { onSuccess: () => void }) {
   };
 
   return (
-    <main className="login">
+    <main className="login login--stacked">
       <div className="login__glow" aria-hidden="true" />
       <form className="login__card" onSubmit={handleSubmit}>
         <span className="app__brand-mark login__mark">JB</span>
         <h1 className="login__title">Welcome back</h1>
         <p className="login__subtitle">
-          Enter the team password to open your unified inbox.
+          Enter the team password to open the Smooth Unified Mailbox.
         </p>
 
         <label className="login__field">
@@ -86,8 +86,17 @@ export function LoginPage({ onSuccess }: { onSuccess: () => void }) {
           )}
         </button>
 
-        <p className="login__footer">Smooth · Creator outreach engine</p>
+        <p className="login__footer">Smooth Media Technologies LLC</p>
       </form>
+
+      <a
+        className="login__privacy"
+        href={`${api.baseUrl}/privacy`}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        Privacy Policy
+      </a>
     </main>
   );
 }

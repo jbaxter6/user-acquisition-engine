@@ -2884,3 +2884,22 @@ button:disabled {
   color: var(--accent);
   display: inline-flex;
 }
+
+.login--stacked {
+  flex-direction: column;
+  gap: 18px;
+}
+
+.login__privacy {
+  position: relative;
+  font-size: 13px;
+  color: var(--text-dim);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.login__privacy:hover {
+  color: var(--text);
+  border-bottom-color: var(--text-dim);
+}

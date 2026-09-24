@@ -70,21 +70,11 @@ function setSessionCookie(req: Request, res: Response, token: string, maxAgeMs: 
   res.append("Set-Cookie", attrs.join("; "));
 }
 
-function hasBasicAuth(req: Request, password: string): boolean {
-  const header = req.headers.authorization;
-  if (!header?.startsWith("Basic ")) return false;
-  const decoded = Buffer.from(header.slice(6), "base64").toString("utf8");
-  const separatorIndex = decoded.indexOf(":");
-  const provided =
-    separatorIndex >= 0 ? decoded.slice(separatorIndex + 1) : decoded;
-  return timingSafeEqualStr(provided, password);
-}
-
+// Cookie-only on purpose: browsers keep re-sending old HTTP Basic Auth
+// credentials for the whole session, which would silently keep people signed
+// in behind the login page and make Sign out a no-op.
 function isAuthenticated(req: Request, password: string): boolean {
-  return (
-    tokenIsValid(password, readCookie(req, COOKIE_NAME)) ||
-    hasBasicAuth(req, password)
-  );
+  return tokenIsValid(password, readCookie(req, COOKIE_NAME));
 }
 
 // Failed-login throttle, per client IP (in-memory: fine for one process).
@@ -101,6 +91,7 @@ export function sessionRouter(): Router {
   const password = process.env.SITE_PASSWORD;
 
   router.get("/", (req, res) => {
+    res.set("Cache-Control", "no-store");
     res.json({
       required: Boolean(password),
       authenticated: !password || isAuthenticated(req, password),
@@ -147,8 +138,8 @@ export function sessionRouter(): Router {
 /**
  * Gates the API and OAuth routes behind the shared password. The static app
  * shell stays public (it holds no data) so the login page can render; every
- * /api and /auth request needs a valid session cookie, or Basic Auth for
- * scripts. If SITE_PASSWORD isn't set the gate is disabled (local dev).
+ * /api and /auth request needs a valid session cookie. If SITE_PASSWORD
+ * isn't set the gate is disabled (local dev).
  * Mount AFTER routes that must stay reachable without a session — Meta's
  * webhooks, the privacy policy, and the TikTok OAuth callback.
  */
