@@ -219,7 +219,6 @@ export function TemplatesPanel() {
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Filter pitches, tags, variables..."
           />
-          <kbd>⌘K</kbd>
         </label>
 
         <div className="tpl-tabs">

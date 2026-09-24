@@ -10,6 +10,8 @@ import {
 import { api } from "./api/client";
 import { ConversationList } from "./components/ConversationList";
 import { ThreadView } from "./components/ThreadView";
+import { AuthGate, useAuth } from "./components/AuthGate";
+import { IconLogOut } from "./components/icons";
 import { AccountConnection } from "./components/AccountConnection";
 import { PlatformStatusChip } from "./components/PlatformStatusChip";
 import { ProspectingPage } from "./components/ProspectingPage";
@@ -39,13 +41,16 @@ function getViewFromPath(pathname: string): View {
 
 function App() {
   return (
-    <BrowserRouter>
-      <AppShell />
-    </BrowserRouter>
+    <AuthGate>
+      <BrowserRouter>
+        <AppShell />
+      </BrowserRouter>
+    </AuthGate>
   );
 }
 
 function AppShell() {
+  const { passwordRequired, logout } = useAuth();
   const location = useLocation();
   const view = getViewFromPath(location.pathname);
   const [accounts, setAccounts] = useState<InstagramAccount[]>([]);
@@ -175,6 +180,16 @@ function AppShell() {
             count={0}
             title="No Twitch integration yet — messages are logged manually"
           />
+          {passwordRequired && (
+            <button
+              className="icon-btn icon-btn--ghost"
+              onClick={logout}
+              title="Sign out"
+              aria-label="Sign out"
+            >
+              <IconLogOut size={16} />
+            </button>
+          )}
         </div>
       </header>
 

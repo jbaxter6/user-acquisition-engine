@@ -80,7 +80,6 @@ const STATUS_FILTERS: Array<{
   { label: "Not Contacted", value: "new" },
   { label: "Awaiting Reply", value: "contacted" },
   { label: "Replied", value: "replied" },
-  { label: "Closed", value: "closed" },
 ];
 
 const PLATFORM_FILTERS: Array<{ label: string; value: Platform | "all" }> = [
@@ -102,8 +101,9 @@ const MAX_THREADS_SHOWN = 3;
 
 export function ProspectingPage({ accounts }: Props) {
   const [prospects, setProspects] = useState<Prospect[]>([]);
+  // Opens on "Not Contacted" — the prospects ready for first outreach.
   const [statusFilter, setStatusFilter] = useState<Prospect["status"] | "all">(
-    "all",
+    "new",
   );
   const [platformFilter, setPlatformFilter] = useState<Platform | "all">("all");
   const [search, setSearch] = useState("");
@@ -428,7 +428,6 @@ export function ProspectingPage({ accounts }: Props) {
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search handle, name, brand"
             />
-            <kbd>⌘K</kbd>
           </label>
 
           <label className="toolbar-select">
@@ -985,6 +984,15 @@ function ProspectCard({
                     className="prospect-card__existing-thread"
                   >
                     <div className="prospect-card__thread-chips">
+                      <span
+                        className={
+                          first.template_name
+                            ? "prospect-card__template-tag"
+                            : "prospect-card__template-tag prospect-card__template-tag--custom"
+                        }
+                      >
+                        {first.template_name ?? "Custom Message"}
+                      </span>
                       {thread.account && (
                         <Avatar
                           src={thread.account.profile_picture_url}
@@ -997,19 +1005,9 @@ function ProspectCard({
                           size={22}
                         />
                       )}
-                      <span
-                        className={
-                          first.template_name
-                            ? "prospect-card__template-tag"
-                            : "prospect-card__template-tag prospect-card__template-tag--custom"
-                        }
-                      >
-                        {first.template_name ?? "Custom Message"}
-                      </span>
                     </div>
                     <span className="prospect-card__existing-label">
                       Initial outbound message
-                      {accountName && ` from ${accountName}`}
                       {` · ${formatRelativeTime(first.created_at)}`}
                     </span>
                     <div

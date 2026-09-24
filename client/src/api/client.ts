@@ -19,8 +19,13 @@ const BASE_URL = import.meta.env.VITE_API_URL ?? "";
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     ...init,
   });
+  if (res.status === 401 && !path.startsWith("/api/session")) {
+    // Session expired or missing — send the user back to the login page.
+    window.dispatchEvent(new Event("auth-required"));
+  }
   if (!res.ok) {
     const body = await res.text();
     throw new Error(`${res.status} ${res.statusText}: ${body}`);
@@ -32,6 +37,27 @@ export const api = {
   baseUrl: BASE_URL,
 
   health: () => request<HealthResponse>("/api/health"),
+
+  session: () =>
+    request<{ required: boolean; authenticated: boolean }>("/api/session"),
+
+  login: async (password: string) => {
+    const res = await fetch(`${BASE_URL}/api/session/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ password }),
+    });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+      throw new Error(body?.error ?? "Couldn't sign in. Try again.");
+    }
+  },
+
+  logout: () =>
+    request<{ ok: true }>("/api/session/logout", { method: "POST" }),
 
   listInstagramAccounts: () =>
     request<InstagramAccount[]>("/auth/instagram/accounts"),

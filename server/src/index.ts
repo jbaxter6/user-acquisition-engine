@@ -11,13 +11,22 @@ import { webhooksRouter } from "./routes/webhooks.js";
 import { authRouter } from "./routes/auth.js";
 import { prospectsRouter } from "./routes/prospects.js";
 import { templatesRouter } from "./routes/templates.js";
-import { siteAuth } from "./siteAuth.js";
+import { sessionRouter, siteAuth } from "./siteAuth.js";
 import "./db.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
-app.use(cors());
+// Behind Railway's proxy: lets req.secure / req.ip reflect the real client.
+app.set("trust proxy", 1);
+// Credentials so the session cookie also works when the dev client (:5173)
+// talks to the API on another port; production is same-origin.
+app.use(
+  cors({
+    origin: process.env.CLIENT_URL ?? "http://localhost:5173",
+    credentials: true,
+  }),
+);
 // Bumped from Express's 100kb default — bulk prospect imports (parsed
 // client-side from an Excel sheet, sent here as JSON) can reasonably run
 // into the thousands of rows.
@@ -47,6 +56,7 @@ app.get(["/privacy", "/privacy.html"], (_req, res) => {
 // without a state token issued by the (gated) /auth/tiktok/login route.
 app.get("/auth/tiktok/callback", tiktokCallback);
 
+app.use("/api/session", sessionRouter());
 app.use(siteAuth());
 
 app.get("/api/health", (_req, res) => {
