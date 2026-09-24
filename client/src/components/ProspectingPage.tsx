@@ -546,6 +546,7 @@ export function ProspectingPage({ accounts }: Props) {
               key={p.id}
               prospect={p}
               templates={templates}
+              showStatusChip={statusFilter === "all"}
               onChange={refresh}
             />
           ))}
@@ -772,10 +773,13 @@ function LinkPicker({
 function ProspectCard({
   prospect,
   templates,
+  showStatusChip,
   onChange,
 }: {
   prospect: Prospect;
   templates: MessageTemplate[];
+  // Redundant when the list is already filtered to a single status.
+  showStatusChip: boolean;
   onChange: () => void;
 }) {
   const navigate = useNavigate();
@@ -785,6 +789,8 @@ function ProspectCard({
   const [linkingChannel, setLinkingChannel] = useState(false);
   const [linkingManager, setLinkingManager] = useState(false);
 
+  const messagedAt =
+    prospect.first_outbound_message?.created_at ?? prospect.contacted_at;
   const outboundThreads = (prospect.threads ?? []).filter(
     (t) => t.first_outbound,
   );
@@ -897,21 +903,20 @@ function ProspectCard({
         </div>
       </div>
 
-      <div className="prospect-card__pills">
-        {(prospect.first_outbound_message?.created_at ??
-          prospect.contacted_at) && (
-          <span className="pill pill--info">
-            Messaged ·{" "}
-            {formatRelativeTime(
-              (prospect.first_outbound_message?.created_at ??
-                prospect.contacted_at)!,
-            )}
-          </span>
-        )}
-        <span className={`pill pill--status-${prospect.status}`}>
-          {STATUS_LABEL[prospect.status]}
-        </span>
-      </div>
+      {(messagedAt || showStatusChip) && (
+        <div className="prospect-card__pills">
+          {messagedAt && (
+            <span className="pill pill--info">
+              Messaged · {formatRelativeTime(messagedAt)}
+            </span>
+          )}
+          {showStatusChip && (
+            <span className={`pill pill--status-${prospect.status}`}>
+              {STATUS_LABEL[prospect.status]}
+            </span>
+          )}
+        </div>
+      )}
 
       {(prospect.followers != null || prospect.notes) && (
         <div className="prospect-card__about">
