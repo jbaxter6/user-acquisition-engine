@@ -6,3 +6,4 @@ server/data/
 *.log
 .DS_Store
 war/recruits/
+war/fuckem/OPP1/strat-2/.state.json
