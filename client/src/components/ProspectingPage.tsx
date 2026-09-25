@@ -892,7 +892,7 @@ function ProspectCard({
           <Avatar
             src={prospect.avatar_url ?? null}
             label={prospect.display_name || prospect.username}
-            size={52}
+            size={68}
             engaged={Boolean(prospect.has_engaged)}
           />
           <span className="prospect-card__avatar-badge">
