@@ -736,7 +736,7 @@ button:disabled {
 .prospecting {
   flex: 1;
   overflow-y: auto;
-  padding: 16px 20px 24px;
+  padding: 6px 20px 24px;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -1531,9 +1531,16 @@ button:disabled {
 
 /* ---- Prospecting toolbar ---- */
 .prospecting-toolbar {
-  background: var(--panel);
-  border: 1px solid var(--border);
+  position: sticky;
+  top: 6px;
+  z-index: 30;
+  flex-shrink: 0;
+  background: rgba(24, 27, 34, 0.82);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
   display: flex;
   flex-direction: column;
 }
@@ -1852,7 +1859,7 @@ button:disabled {
 
 /* ---- Message templates page ---- */
 .tpl-page {
-  gap: 18px;
+  gap: 28px;
 }
 
 .tpl-add-btn {
@@ -2253,10 +2260,21 @@ button:disabled {
 
 /* ---- Templates filter bar ---- */
 .tpl-toolbar {
+  position: sticky;
+  top: 6px;
+  z-index: 30;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 10px;
+  padding: 12px 16px;
+  background: rgba(24, 27, 34, 0.82);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
 }
 
 .tpl-toolbar .toolbar-search,
