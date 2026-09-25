@@ -24,20 +24,7 @@ import type {
 } from "./types";
 import "./index.css";
 
-const VIEW_LABELS = {
-  inbox: "Inbox",
-  prospecting: "Prospecting",
-  templates: "Templates",
-} as const;
 const BRAND_NAME = "JB";
-
-type View = keyof typeof VIEW_LABELS;
-
-function getViewFromPath(pathname: string): View {
-  if (pathname.startsWith("/prospecting")) return "prospecting";
-  if (pathname.startsWith("/templates")) return "templates";
-  return "inbox";
-}
 
 function App() {
   return (
@@ -52,7 +39,6 @@ function App() {
 function AppShell() {
   const { passwordRequired, logout } = useAuth();
   const location = useLocation();
-  const view = getViewFromPath(location.pathname);
   const [accounts, setAccounts] = useState<InstagramAccount[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [filter, setFilter] = useState<Platform | "all">("all");
@@ -138,7 +124,6 @@ function AppShell() {
         <div className="app__header-left">
           <div className="app__brand" aria-label="JB brand">
             <span className="app__brand-mark">{BRAND_NAME}</span>
-            <span className="app__brand-page">{VIEW_LABELS[view]}</span>
           </div>
 
           <nav className="app__nav" aria-label="Main navigation">
