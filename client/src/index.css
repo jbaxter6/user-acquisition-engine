@@ -2915,3 +2915,14 @@ button:disabled {
   display: flex;
   gap: 22px;
 }
+
+.tpl-modal__hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+
+.tpl-toolbar .tpl-add-btn {
+  margin-left: auto;
+}

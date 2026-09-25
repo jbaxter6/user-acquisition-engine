@@ -13,13 +13,35 @@ import {
 import { PlatformBadge } from "./PlatformBadge";
 import { formatRelativeTime } from "../lib/relativeTime";
 
-type Filter = "all" | "top" | "drafts";
-type SortKey = "hit" | "newest" | "sent";
+type ViewKey =
+  | "all"
+  | "top"
+  | "drafts"
+  | "newest"
+  | "sent"
+  | "replies"
+  | "lowest"
+  | "quickest"
+  | "slowest"
+  | "longest"
+  | "shortest"
+  | "mostTokens"
+  | "leastTokens";
 
-const SORT_LABEL: Record<SortKey, string> = {
-  hit: "Hit Rate: High to Low",
+const VIEW_LABEL: Record<ViewKey, string> = {
+  all: "All Pitches",
+  top: "Top Performers (Best hit rate)",
+  drafts: "New Drafts (Unused)",
   newest: "Newest",
   sent: "Most Sent",
+  replies: "Most Replies",
+  lowest: "Lowest Hit Rate",
+  quickest: "Quickest Response Time",
+  slowest: "Slowest Response Time",
+  longest: "Most Characters",
+  shortest: "Least Characters",
+  mostTokens: "Most Tokens",
+  leastTokens: "Least Tokens",
 };
 
 const TOP_PERFORMER_RATE = 0.3;
@@ -61,8 +83,7 @@ export function TemplatesPanel() {
   const [stats, setStats] = useState<MessageTemplateStats[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<Filter>("all");
-  const [sort, setSort] = useState<SortKey>("hit");
+  const [view, setView] = useState<ViewKey>("all");
   const [menuId, setMenuId] = useState<number | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [formOpen, setFormOpen] = useState(false);
@@ -163,10 +184,15 @@ export function TemplatesPanel() {
   const archived = stats.filter((t) => t.archived_at);
 
   const query = search.trim().toLowerCase();
+  const byHit = (a: MessageTemplateStats, b: MessageTemplateStats) =>
+    b.reply_rate - a.reply_rate || b.sent - a.sent;
   const visible = active
     .filter((t) => {
-      if (filter === "top") return t.sent > 0 && t.reply_rate >= TOP_PERFORMER_RATE;
-      if (filter === "drafts") return t.sent === 0;
+      if (view === "top") return t.sent > 0 && t.reply_rate >= TOP_PERFORMER_RATE;
+      if (view === "drafts") return t.sent === 0;
+      if (view === "lowest") return t.sent > 0;
+      if (view === "quickest" || view === "slowest")
+        return t.avg_response_hours != null;
       return true;
     })
     .filter(
@@ -176,38 +202,39 @@ export function TemplatesPanel() {
         t.body.toLowerCase().includes(query),
     )
     .sort((a, b) => {
-      if (sort === "newest") return b.id - a.id;
-      if (sort === "sent") return b.sent - a.sent;
-      return b.reply_rate - a.reply_rate || b.sent - a.sent;
+      switch (view) {
+        case "newest":
+        case "drafts":
+          return b.id - a.id;
+        case "sent":
+          return b.sent - a.sent || byHit(a, b);
+        case "replies":
+          return b.replied - a.replied || byHit(a, b);
+        case "lowest":
+          return a.reply_rate - b.reply_rate || b.sent - a.sent;
+        case "quickest":
+          return (a.avg_response_hours ?? 0) - (b.avg_response_hours ?? 0);
+        case "slowest":
+          return (b.avg_response_hours ?? 0) - (a.avg_response_hours ?? 0);
+        case "longest":
+          return b.body.length - a.body.length;
+        case "shortest":
+          return a.body.length - b.body.length;
+        case "mostTokens":
+          return (
+            extractVariables(b.body).length - extractVariables(a.body).length
+          );
+        case "leastTokens":
+          return (
+            extractVariables(a.body).length - extractVariables(b.body).length
+          );
+        default:
+          return byHit(a, b);
+      }
     });
-
-  const topCount = active.filter(
-    (t) => t.sent > 0 && t.reply_rate >= TOP_PERFORMER_RATE,
-  ).length;
-  const draftCount = active.filter((t) => t.sent === 0).length;
 
   return (
     <div className="prospecting tpl-page">
-      <header className="tpl-header">
-        <div>
-          <h1>
-            Message templates
-            <span className="tpl-badge">
-              {active.length} Active Pitch Variation
-              {active.length === 1 ? "" : "s"}
-            </span>
-          </h1>
-          <p>
-            Save reusable outreach copy, use {"{{variable}}"} placeholders, and
-            monitor conversion metrics below to see which pitches actually land
-            replies.
-          </p>
-        </div>
-        <button className="tpl-add-btn" onClick={openNew}>
-          <IconPlus size={16} /> Add template
-        </button>
-      </header>
-
       {error && <div className="app__error">{error}</div>}
 
       <section className="tpl-toolbar">
@@ -221,43 +248,24 @@ export function TemplatesPanel() {
           />
         </label>
 
-        <div className="tpl-tabs">
-          <button
-            className={filter === "all" ? "tpl-tab tpl-tab--active" : "tpl-tab"}
-            onClick={() => setFilter("all")}
-          >
-            All Pitches <span className="tpl-tab__count">{active.length}</span>
-          </button>
-          <button
-            className={filter === "top" ? "tpl-tab tpl-tab--active" : "tpl-tab"}
-            onClick={() => setFilter("top")}
-          >
-            Top Performers <span className="tpl-tab__count">{topCount}</span>
-          </button>
-          <button
-            className={
-              filter === "drafts" ? "tpl-tab tpl-tab--active" : "tpl-tab"
-            }
-            onClick={() => setFilter("drafts")}
-          >
-            New Drafts <span className="tpl-tab__count">{draftCount}</span>
-          </button>
-        </div>
-
         <label className="toolbar-select tpl-toolbar__sort">
-          <span className="toolbar-select__prefix">Sort:</span>
+          <span className="toolbar-select__prefix">View:</span>
           <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value as SortKey)}
+            value={view}
+            onChange={(e) => setView(e.target.value as ViewKey)}
           >
-            {(Object.keys(SORT_LABEL) as SortKey[]).map((k) => (
+            {(Object.keys(VIEW_LABEL) as ViewKey[]).map((k) => (
               <option key={k} value={k}>
-                {SORT_LABEL[k]}
+                {VIEW_LABEL[k]}
               </option>
             ))}
           </select>
           <IconChevronDown size={14} />
         </label>
+
+        <button className="tpl-add-btn" onClick={openNew}>
+          <IconPlus size={16} /> Add template
+        </button>
       </section>
 
       <div className="tpl-grid">
@@ -509,6 +517,11 @@ export function TemplatesPanel() {
               value={body}
               onChange={(e) => setBody(e.target.value)}
             />
+            <p className="tpl-modal__hint">
+              Use {"{{variable}}"} placeholders (e.g. {"{{first_name}}"}) for
+              anything that changes per recipient. Once a template has been
+              sent it's locked — duplicate it to make changes.
+            </p>
             <div className="tpl-modal__footer">
               <span className="tpl-modal__count">
                 {body.length} chars • {extractVariables(body).length} token

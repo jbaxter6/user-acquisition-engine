@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { Conversation, InstagramAccount, Platform } from "../types";
 import { PlatformBadge } from "./PlatformBadge";
 import { PlatformIcon } from "./PlatformIcon";
@@ -32,9 +33,12 @@ export function ConversationList({
   accountFor,
   searchTerm,
 }: Props) {
+  const [replyFilter, setReplyFilter] = useState<"all" | "awaiting" | "replied">("all");
   const query = searchTerm.trim().toLowerCase();
   const visible = conversations.filter((c) => {
     if (accountFilter !== "all" && c.account_id !== accountFilter) return false;
+    if (replyFilter === "awaiting" && c.has_engaged) return false;
+    if (replyFilter === "replied" && !c.has_engaged) return false;
 
     if (!query) return true;
 
@@ -100,11 +104,31 @@ export function ConversationList({
         )}
       </div>
 
+      <div className="conversation-list__filters">
+        {(
+          [
+            ["all", "All"],
+            ["awaiting", "Awaiting reply"],
+            ["replied", "Replied"],
+          ] as const
+        ).map(([value, label]) => (
+          <button
+            key={value}
+            className={
+              replyFilter === value ? "filter-btn filter-btn--active" : "filter-btn"
+            }
+            onClick={() => setReplyFilter(value)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       <div className="conversation-list__items">
         {visible.length === 0 && (
           <p className="empty-state">
-            {query
-              ? "No conversations match your search."
+            {query || replyFilter !== "all"
+              ? "No conversations match your filters."
               : "No conversations yet."}
           </p>
         )}
