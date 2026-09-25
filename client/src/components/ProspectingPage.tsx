@@ -892,11 +892,11 @@ function ProspectCard({
           <Avatar
             src={prospect.avatar_url ?? null}
             label={prospect.display_name || prospect.username}
-            size={32}
+            size={52}
             engaged={Boolean(prospect.has_engaged)}
           />
           <span className="prospect-card__avatar-badge">
-            <PlatformIcon platform={prospect.platform} size={10} />
+            <PlatformIcon platform={prospect.platform} size={12} />
           </span>
         </span>
         <div className="prospect-card__identity">
