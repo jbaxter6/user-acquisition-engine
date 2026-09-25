@@ -85,7 +85,7 @@ export function TemplatesPanel() {
   const [search, setSearch] = useState("");
   const [view, setView] = useState<ViewKey>("all");
   const [menuId, setMenuId] = useState<number | null>(null);
-  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [detailId, setDetailId] = useState<number | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [name, setName] = useState("");
@@ -109,6 +109,7 @@ export function TemplatesPanel() {
         searchRef.current?.focus();
       }
       if (e.key === "Escape") {
+        setDetailId(null);
         setFormOpen(false);
         setMenuId(null);
       }
@@ -233,6 +234,8 @@ export function TemplatesPanel() {
       }
     });
 
+  const detail = stats.find((t) => t.id === detailId) ?? null;
+
   return (
     <div className="prospecting tpl-page">
       {error && <div className="app__error">{error}</div>}
@@ -282,13 +285,20 @@ export function TemplatesPanel() {
           const vars = extractVariables(t.body);
           const words = t.body.trim().split(/\s+/).filter(Boolean).length;
           return (
-            <article key={t.id} className={`tpl-card tpl-card--${tier}`}>
+            <article
+              key={t.id}
+              className={`tpl-card tpl-card--${tier}`}
+              onClick={() => setDetailId(t.id)}
+            >
               <div className="tpl-card__body">
                 <div className="tpl-card__top">
                   <span className={`tpl-rate tpl-rate--${tier}`}>
                     {tier === "draft" ? "NEW DRAFT" : `${rate}% HIT RATE`}
                   </span>
-                  <div className="tpl-card__menu">
+                  <div
+                    className="tpl-card__menu"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <button
                       className="tpl-kebab"
                       aria-label="More actions"
@@ -377,65 +387,10 @@ export function TemplatesPanel() {
                   </div>
                 </div>
 
-                {t.conversations.length > 0 && (
-                  <button
-                    className="tpl-convos-toggle"
-                    onClick={() =>
-                      setExpandedId(expandedId === t.id ? null : t.id)
-                    }
-                  >
-                    <span>
-                      {expandedId === t.id ? "Hide" : "View"} conversations (
-                      {t.conversations.length})
-                    </span>
-                    <span
-                      className={
-                        expandedId === t.id
-                          ? "tpl-convos-toggle__chev tpl-convos-toggle__chev--open"
-                          : "tpl-convos-toggle__chev"
-                      }
-                    >
-                      <IconChevronDown size={15} />
-                    </span>
-                  </button>
-                )}
-
-                {expandedId === t.id && (
-                  <ul className="tpl-convos">
-                    {t.conversations.map((c) => (
-                      <li key={c.id}>
-                        <button
-                          className="tpl-convo"
-                          onClick={() =>
-                            navigate(`/inbox?conversationId=${c.id}`)
-                          }
-                          title="Open in inbox"
-                        >
-                          <PlatformBadge platform={c.platform} />
-                          <span className="tpl-convo__who">
-                            {c.participant_name || `@${c.participant_handle}`}
-                          </span>
-                          <span className="tpl-convo__when">
-                            {formatRelativeTime(c.sent_at)}
-                          </span>
-                          <span
-                            className={
-                              c.replied
-                                ? "tpl-convo__status tpl-convo__status--yes"
-                                : "tpl-convo__status"
-                            }
-                          >
-                            {c.replied
-                              ? `Replied${c.response_hours != null ? ` · ${formatHours(c.response_hours)}` : ""}`
-                              : "No reply"}
-                          </span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-
-                <div className="tpl-card__actions">
+                <div
+                  className="tpl-card__actions"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   {t.sent === 0 ? (
                     <button className="tpl-btn" onClick={() => openEdit(t)}>
                       Edit
@@ -484,6 +439,129 @@ export function TemplatesPanel() {
             ))}
           </div>
         </details>
+      )}
+
+      {detail && (
+        <div className="tpl-modal-backdrop" onClick={() => setDetailId(null)}>
+          <div
+            className="tpl-modal tpl-modal--detail"
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="tpl-modal__header">
+              <h2>
+                {detail.name}
+                {detail.sent > 0 && <span className="tpl-live">LIVE</span>}
+              </h2>
+              <button
+                className="icon-btn icon-btn--ghost"
+                onClick={() => setDetailId(null)}
+                aria-label="Close"
+              >
+                <IconX size={15} />
+              </button>
+            </div>
+
+            <div className="tpl-detail__stats">
+              <div>
+                <span>HIT RATE</span>
+                <strong>
+                  {detail.sent > 0
+                    ? `${Math.round(detail.reply_rate * 1000) / 10}%`
+                    : "—"}
+                </strong>
+              </div>
+              <div>
+                <span>SENT</span>
+                <strong>{detail.sent}</strong>
+              </div>
+              <div>
+                <span>REPLIED</span>
+                <strong>{detail.replied}</strong>
+              </div>
+              <div>
+                <span>AVG RESPONSE</span>
+                <strong>{formatHours(detail.avg_response_hours)}</strong>
+              </div>
+            </div>
+
+            <div className="tpl-card__preview tpl-card__preview--full">
+              {renderBody(detail.body)}
+            </div>
+
+            <div className="tpl-card__meta">
+              <span>
+                <IconTag size={14} /> {extractVariables(detail.body).length}{" "}
+                Token{extractVariables(detail.body).length === 1 ? "" : "s"}
+              </span>
+              <span>{detail.body.length} chars</span>
+            </div>
+
+            <div className="tpl-detail__section">
+              Used on ({detail.conversations.length})
+            </div>
+            {detail.conversations.length === 0 ? (
+              <p className="empty-state">Not sent to anyone yet.</p>
+            ) : (
+              <ul className="tpl-convos">
+                {detail.conversations.map((c) => (
+                  <li key={c.id}>
+                    <button
+                      className="tpl-convo"
+                      onClick={() => navigate(`/inbox?conversationId=${c.id}`)}
+                      title="Open in inbox"
+                    >
+                      <PlatformBadge platform={c.platform} />
+                      <span className="tpl-convo__who">
+                        {c.participant_name || c.participant_handle}
+                      </span>
+                      <span className="tpl-convo__when">
+                        {formatRelativeTime(c.sent_at)}
+                      </span>
+                      <span
+                        className={
+                          c.replied
+                            ? "tpl-convo__status tpl-convo__status--yes"
+                            : "tpl-convo__status"
+                        }
+                      >
+                        {c.replied
+                          ? `Replied${c.response_hours != null ? ` · ${formatHours(c.response_hours)}` : ""}`
+                          : "No reply"}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <div className="tpl-card__actions">
+              {detail.sent === 0 ? (
+                <button
+                  className="tpl-btn"
+                  onClick={() => {
+                    setDetailId(null);
+                    openEdit(detail);
+                  }}
+                >
+                  Edit
+                </button>
+              ) : (
+                <button
+                  className="tpl-btn"
+                  onClick={() => {
+                    setDetailId(null);
+                    openDuplicate(detail);
+                  }}
+                  title="Live templates are locked — duplicate to make changes"
+                >
+                  Duplicate
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {formOpen && (
