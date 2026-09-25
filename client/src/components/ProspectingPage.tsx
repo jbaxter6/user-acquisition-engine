@@ -896,7 +896,7 @@ function ProspectCard({
             engaged={Boolean(prospect.has_engaged)}
           />
           <span className="prospect-card__avatar-badge">
-            <PlatformIcon platform={prospect.platform} size={12} />
+            <PlatformIcon platform={prospect.platform} size={16} />
           </span>
         </span>
         <div className="prospect-card__identity">

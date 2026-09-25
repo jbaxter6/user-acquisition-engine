@@ -341,7 +341,9 @@ export function TemplatesPanel() {
                   )}
                 </h3>
 
-                <div className="tpl-card__preview">{renderBody(t.body)}</div>
+                <div className="tpl-card__preview">
+                  <div className="tpl-card__preview-text">{renderBody(t.body)}</div>
+                </div>
 
                 <div className="tpl-card__meta">
                   <span>

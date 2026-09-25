@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+// (add useRef back when re-enabling the auto-sync block below)
 import { api } from "../api/client";
 import { Avatar } from "./Avatar";
 import { PlatformIcon } from "./PlatformIcon";
@@ -14,7 +15,8 @@ export function AccountConnection({ accounts, onChange }: Props) {
   const [banner, setBanner] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [syncingId, setSyncingId] = useState<number | null>(null);
-  const [syncingAll, setSyncingAll] = useState(false);
+  // setSyncingAll is only used by the disabled auto-sync block below.
+  const [syncingAll] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -29,43 +31,42 @@ export function AccountConnection({ accounts, onChange }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Coming back to this tab (e.g. after sending a DM in the Instagram
-  // window opened from a prospect card) syncs every connected account so
-  // the inbox and prospect cards reflect what was just sent.
-  const accountsRef = useRef(accounts);
-  accountsRef.current = accounts;
-  const syncingAllRef = useRef(false);
-  const lastSyncAtRef = useRef(0);
-
-  useEffect(() => {
-    const syncAll = async () => {
-      if (document.visibilityState !== "visible") return;
-      if (syncingAllRef.current) return;
-      if (Date.now() - lastSyncAtRef.current < 15_000) return;
-      const current = accountsRef.current;
-      if (current.length === 0) return;
-
-      syncingAllRef.current = true;
-      lastSyncAtRef.current = Date.now();
-      setSyncingAll(true);
-      try {
-        await Promise.allSettled(current.map((a) => api.syncInstagramAccount(a.id)));
-        onChange();
-        window.dispatchEvent(new Event("accounts-synced"));
-      } finally {
-        syncingAllRef.current = false;
-        setSyncingAll(false);
-      }
-    };
-
-    document.addEventListener("visibilitychange", syncAll);
-    window.addEventListener("focus", syncAll);
-    return () => {
-      document.removeEventListener("visibilitychange", syncAll);
-      window.removeEventListener("focus", syncAll);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Auto-sync on returning to the tab is disabled for now (was: syncs every
+  // connected account on tab focus/visibility). Re-enable by uncommenting.
+  // const accountsRef = useRef(accounts);
+  // accountsRef.current = accounts;
+  // const syncingAllRef = useRef(false);
+  // const lastSyncAtRef = useRef(0);
+  //
+  // useEffect(() => {
+  //   const syncAll = async () => {
+  //     if (document.visibilityState !== "visible") return;
+  //     if (syncingAllRef.current) return;
+  //     if (Date.now() - lastSyncAtRef.current < 15_000) return;
+  //     const current = accountsRef.current;
+  //     if (current.length === 0) return;
+  //
+  //     syncingAllRef.current = true;
+  //     lastSyncAtRef.current = Date.now();
+  //     setSyncingAll(true);
+  //     try {
+  //       await Promise.allSettled(current.map((a) => api.syncInstagramAccount(a.id)));
+  //       onChange();
+  //       window.dispatchEvent(new Event("accounts-synced"));
+  //     } finally {
+  //       syncingAllRef.current = false;
+  //       setSyncingAll(false);
+  //     }
+  //   };
+  //
+  //   document.addEventListener("visibilitychange", syncAll);
+  //   window.addEventListener("focus", syncAll);
+  //   return () => {
+  //     document.removeEventListener("visibilitychange", syncAll);
+  //     window.removeEventListener("focus", syncAll);
+  //   };
+  //   // eslint-disable-next-line react-hooks/exhaustive-deps
+  // }, []);
 
   const handleDisconnect = async (id: number) => {
     await api.disconnectInstagramAccount(id);
