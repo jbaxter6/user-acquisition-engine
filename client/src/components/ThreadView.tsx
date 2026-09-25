@@ -1,7 +1,6 @@
 import { useState } from "react";
 import type { Conversation, InstagramAccount, Message } from "../types";
-import { PlatformBadge } from "./PlatformBadge";
-import { Avatar } from "./Avatar";
+import { Avatar, PlatformAvatar } from "./Avatar";
 import { formatRelativeTime, parseServerDate } from "../lib/relativeTime";
 
 interface Props {
@@ -47,7 +46,8 @@ export function ThreadView({ conversation, messages, canSend, accountFor, onSend
           <button className="thread-view__back secondary" onClick={onBack} aria-label="Back to conversations">
             ← Back
           </button>
-          <Avatar
+          <PlatformAvatar
+            platform={conversation.platform}
             src={conversation.participant_avatar_url}
             label={conversation.participant_name || conversation.participant_handle}
             size={36}
@@ -67,7 +67,6 @@ export function ThreadView({ conversation, messages, canSend, accountFor, onSend
               size={22}
             />
           )}
-          <PlatformBadge platform={conversation.platform} />
         </div>
       </div>
 

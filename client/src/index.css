@@ -2997,3 +2997,19 @@ button:disabled {
   color: var(--text-dim);
   padding: 2px 4px;
 }
+
+.avatar-wrap {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.avatar-wrap__badge {
+  position: absolute;
+  border-radius: 50%;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

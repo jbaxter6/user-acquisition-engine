@@ -1,8 +1,7 @@
 import { useState } from "react";
 import type { Conversation, InstagramAccount, Platform } from "../types";
-import { PlatformBadge } from "./PlatformBadge";
 import { PlatformIcon } from "./PlatformIcon";
-import { Avatar } from "./Avatar";
+import { Avatar, PlatformAvatar } from "./Avatar";
 import { formatRelativeTime, parseServerDate } from "../lib/relativeTime";
 
 const PLATFORMS: Platform[] = ["instagram", "tiktok", "twitch", "youtube"];
@@ -146,7 +145,8 @@ export function ConversationList({
             >
               <div className="conversation-item__row">
                 <span className="conversation-item__identity">
-                  <Avatar
+                  <PlatformAvatar
+                    platform={c.platform}
                     src={c.participant_avatar_url}
                     label={c.participant_name || c.participant_handle}
                     size={32}
@@ -166,7 +166,6 @@ export function ConversationList({
                         size={18}
                       />
                     )}
-                    <PlatformBadge platform={c.platform} />
                   </span>
                   <span
                     className="conversation-item__time"

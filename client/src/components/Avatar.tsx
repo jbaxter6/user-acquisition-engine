@@ -1,4 +1,6 @@
 import { useState } from "react";
+import type { Platform } from "../types";
+import { PlatformIcon } from "./PlatformIcon";
 
 interface Props {
   src: string | null;
@@ -59,6 +61,28 @@ export function Avatar({ src, label, size = 28, title, engaged = true }: Props) 
   return (
     <span className="avatar avatar--fallback" style={style} title={tooltip}>
       {label.charAt(0).toUpperCase() || "?"}
+    </span>
+  );
+}
+
+// Avatar with the platform icon in its corner — the same look as the
+// prospect cards, scaled to the avatar size.
+export function PlatformAvatar({
+  platform,
+  ...avatarProps
+}: Props & { platform: Platform }) {
+  const size = avatarProps.size ?? 28;
+  const badge = Math.round(size * 0.47);
+  const offset = -Math.round(size * 0.09);
+  return (
+    <span className="avatar-wrap">
+      <Avatar {...avatarProps} />
+      <span
+        className="avatar-wrap__badge"
+        style={{ width: badge, height: badge, right: offset, bottom: offset }}
+      >
+        <PlatformIcon platform={platform} size={Math.round(badge * 0.62)} />
+      </span>
     </span>
   );
 }
