@@ -242,9 +242,19 @@ body {
 /* Distinct from .avatar--fallback on purpose: an empty dashed ring reads as
    "no info yet" rather than "here's who this is, just no photo." */
 .avatar--pending {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  box-sizing: border-box;
   background: transparent;
   border: 1.5px dashed var(--border);
+  color: #2b2f39;
+}
+
+.avatar--pending svg {
+  display: block;
+  flex-shrink: 0;
 }
 
 .connect-btn {
@@ -814,7 +824,6 @@ button:disabled {
   gap: 14px;
 }
 .prospect-card {
-  min-height: 220px;
   padding: 16px;
   border-radius: 10px;
 }
@@ -842,7 +851,7 @@ button:disabled {
   padding: 14px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .prospect-card__header {
@@ -859,10 +868,10 @@ button:disabled {
 
 .prospect-card__avatar-badge {
   position: absolute;
-  bottom: -4px;
-  right: -4px;
-  width: 26px;
-  height: 26px;
+  bottom: -6px;
+  right: -6px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   background: var(--panel);
   border: 1px solid var(--border);
@@ -2634,7 +2643,7 @@ button:disabled {
 /* More room between prospect cards */
 .prospecting__cards {
   column-gap: 26px;
-  row-gap: 44px;
+  row-gap: 30px;
 }
 
 .prospect-card__outreach .prospect-card__existing-thread + .prospect-card__existing-thread {

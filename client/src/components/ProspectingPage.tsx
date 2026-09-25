@@ -896,7 +896,7 @@ function ProspectCard({
             engaged={Boolean(prospect.has_engaged)}
           />
           <span className="prospect-card__avatar-badge">
-            <PlatformIcon platform={prospect.platform} size={16} />
+            <PlatformIcon platform={prospect.platform} size={20} />
           </span>
         </span>
         <div className="prospect-card__identity">
@@ -1081,7 +1081,7 @@ function ProspectCard({
             <textarea
               value={text}
               readOnly
-              rows={5}
+              rows={3}
               placeholder="Select a template above…"
             />
             <span className="prospect-card__char-count">

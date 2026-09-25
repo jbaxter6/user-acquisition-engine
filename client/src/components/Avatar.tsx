@@ -41,7 +41,18 @@ export function Avatar({ src, label, size = 28, title, engaged = true }: Props) 
         style={style}
         title="Hasn't engaged yet — no photo available until they reply"
         aria-label="Not yet engaged"
-      />
+      >
+        <svg
+          viewBox="0 0 24 24"
+          width={size * 0.68}
+          height={size * 0.68}
+          fill="currentColor"
+          aria-hidden="true"
+        >
+          <circle cx="12" cy="8" r="4.2" />
+          <path d="M3.5 21c0-4.4 3.8-7 8.5-7s8.5 2.6 8.5 7z" />
+        </svg>
+      </span>
     );
   }
 
