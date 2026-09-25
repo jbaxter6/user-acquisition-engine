@@ -1,4 +1,5 @@
 import type {
+  AttributeRegistry,
   Conversation,
   HealthResponse,
   InstagramAccount,
@@ -7,6 +8,8 @@ import type {
   MessageTemplateStats,
   Platform,
   Prospect,
+  TargetProfile,
+  TargetProfileInput,
 } from "../types";
 import type { MappedProspect } from "../lib/prospectImport";
 
@@ -215,4 +218,33 @@ export const api = {
 
   archiveTemplate: (id: number) =>
     request<{ ok: true }>(`/api/templates/${id}`, { method: "DELETE" }),
+
+  profileAttributes: () =>
+    request<AttributeRegistry>("/api/profiles/attributes"),
+
+  listProfiles: (includeArchived = false) =>
+    request<TargetProfile[]>(
+      `/api/profiles${includeArchived ? "?includeArchived=true" : ""}`,
+    ),
+
+  createProfile: (input: TargetProfileInput) =>
+    request<TargetProfile>("/api/profiles", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+
+  updateProfile: (id: number, input: TargetProfileInput) =>
+    request<TargetProfile>(`/api/profiles/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(input),
+    }),
+
+  duplicateProfile: (id: number) =>
+    request<TargetProfile>(`/api/profiles/${id}/duplicate`, { method: "POST" }),
+
+  archiveProfile: (id: number) =>
+    request<{ ok: true }>(`/api/profiles/${id}`, { method: "DELETE" }),
+
+  restoreProfile: (id: number) =>
+    request<TargetProfile>(`/api/profiles/${id}/restore`, { method: "POST" }),
 };

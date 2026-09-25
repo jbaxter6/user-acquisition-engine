@@ -23,6 +23,11 @@
 - [ ] Real cold-send to a prospect will likely fail with a Meta messaging-window error most of the time — expected, not a bug; "Mark sent manually" is the intended fallback, not an afterthought
 - [ ] Redeploy the "not yet engaged" avatar treatment + Sync's skip of doomed profile lookups (none pushed yet)
 - [ ] Redeploy multi-platform Prospecting import (platform column mapping, default-platform selector, platform filter, TikTok/Twitch manual-only messaging) — merged cleanly with the concurrent templates work, verified via typecheck/build/API smoke test, no browser check
+- [ ] Redeploy the Profiles page (none pushed yet) and click through it in a real browser on prod. Verified so far only in headless Chrome against a scratch DB, desktop and mobile
+- [ ] Decide the open questions in docs/profiles-architecture.md §9 (attribute list, weighted scoring, one platform per profile, "Profiles" vs "Personas"). Phase 1 shipped with the recommended defaults
+- [ ] Decide whether IG keyword discovery keeps passively reading Instagram's JSON responses or switches to reading the rendered grid (docs/instagram-profile-data.md §1, conflicts with the UI-only rule)
+- [ ] Save rendered-page fixtures (profile, "and 1 more" links dialog, post modal, Reels tab) to confirm the scraper selectors in docs/instagram-profile-data.md §2
+- [ ] Build Profiles Phase 2: `prospect_attributes` table + map spreadsheet columns onto registry attributes in the Prospecting import
 
 ## Accomplishments
 ### 2026-09-23 (continued)
@@ -131,6 +136,12 @@
 - Fixed the live extraction against the Nero discover page: the scraper now follows each live artist card to its profile page, normalizes noisy handle text, and extracts real Instagram/TikTok links from the profile anchors. Verified with `OPP1_URL='https://www.nero.fan/discover' node run-opp1.js` that it returns real prospects instead of zero results.
 - Tightened the carousel logic to target the actual `[role="link"][aria-label]` cards and de-dupe repeated carousel copies by profile URL, so the first live row is fully captured instead of stopping at a partial 4-record slice.
 
+### 2026-09-25
+- Wrote the Profiles architecture plan (docs/profiles-architecture.md): per-platform target profiles, one attribute registry shared by the UI, the future importer and the matcher, must-have/nice-to-have criteria, "unknown" as a first-class match outcome, and a 4-phase rollout through Discovery.
+- Built Profiles Phase 1: attribute registry + `validateCriteria` (`server/src/profiles/attributes.ts`), `target_profiles` table (named so to avoid clashing with the existing social-account "profile" meaning), and `/api/profiles` CRUD + duplicate + archive + restore. A platform change that would drop criteria is refused with a 409, never silently stripped.
+- Added vitest to `server/` (`npm test`; test files excluded from the tsc build) with 15 tests covering the criteria validator's edge cases.
+- Built the Profiles page (`/profiles`, nav between Prospecting and Templates): list with platform filter/search/criteria preview chips, and an editor whose value controls are chosen by attribute type (so new registry entries need no UI change). It also has "10k"/"1.2M" count input, a confirm on platform switch, unsaved-changes guards, Cmd+S, and a stacked mobile layout.
+
 ## Documentation Index
 - [Project Overview](README.md) — vision, problem statement, and 3-module architecture
 - [Unified Master Inbox setup & platform API constraints](README.md) — how to run client/server, Instagram credential setup, why TikTok/Twitch are manual-only
@@ -150,6 +161,11 @@
 - [Prospecting/Business Discovery](server/src/prospecting.ts) — username → Instagram ID resolution and cold-send attempt for prospects; the ID-as-recipient assumption is unverified
 - [Prospect data model](server/src/db.ts) — `prospects` table, separate pipeline from `conversations`
 - [Message templates](server/src/db.ts) — `message_templates` table + `messages.template_id`, reusable outreach copy with per-template sent/replied/reply-rate stats (`getMessageTemplateStats`)
+- [Instagram profile data inventory](docs/instagram-profile-data.md) — UI-only (no platform APIs) inventory of what the scraper can read from an IG profile via page loads/hovers/clicks, depth levels, storage/snapshot plan, rollout order
+- [Profiles architecture](docs/profiles-architecture.md) — plan for target profiles/personas, attribute registry, matchmaking semantics and phases 1–4
+- [Profile attribute registry](server/src/profiles/attributes.ts) — per-platform filterable attributes + criteria validation; the contract for Profiles, import and matching
+- [Profiles API](server/src/routes/profiles.ts) — CRUD, duplicate, archive/restore, and `/attributes` (the form schema)
+- [Profiles UI](client/src/components/ProfilesPage.tsx) — list + editor; criterion controls in `CriterionRow.tsx`, logic in `lib/profileCriteria.ts`
 - [Templates API](server/src/routes/templates.ts) — CRUD + archive + `/stats` for message templates
 - [Templates UI](client/src/components/TemplatesPanel.tsx) — create/edit/archive templates and view effectiveness, on the Prospecting page
 - [Excel column mapping](client/src/lib/prospectImport.ts) — auto-detects likely columns by header name, `xlsx` loaded via dynamic import

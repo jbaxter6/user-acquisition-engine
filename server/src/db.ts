@@ -2,6 +2,8 @@ import Database from "better-sqlite3";
 import path from "node:path";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
+import type { Platform } from "./adapters/types.js";
+import type { Criterion } from "./profiles/attributes.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // DATA_DIR lets a deploy point this at a mounted persistent volume (e.g.
@@ -130,6 +132,22 @@ for (const migration of [
     relationship TEXT NOT NULL DEFAULT 'linked',
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(prospect_id, linked_prospect_id)
+  )`,
+  // Target profiles ("Profiles" in the UI): saved per-platform criteria
+  // describing who we want to reach. Named target_* because "profile"
+  // already means a social account's own profile elsewhere in this
+  // codebase. criteria_json is validated against the attribute registry
+  // (profiles/attributes.ts) on every write. See docs/profiles-architecture.md.
+  `CREATE TABLE IF NOT EXISTS target_profiles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    description TEXT,
+    platform TEXT NOT NULL,
+    criteria_json TEXT NOT NULL DEFAULT '[]',
+    color TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    archived_at TEXT
   )`,
 ]) {
   try {
@@ -1323,6 +1341,107 @@ export function updateMessageTemplate(
 export function archiveMessageTemplate(id: number): void {
   db.prepare(
     "UPDATE message_templates SET archived_at = datetime('now') WHERE id = ?",
+  ).run(id);
+}
+
+interface TargetProfileDbRow {
+  id: number;
+  name: string;
+  description: string | null;
+  platform: Platform;
+  criteria_json: string;
+  color: string | null;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+}
+
+export interface TargetProfileRow extends Omit<TargetProfileDbRow, "criteria_json"> {
+  criteria: Criterion[];
+}
+
+export interface TargetProfileInput {
+  name: string;
+  description: string | null;
+  platform: Platform;
+  criteria: Criterion[];
+  color: string | null;
+}
+
+function toTargetProfile(row: TargetProfileDbRow): TargetProfileRow {
+  const { criteria_json, ...rest } = row;
+  return { ...rest, criteria: JSON.parse(criteria_json) as Criterion[] };
+}
+
+export function listTargetProfiles(filters: {
+  platform?: string;
+  includeArchived?: boolean;
+}): TargetProfileRow[] {
+  const clauses: string[] = [];
+  const params: string[] = [];
+  if (!filters.includeArchived) clauses.push("archived_at IS NULL");
+  if (filters.platform) {
+    clauses.push("platform = ?");
+    params.push(filters.platform);
+  }
+  const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+  return db
+    .prepare<
+      string[],
+      TargetProfileDbRow
+    >(`SELECT * FROM target_profiles ${where} ORDER BY updated_at DESC, id DESC`)
+    .all(...params)
+    .map(toTargetProfile);
+}
+
+export function getTargetProfileById(id: number): TargetProfileRow | undefined {
+  const row = db
+    .prepare<[number], TargetProfileDbRow>("SELECT * FROM target_profiles WHERE id = ?")
+    .get(id);
+  return row && toTargetProfile(row);
+}
+
+export function createTargetProfile(input: TargetProfileInput): TargetProfileRow {
+  const result = db
+    .prepare(
+      `INSERT INTO target_profiles (name, description, platform, criteria_json, color)
+       VALUES (?, ?, ?, ?, ?)`,
+    )
+    .run(
+      input.name,
+      input.description,
+      input.platform,
+      JSON.stringify(input.criteria),
+      input.color,
+    );
+  return getTargetProfileById(result.lastInsertRowid as number)!;
+}
+
+export function updateTargetProfile(
+  id: number,
+  input: TargetProfileInput,
+): TargetProfileRow | undefined {
+  db.prepare(
+    `UPDATE target_profiles
+     SET name = ?, description = ?, platform = ?, criteria_json = ?, color = ?,
+         updated_at = datetime('now')
+     WHERE id = ?`,
+  ).run(
+    input.name,
+    input.description,
+    input.platform,
+    JSON.stringify(input.criteria),
+    input.color,
+    id,
+  );
+  return getTargetProfileById(id);
+}
+
+export function setTargetProfileArchived(id: number, archived: boolean): void {
+  db.prepare(
+    `UPDATE target_profiles
+     SET archived_at = ${archived ? "datetime('now')" : "NULL"}, updated_at = datetime('now')
+     WHERE id = ?`,
   ).run(id);
 }
 

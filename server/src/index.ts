@@ -11,6 +11,7 @@ import { webhooksRouter } from "./routes/webhooks.js";
 import { authRouter } from "./routes/auth.js";
 import { prospectsRouter } from "./routes/prospects.js";
 import { templatesRouter } from "./routes/templates.js";
+import { profilesRouter } from "./routes/profiles.js";
 import { isSignedOutVisitor, sessionRouter, siteAuth } from "./siteAuth.js";
 import "./db.js";
 
@@ -98,6 +99,7 @@ app.get("/api/health", (_req, res) => {
 app.use("/api/conversations", conversationsRouter());
 app.use("/api/prospects", prospectsRouter());
 app.use("/api/templates", templatesRouter());
+app.use("/api/profiles", profilesRouter());
 app.use("/auth", authRouter());
 app.use("/auth/tiktok", tiktokLoginRouter());
 

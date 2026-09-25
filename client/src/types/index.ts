@@ -154,3 +154,75 @@ export interface Prospect {
   channels?: ProspectChannel[];
   links?: ProspectLink[];
 }
+
+// ---- Target profiles ("Profiles" page) ----
+// Mirrors server/src/profiles/attributes.ts — the server's registry is the
+// source of truth and is fetched at runtime; these are just the shapes.
+
+export type AttributeType =
+  | "count"
+  | "percent"
+  | "number"
+  | "enum"
+  | "keywords"
+  | "boolean";
+
+export type CriterionOperator =
+  | "between"
+  | "gte"
+  | "lte"
+  | "in"
+  | "not_in"
+  | "contains_any"
+  | "contains_none"
+  | "is";
+
+export type AttributeGroup = "audience" | "content" | "identity";
+
+export interface AttributeDef {
+  key: string;
+  label: string;
+  group: AttributeGroup;
+  platforms: Platform[];
+  type: AttributeType;
+  unit?: string;
+  options?: { value: string; label: string }[];
+  description: string;
+  hasData: boolean;
+}
+
+export interface AttributeRegistry {
+  attributes: AttributeDef[];
+  operators: Record<AttributeType, CriterionOperator[]>;
+}
+
+export type CriterionValue = number | boolean | [number, number] | string[];
+
+export interface Criterion {
+  id: string;
+  attribute: string;
+  operator: CriterionOperator;
+  value: CriterionValue;
+  mode: "required" | "preferred";
+  weight?: 1 | 2 | 3;
+}
+
+export interface TargetProfile {
+  id: number;
+  name: string;
+  description: string | null;
+  platform: Platform;
+  criteria: Criterion[];
+  color: string | null;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+}
+
+export interface TargetProfileInput {
+  name: string;
+  description: string | null;
+  platform: Platform;
+  criteria: Criterion[];
+  color: string | null;
+}
