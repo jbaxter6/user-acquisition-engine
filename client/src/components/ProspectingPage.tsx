@@ -415,6 +415,7 @@ export function ProspectingPage() {
         </div>
       </section>
 
+      {(sheet || importResult) && (
       <div ref={importPanelRef}>
       {sheet && wide && (
         <section className="prospecting__import">
@@ -495,6 +496,7 @@ export function ProspectingPage() {
 
       {importResult && <p className="prospecting__hint">{importResult}</p>}
       </div>
+      )}
       {error && <div className="app__error">{error}</div>}
 
       <section className="prospecting__list">
