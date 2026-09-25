@@ -1858,22 +1858,23 @@ button:disabled {
 .tpl-add-btn {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-shrink: 0;
-  background: linear-gradient(135deg, #5b6cff, #6a4bff);
-  border: none;
-  color: #fff;
-  font-weight: 600;
-  font-size: 14px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-weight: 500;
+  font-size: 13px;
   font-family: inherit;
-  padding: 11px 20px;
+  padding: 0 14px;
   border-radius: 10px;
   cursor: pointer;
-  box-shadow: 0 6px 20px rgba(91, 108, 255, 0.35);
+  transition: color 0.15s ease, border-color 0.15s ease;
 }
 
 .tpl-add-btn:hover {
-  filter: brightness(1.1);
+  color: var(--text);
+  border-color: var(--accent);
 }
 
 .tpl-grid {
