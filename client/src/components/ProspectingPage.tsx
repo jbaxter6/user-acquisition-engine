@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import type {
-  InstagramAccount,
   MessageTemplate,
   Platform,
   Prospect,
@@ -26,11 +25,9 @@ import { PlatformBadge } from "./PlatformBadge";
 import { PlatformIcon } from "./PlatformIcon";
 import {
   IconDownload,
-  IconFile,
   IconFilter,
   IconGrid,
   IconList,
-  IconRefresh,
   IconSearch,
   IconShield,
   IconUpload,
@@ -81,10 +78,6 @@ const STATUS_LABEL: Record<Prospect["status"], string> = {
   closed: "Closed",
 };
 
-interface Props {
-  accounts: InstagramAccount[];
-}
-
 const STATUS_FILTERS: Array<{
   label: string;
   value: Prospect["status"] | "all";
@@ -113,7 +106,7 @@ const SORT_LABEL: Record<SortKey, string> = {
 const PAGE_SIZE = 24;
 const MAX_THREADS_SHOWN = 3;
 
-export function ProspectingPage({ accounts }: Props) {
+export function ProspectingPage() {
   const [prospects, setProspects] = useState<Prospect[]>([]);
   // Opens on "Not Contacted" — the prospects ready for first outreach.
   const [statusFilter, setStatusFilter] = useState<Prospect["status"] | "all">(
@@ -123,7 +116,8 @@ export function ProspectingPage({ accounts }: Props) {
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortKey>("recent");
   const [view, setView] = useState<"grid" | "list">("grid");
-  const [syncing, setSyncing] = useState(false);
+  const [fabOpen, setFabOpen] = useState(false);
+  const importPanelRef = useRef<HTMLDivElement>(null);
   const [sheet, setSheet] = useState<ParsedSheet | null>(null);
   const [mapping, setMapping] = useState<
     Partial<Record<ProspectField, string>>
@@ -283,21 +277,15 @@ export function ProspectingPage({ accounts }: Props) {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const handleSyncAll = async () => {
-    if (syncing || accounts.length === 0) return;
-    setSyncing(true);
-    try {
-      await Promise.allSettled(
-        accounts.map((a) => api.syncInstagramAccount(a.id)),
-      );
-      refresh();
-    } finally {
-      setSyncing(false);
+  useEffect(() => {
+    if (sheet) {
+      importPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
-  };
+  }, [sheet]);
 
   const handleFile = async (file: File) => {
     setImportResult(null);
+    setFabOpen(false);
     const buffer = await file.arrayBuffer();
     const parsed = await parseSpreadsheet(buffer);
     setSheet(parsed);
@@ -341,67 +329,6 @@ export function ProspectingPage({ accounts }: Props) {
   return (
     <div className="prospecting">
       <section className="prospecting-toolbar">
-        <div className="prospecting-toolbar__row prospecting-toolbar__import">
-          <span className="prospecting-toolbar__label">
-            <span className="prospecting-toolbar__label-icon">
-              <IconFile size={15} />
-            </span>
-            Import:
-          </span>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".xlsx,.xls,.csv"
-            hidden
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) handleFile(file);
-            }}
-          />
-          <button
-            className="toolbar-btn toolbar-btn--primary"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <IconUpload size={15} /> Upload CSV / Excel
-          </button>
-          <button
-            className="toolbar-btn toolbar-btn--ghost"
-            onClick={() => downloadProspectTemplate()}
-          >
-            <IconDownload size={14} /> Template
-          </button>
-          <span className="toolbar-chip">
-            <IconShield size={14} /> Auto-skips duplicates
-          </span>
-
-          <div className="prospecting-toolbar__stats">
-            <span>
-              Pipeline: <strong>{pipeline.all}</strong>
-            </span>
-            <span className="prospecting-toolbar__divider" />
-            <span>
-              Awaiting Reply:{" "}
-              <strong className="prospecting-toolbar__warn">
-                {pipeline.contacted}
-              </strong>
-            </span>
-            <span className="prospecting-toolbar__divider" />
-            <button
-              className="toolbar-link"
-              onClick={handleSyncAll}
-              disabled={syncing || accounts.length === 0}
-              title={
-                accounts.length === 0
-                  ? "Connect an Instagram account first"
-                  : "Sync all connected accounts"
-              }
-            >
-              {syncing ? <Spinner size={14} /> : <IconRefresh size={14} />} Sync
-              All
-            </button>
-          </div>
-        </div>
-
         <div className="prospecting-toolbar__row prospecting-toolbar__filters">
           <div className="filter-pills">
             {STATUS_FILTERS.map((f) => (
@@ -488,6 +415,7 @@ export function ProspectingPage({ accounts }: Props) {
         </div>
       </section>
 
+      <div ref={importPanelRef}>
       {sheet && wide && (
         <section className="prospecting__import">
           <div className="prospecting__mapping">
@@ -566,6 +494,7 @@ export function ProspectingPage({ accounts }: Props) {
       )}
 
       {importResult && <p className="prospecting__hint">{importResult}</p>}
+      </div>
       {error && <div className="app__error">{error}</div>}
 
       <section className="prospecting__list">
@@ -606,6 +535,41 @@ export function ProspectingPage({ accounts }: Props) {
           )}
         </div>
       </section>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".xlsx,.xls,.csv"
+        hidden
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleFile(file);
+        }}
+      />
+      <div className="import-fab">
+        {fabOpen && (
+          <div className="import-fab__menu">
+            <button onClick={() => fileInputRef.current?.click()}>
+              <IconUpload size={15} /> Upload CSV / Excel
+            </button>
+            <button onClick={() => downloadProspectTemplate()}>
+              <IconDownload size={14} /> Download template
+            </button>
+            <span className="import-fab__note">
+              <IconShield size={13} /> Auto-skips duplicates
+            </span>
+          </div>
+        )}
+        <button
+          className="import-fab__btn"
+          onClick={() => setFabOpen((o) => !o)}
+          aria-label="Import prospects"
+          aria-expanded={fabOpen}
+        >
+          {fabOpen ? <IconX size={18} /> : <IconUpload size={18} />}
+          {!fabOpen && <span>Import</span>}
+        </button>
+      </div>
     </div>
   );
 }

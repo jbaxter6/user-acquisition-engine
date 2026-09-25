@@ -222,7 +222,7 @@ function AppShell() {
         />
         <Route
           path="/prospecting"
-          element={<ProspectingPage accounts={accounts} />}
+          element={<ProspectingPage />}
         />
         <Route path="/templates" element={<TemplatesPanel />} />
         <Route path="*" element={<Navigate to="/inbox" replace />} />

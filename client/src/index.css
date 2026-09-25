@@ -1864,42 +1864,6 @@ button:disabled {
   gap: 18px;
 }
 
-.tpl-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--border);
-}
-
-.tpl-header h1 {
-  margin: 0 0 8px;
-  font-size: 28px;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.tpl-header p {
-  margin: 0;
-  max-width: 640px;
-  color: var(--text-dim);
-  font-size: 14px;
-  line-height: 1.5;
-}
-
-.tpl-badge {
-  font-size: 12px;
-  font-weight: 500;
-  padding: 4px 12px;
-  border-radius: 999px;
-  border: 1px solid rgba(91, 140, 255, 0.4);
-  background: rgba(91, 140, 255, 0.1);
-  color: #7aa2ff;
-}
-
 .tpl-add-btn {
   display: inline-flex;
   align-items: center;
@@ -2276,10 +2240,7 @@ button:disabled {
 }
 
 @media (max-width: 760px) {
-  .tpl-header {
-    flex-direction: column;
-  }
-      .tpl-grid {
+  .tpl-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -2306,8 +2267,7 @@ button:disabled {
 }
 
 .tpl-toolbar .toolbar-search,
-.tpl-toolbar .toolbar-select,
-.tpl-tabs {
+.tpl-toolbar .toolbar-select {
   height: 42px;
   border-radius: 10px;
   background: var(--panel);
@@ -2316,55 +2276,14 @@ button:disabled {
 
 .tpl-toolbar__search {
   flex: 1 1 260px;
-  max-width: 380px;
+  max-width: 440px;
   min-width: 0;
 }
 
-.tpl-tabs {
-  display: inline-flex;
-  align-items: stretch;
-  padding: 3px;
-  gap: 2px;
-}
-
-.tpl-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 14px;
-  border: none;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--text-dim);
-  font-family: inherit;
-  font-size: 14px;
-  font-weight: 500;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.tpl-tab:hover {
-  color: var(--text);
-}
-
-.tpl-tab--active {
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.09);
-}
-
-.tpl-tab__count {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-dim);
-}
-
-.tpl-tab--active .tpl-tab__count {
-  color: #7aa2ff;
-}
-
 .tpl-toolbar__sort {
-  margin-left: auto;
   position: relative;
+  flex: 0 0 auto;
+  width: 320px;
   padding-right: 30px;
 }
 
@@ -2373,7 +2292,17 @@ button:disabled {
   -webkit-appearance: none;
   background-image: none;
   padding-right: 0;
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  text-overflow: ellipsis;
   cursor: pointer;
+}
+
+.tpl-toolbar .tpl-add-btn {
+  margin-left: auto;
+  height: 42px;
+  padding: 0 18px;
 }
 
 .tpl-toolbar__sort select option {
@@ -2408,14 +2337,12 @@ button:disabled {
     max-width: none;
     flex-basis: 100%;
   }
-  .tpl-tabs {
-    order: 3;
-    width: 100%;
-    overflow-x: auto;
-  }
   .tpl-toolbar__sort {
-    margin-left: 0;
     flex: 1;
+    width: auto;
+  }
+  .tpl-toolbar .tpl-add-btn {
+    margin-left: 0;
   }
 }
 
@@ -2937,10 +2864,6 @@ button:disabled {
   line-height: 1.4;
 }
 
-.tpl-toolbar .tpl-add-btn {
-  margin-left: auto;
-}
-
 .tpl-card {
   cursor: pointer;
   transition: border-color 0.15s ease;
@@ -2979,4 +2902,78 @@ button:disabled {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-dim);
+}
+
+.import-fab {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.import-fab__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 48px;
+  min-width: 48px;
+  padding: 0 18px;
+  justify-content: center;
+  border-radius: 999px;
+  border: none;
+  background: linear-gradient(135deg, #5b8cff, #a35bff);
+  color: #fff;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.import-fab__btn:hover {
+  filter: brightness(1.1);
+}
+
+.import-fab__menu {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  min-width: 210px;
+}
+
+.import-fab__menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--panel-alt);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.import-fab__menu button:hover {
+  border-color: var(--accent);
+}
+
+.import-fab__note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-dim);
+  padding: 2px 4px;
 }
