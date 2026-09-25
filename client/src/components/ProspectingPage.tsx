@@ -764,7 +764,7 @@ function LinkPicker({
                     >
                       <PlatformBadge platform={candidate.platform} />
                       <span>
-                        {candidate.display_name || `@${candidate.username}`}
+                        {candidate.display_name || candidate.username}
                       </span>
                       <span className="prospect-card__handle-dim">
                         @{candidate.username}
@@ -935,7 +935,7 @@ function ProspectCard({
         </span>
         <div className="prospect-card__identity">
           <span className="prospect-card__name">
-            {prospect.display_name || `@${prospect.username}`}
+            {prospect.display_name || prospect.username}
           </span>
           <a
             className="prospect-card__handle"
@@ -1182,7 +1182,7 @@ function ProspectCard({
                 <div key={link.id} className="prospect-card__channel-card">
                   <PlatformBadge platform={link.platform} />
                   <span className="prospect-card__channel-username">
-                    {link.display_name || `@${link.username}`}
+                    {link.display_name || link.username}
                   </span>
                   <span className={`pill pill--status-${link.status}`}>
                     {STATUS_LABEL[link.status]}
@@ -1261,7 +1261,7 @@ function ProspectCard({
                   />
                   <span className="prospect-card__contact-info">
                     <span className="prospect-card__contact-name">
-                      {link.display_name || `@${link.username}`}
+                      {link.display_name || link.username}
                       <span className="prospect-card__contact-role">
                         {link.relationship}
                       </span>
@@ -1297,7 +1297,7 @@ function ProspectCard({
                   />
                   <span className="prospect-card__contact-info">
                     <span className="prospect-card__contact-name">
-                      {contact.name || `@${contact.handle}`}
+                      {contact.name || contact.handle}
                       {contact.role && (
                         <span className="prospect-card__contact-role">
                           {contact.role}
@@ -1349,7 +1349,7 @@ function ProspectCard({
                       />
                       <span className="prospect-card__contact-info">
                         <span className="prospect-card__contact-name">
-                          {link.display_name || `@${link.username}`}
+                          {link.display_name || link.username}
                           <span className="prospect-card__contact-role">
                             {role[0].toUpperCase() + role.slice(1)} for this
                             account
