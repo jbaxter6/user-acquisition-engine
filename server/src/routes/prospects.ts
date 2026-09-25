@@ -26,6 +26,7 @@ import {
   type ProspectInput,
   type ProspectSort,
 } from "../db.js";
+import { normalizeHandle } from "../handle.js";
 
 const PLATFORMS = ["instagram", "tiktok", "twitch", "youtube"];
 
@@ -125,14 +126,16 @@ export function prospectsRouter(): Router {
       if (typeof p !== "object" || p === null) continue;
       const { username, platform, displayName, followers, notes, email } =
         p as Record<string, unknown>;
-      if (typeof username !== "string" || !username.trim()) continue;
+      if (typeof username !== "string") continue;
+      const handle = normalizeHandle(username);
+      if (!handle) continue;
       const normalizedPlatform =
         typeof platform === "string" ? platform.toLowerCase() : "";
       const row = {
         platform: PLATFORMS.includes(normalizedPlatform)
           ? normalizedPlatform
           : "instagram",
-        username: username.trim().replace(/^@/, ""),
+        username: handle,
         displayName: typeof displayName === "string" ? displayName : undefined,
         followers: typeof followers === "number" ? followers : undefined,
         notes: typeof notes === "string" ? notes : undefined,

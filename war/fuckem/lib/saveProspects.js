@@ -10,6 +10,25 @@ const OUTPUT_DIR = process.env.OUTPUT_DIR
   ? path.resolve(process.env.OUTPUT_DIR)
   : path.resolve(__dirname, '../../recruits');
 
+
+const RESERVED = new Set(['p', 'reel', 'reels', 'explore', 'stories', 'accounts', 'video', 'channel', 'tv', 'share', 't', 'user']);
+
+/** Profile URL -> bare handle ('' if it can't be found). */
+export function handleFromUrl(raw) {
+  const value = String(raw ?? '').trim();
+  if (!value) return '';
+  try {
+    const url = new URL(/^https?:\/\//i.test(value) ? value : `https://${value}`);
+    const parts = url.pathname.split('/').filter(Boolean);
+    const yt = /youtube\.com|youtu\.be/i.test(url.hostname);
+    const first = (yt && /^(channel|c|user)$/i.test(parts[0] ?? '') ? parts[1] : parts[0]) ?? '';
+    const handle = decodeURIComponent(first).replace(/^@/, '');
+    return handle && !RESERVED.has(handle.toLowerCase()) ? handle : '';
+  } catch {
+    return '';
+  }
+}
+
 /**
  * Writes one strategy's prospects to war/recruits as an .xlsx.
  * File names are `opp<N>-strat-<M>-<YYYY-MM-DD_HHmm>.xlsx`, keyed by slot
@@ -23,11 +42,17 @@ export function saveProspects(strategyId, prospects) {
   fs.mkdirSync(OUTPUT_DIR, { recursive: true });
   const file = path.join(OUTPUT_DIR, `${slug}-${stamp}.xlsx`);
 
+  // URL columns first (what the Prospecting import keys off), then the bare
+  // username for each so the sheet is readable/usable without the URLs.
   const rows = prospects.map((p) => ({
     Instagram: p.instagram ?? '',
     TikTok: p.tiktok ?? '',
     YouTube: p.youtube ?? '',
     Twitch: p.twitch ?? '',
+    'Instagram Username': handleFromUrl(p.instagram),
+    'TikTok Username': handleFromUrl(p.tiktok),
+    'YouTube Username': handleFromUrl(p.youtube),
+    'Twitch Username': handleFromUrl(p.twitch),
   }));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Prospects');

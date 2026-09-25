@@ -212,12 +212,13 @@ export function applyMapping(
   if (!mapping.username) return [];
   const out: MappedProspect[] = [];
   for (const row of rows) {
-    const username = String(row[mapping.username] ?? "").trim();
+    // The username cell may hold a bare handle, an @handle, or a full profile URL.
+    const username = handleFromUrl(row[mapping.username]);
     if (!username) continue;
     const followersRaw = mapping.followers ? row[mapping.followers] : undefined;
     const followers = followersRaw != null && followersRaw !== "" ? Number(followersRaw) : undefined;
     out.push({
-      username: username.replace(/^@/, ""),
+      username,
       platform: mapping.platform ? normalizePlatform(row[mapping.platform], defaultPlatform) : defaultPlatform,
       displayName: mapping.displayName ? String(row[mapping.displayName] ?? "").trim() || undefined : undefined,
       followers: Number.isFinite(followers) ? followers : undefined,
