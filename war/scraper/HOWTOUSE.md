@@ -55,7 +55,7 @@ See what searches exist: `npm run list`
 
 ## If something goes wrong
 
-- **"No Chrome found on port 9222":** do Step 1 first. If Chrome was already open, quit it fully (Cmd+Q) and rerun `npm run chrome`.
+- **"No Chrome found at http://127.0.0.1:9222":** do Step 1 first. If Chrome was already open, quit it fully (Cmd+Q) and rerun `npm run chrome`.
 - **0 prospects:** the filters are probably too tight, or everyone was already collected. Rerun with `--no-dedupe`.
 - **Rate limited or login lockout:** stop and wait a few hours. Don't keep retrying.
 - Use a throwaway social account, never a Smooth account. See [../IMPORTANT.md](../IMPORTANT.md).
