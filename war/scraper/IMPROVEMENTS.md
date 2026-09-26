@@ -5,7 +5,7 @@ Ideas for making the scraper better, roughly in priority order. Check items off 
 ## Suggested first batch
 
 - [x] 1. Dedup memory (`seen.json` + prod check) — done, see `src/known.ts`
-- [ ] 2. Handle-list mode
+- [x] 2. Handle-list mode — done as `npm run enrich -- <sheet>`, see `src/enrich.ts`
 - [x] 3. Save results as we go — done as save-on-interrupt/crash, see `src/gracefulExit.ts`
 
 Then 5 (more TikTok discovery) and 4 (scoring).
