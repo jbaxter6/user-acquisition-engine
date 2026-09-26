@@ -40,6 +40,8 @@ export interface InstagramAccount {
   igUserId: string;
   profilePictureUrl: string | null;
   connectedAt: string;
+  // Meta rejected this account's token (expired / password changed).
+  needsReconnect: boolean;
 }
 
 // GET /api/meta/usage — see docs/meta-api-usage-meter.md.

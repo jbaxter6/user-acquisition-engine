@@ -208,6 +208,18 @@ body {
   color: #e5484d;
 }
 
+.account-connection__reconnect {
+  align-self: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  background: #e5484d;
+  border-radius: 6px;
+  padding: 3px 8px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
 .account-connection {
   position: relative;
 }

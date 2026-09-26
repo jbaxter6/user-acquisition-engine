@@ -72,6 +72,7 @@ export function authRouter(): Router {
       igUserId: a.ig_user_id,
       profilePictureUrl: a.profile_picture_url,
       connectedAt: a.connected_at,
+      needsReconnect: a.token_invalid_at !== null,
     }));
     res.json(accounts);
   });
@@ -93,7 +94,10 @@ export function authRouter(): Router {
       const result = await syncInstagramAccount(account);
       res.json(result);
     } catch (err) {
-      res.status(502).json({ error: (err as Error).message });
+      // metaFetch flags the account when Meta rejected its token; tell the
+      // client so it can send the user through the login flow again.
+      const needsReconnect = getAccountById(account.id)?.token_invalid_at != null;
+      res.status(502).json({ error: (err as Error).message, needsReconnect });
     }
   });
 

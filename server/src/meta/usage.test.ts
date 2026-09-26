@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   highestPct,
+  isInvalidTokenResponse,
   isThrottleResponse,
   parseUsageHeaders,
   usageLevel,
@@ -65,6 +66,24 @@ describe("isThrottleResponse", () => {
   it("does not flag other errors", () => {
     expect(isThrottleResponse(400, '{"error":{"code":190}}')).toBe(false);
     expect(isThrottleResponse(500, "oops")).toBe(false);
+  });
+});
+
+describe("isInvalidTokenResponse", () => {
+  it("recognises Meta's invalidated-session error (code 190)", () => {
+    const body = JSON.stringify({
+      error: {
+        message: "Error validating access token: The session has been invalidated because the user changed their password",
+        type: "OAuthException",
+        code: 190,
+      },
+    });
+    expect(isInvalidTokenResponse(body)).toBe(true);
+  });
+
+  it("ignores other errors and non-JSON bodies", () => {
+    expect(isInvalidTokenResponse('{"error":{"code":4}}')).toBe(false);
+    expect(isInvalidTokenResponse("Bad Gateway")).toBe(false);
   });
 });
 

@@ -98,6 +98,8 @@ db.exec(`
 // column" error on subsequent runs.
 for (const migration of [
   "ALTER TABLE accounts ADD COLUMN profile_picture_url TEXT",
+  // Set when Meta rejects the token (error 190); cleared on reconnect.
+  "ALTER TABLE accounts ADD COLUMN token_invalid_at TEXT",
   "ALTER TABLE conversations ADD COLUMN participant_avatar_url TEXT",
   "ALTER TABLE messages ADD COLUMN template_id INTEGER REFERENCES message_templates(id)",
   `CREATE TABLE IF NOT EXISTS prospect_channels (
@@ -308,6 +310,7 @@ export interface AccountRow {
   profile_picture_url: string | null;
   access_token: string;
   connected_at: string;
+  token_invalid_at: string | null;
 }
 
 export interface ConversationRow {
@@ -1141,7 +1144,11 @@ export function upsertAccount(input: {
      ON CONFLICT(platform, ig_user_id) DO UPDATE SET
        username = excluded.username,
        profile_picture_url = excluded.profile_picture_url,
-       access_token = excluded.access_token`,
+       access_token = excluded.access_token,
+       token_invalid_at = CASE
+         WHEN excluded.access_token = accounts.access_token THEN accounts.token_invalid_at
+         ELSE NULL
+       END`,
   ).run(
     platform,
     input.igUserId,
@@ -1156,6 +1163,12 @@ export function upsertAccount(input: {
       AccountRow
     >("SELECT * FROM accounts WHERE platform = ? AND ig_user_id = ?")
     .get(platform, input.igUserId)!;
+}
+
+export function markAccountTokenInvalid(id: number): void {
+  db.prepare(
+    "UPDATE accounts SET token_invalid_at = datetime('now') WHERE id = ? AND token_invalid_at IS NULL",
+  ).run(id);
 }
 
 export function deleteAccount(id: number): void {

@@ -20,6 +20,24 @@ import type { MappedProspect } from "../lib/prospectImport";
 // requests — is the correct default when VITE_API_URL isn't set.
 const BASE_URL = import.meta.env.VITE_API_URL ?? "";
 
+// Keeps the old "<status> <text>: <body>" message, but also exposes the
+// parsed JSON body so callers can react to structured errors (e.g. the
+// Sync route's `needsReconnect`).
+export class ApiError extends Error {
+  status: number;
+  body: unknown;
+
+  constructor(status: number, statusText: string, rawBody: string) {
+    super(`${status} ${statusText}: ${rawBody}`);
+    this.status = status;
+    try {
+      this.body = JSON.parse(rawBody);
+    } catch {
+      this.body = rawBody;
+    }
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     headers: { "Content-Type": "application/json" },
@@ -31,8 +49,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     window.dispatchEvent(new Event("auth-required"));
   }
   if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`${res.status} ${res.statusText}: ${body}`);
+    throw new ApiError(res.status, res.statusText, await res.text());
   }
   return res.json() as Promise<T>;
 }

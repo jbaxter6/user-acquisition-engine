@@ -79,6 +79,19 @@ export function isThrottleResponse(status: number, body: string): boolean {
   }
 }
 
+/**
+ * True when Meta says the access token is no longer valid (code 190:
+ * expired, password changed, or the session was revoked). The account
+ * has to be reconnected through the OAuth flow.
+ */
+export function isInvalidTokenResponse(body: string): boolean {
+  try {
+    return (JSON.parse(body) as { error?: { code?: number } }).error?.code === 190;
+  } catch {
+    return false;
+  }
+}
+
 export interface UsageThresholds {
   metaPctWarn: number;
   metaPctOver: number;

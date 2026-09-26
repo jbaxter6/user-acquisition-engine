@@ -1,5 +1,10 @@
-import { recordMetaCall, saveMetaUsageReading } from "../db.js";
-import { isThrottleResponse, parseUsageHeaders, type MetaCallKind } from "./usage.js";
+import { markAccountTokenInvalid, recordMetaCall, saveMetaUsageReading } from "../db.js";
+import {
+  isInvalidTokenResponse,
+  isThrottleResponse,
+  parseUsageHeaders,
+  type MetaCallKind,
+} from "./usage.js";
 
 let loggedHeaderShape = false;
 
@@ -20,8 +25,8 @@ export async function metaFetch(
 
   // Bookkeeping must never break the actual call.
   try {
-    const throttled =
-      res.status === 429 || (!res.ok && isThrottleResponse(res.status, await res.clone().text()));
+    const errorBody = res.ok ? "" : await res.clone().text();
+    const throttled = res.status === 429 || (!res.ok && isThrottleResponse(res.status, errorBody));
     const reading = parseUsageHeaders(res.headers);
 
     // Once per process, show which usage headers Meta actually sends on
@@ -37,6 +42,12 @@ export async function metaFetch(
 
     recordMetaCall({ accountId, kind, status: res.status, throttled });
     if (reading && accountId !== null) saveMetaUsageReading(accountId, reading);
+    // Flag the account so the UI asks for a reconnect; cleared when the
+    // account goes through the OAuth flow again (upsertAccount).
+    if (!res.ok && accountId !== null && isInvalidTokenResponse(errorBody)) {
+      markAccountTokenInvalid(accountId);
+      console.warn(`Meta rejected the access token for account ${accountId}; it needs reconnecting.`);
+    }
     if (throttled) console.warn(`Meta throttled a ${kind} call (account ${accountId ?? "none"}), status ${res.status}.`);
   } catch (err) {
     console.error("Recording Meta API usage failed:", err);

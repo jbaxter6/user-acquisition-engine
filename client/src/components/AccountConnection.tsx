@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 // (add useRef back when re-enabling the auto-sync block below)
-import { api } from "../api/client";
+import { api, ApiError } from "../api/client";
 import { Avatar } from "./Avatar";
 import { PlatformIcon } from "./PlatformIcon";
 import { IconRefresh, IconX, Spinner } from "./icons";
@@ -8,6 +8,8 @@ import { formatRelativeTime } from "../lib/relativeTime";
 import type { InstagramAccount, MetaAccountUsage, MetaUsageLevel, MetaUsageResponse } from "../types";
 
 const USAGE_POLL_MS = 60_000;
+const RECONNECT_REDIRECT_MS = 2_000;
+const reconnectUrl = `${api.baseUrl}/auth/instagram/login`;
 const LEVEL_RANK: Record<MetaUsageLevel, number> = { ok: 0, warn: 1, over: 2 };
 const KIND_LABELS: Record<string, string> = {
   "sync.list": "sync: conversation lists",
@@ -57,19 +59,28 @@ export function AccountConnection({ accounts, onChange }: Props) {
 
   // Meta API usage meter (docs/meta-api-usage-meter.md). Reading it costs
   // no Meta calls, so polling is cheap.
+  // Also refreshes the account list, so a token Meta rejected during a
+  // send or background call shows up as "Reconnect" without a Sync.
   const refreshUsage = () => {
     api.metaUsage().then(setUsage).catch(() => {});
+  };
+  const refreshAfterMetaCall = () => {
+    refreshUsage();
+    onChange();
   };
 
   useEffect(() => {
     refreshUsage();
     const timer = window.setInterval(refreshUsage, USAGE_POLL_MS);
-    window.addEventListener("meta-usage-changed", refreshUsage);
+    window.addEventListener("meta-usage-changed", refreshAfterMetaCall);
     return () => {
       window.clearInterval(timer);
-      window.removeEventListener("meta-usage-changed", refreshUsage);
+      window.removeEventListener("meta-usage-changed", refreshAfterMetaCall);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const needsReconnect = accounts.some((a) => a.needsReconnect);
 
   const usageById = new Map(usage?.accounts.map((u) => [u.accountId, u]));
   const worstLevel = (usage?.accounts ?? []).reduce<MetaUsageLevel>(
@@ -142,6 +153,17 @@ export function AccountConnection({ accounts, onChange }: Props) {
       );
       onChange();
     } catch (err) {
+      const body = err instanceof ApiError ? (err.body as { needsReconnect?: boolean }) : null;
+      if (body?.needsReconnect) {
+        // Meta invalidated the token (password change, security reset,
+        // expiry). The only fix is logging in again, so take them there.
+        const account = accounts.find((a) => a.id === id);
+        setBanner(
+          `Instagram signed @${account?.username ?? "this account"} out. Taking you to log in again...`,
+        );
+        window.setTimeout(() => window.location.assign(reconnectUrl), RECONNECT_REDIRECT_MS);
+        return;
+      }
       setBanner(`Sync failed: ${String(err)}`);
     } finally {
       setSyncingId(null);
@@ -157,6 +179,8 @@ export function AccountConnection({ accounts, onChange }: Props) {
         title={
           accounts.length === 0
             ? "No Instagram accounts connected"
+            : needsReconnect
+            ? "An Instagram account was signed out and needs reconnecting"
             : `${accounts.length} Instagram account(s) connected. Meta API usage: ${
                 worstLevel === "over" ? "over the limit, ease off" : worstLevel === "warn" ? "getting high" : "fine"
               } (highest Meta-reported ${Math.round(highestMetaPct)}%)`
@@ -164,7 +188,7 @@ export function AccountConnection({ accounts, onChange }: Props) {
       >
         <span
           className={
-            accounts.length === 0
+            accounts.length === 0 || needsReconnect
               ? "platform-status-dot platform-status-dot--disconnected"
               : `platform-status-dot platform-status-dot--${worstLevel === "ok" ? "connected" : worstLevel}`
           }
@@ -198,6 +222,11 @@ export function AccountConnection({ accounts, onChange }: Props) {
                     <Avatar src={a.profilePictureUrl} label={a.username ?? a.igUserId} size={26} />
                     <span className="account-connection__identity-text">
                       @{a.username ?? a.igUserId}
+                      {a.needsReconnect && (
+                        <span className="account-connection__usage account-connection__usage--over">
+                          Signed out by Instagram. Reconnect to keep syncing.
+                        </span>
+                      )}
                       {usageById.get(a.id) && usage && (
                         <span
                           className={`account-connection__usage account-connection__usage--${usageById.get(a.id)!.level}`}
@@ -209,6 +238,11 @@ export function AccountConnection({ accounts, onChange }: Props) {
                     </span>
                   </span>
                   <span className="account-connection__actions">
+                    {a.needsReconnect && (
+                      <a className="account-connection__reconnect" href={reconnectUrl}>
+                        Reconnect
+                      </a>
+                    )}
                     <button
                       className="icon-btn"
                       onClick={() => handleSync(a.id)}
