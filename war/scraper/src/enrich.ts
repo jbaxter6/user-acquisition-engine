@@ -2,12 +2,13 @@
 // that only has social links — e.g. fuckem's output, which never visits the
 // social profiles. See docs/instagram-profile-data.md, "Enriching sheets".
 //
-//   npm run enrich -- ../recruits/<sheet>.xlsx [--min N] [--max N] [--refresh]
+//   npm run enrich -- <sheet>.xlsx   (found in ../recruits/intercepts/opp<N>/) [--min N] [--max N] [--refresh]
 //
-// Writes <sheet>-enriched.xlsx next to the input, in the same columns as a
-// search run, so the app's import maps it automatically.
+// Writes <sheet>-enriched.xlsx to war/recruits/dossiers/opp<N> (matching
+// the intercepts folder it came from; override the base with DOSSIERS_DIR), in the same columns as a search run, so the app's import
+// maps it automatically.
 
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync } from "node:fs";
 import path from "node:path";
 import type { Page } from "playwright";
 import { openBrowser } from "./browser.js";
@@ -76,16 +77,35 @@ async function readProfile(page: Page, a: Account): Promise<{ handle: string; de
   return details && { handle: details.handle, details };
 }
 
-const input = process.argv[2];
+// A bare file name is looked up in war/recruits/intercepts/<opp folder>,
+// where fuckem saves its sheets, so `npm run enrich -- opp1-strat-2-….xlsx`
+// works.
+const INTERCEPTS_DIR = "../recruits/intercepts";
+function findIntercept(name: string): string | undefined {
+  if (!existsSync(INTERCEPTS_DIR)) return undefined;
+  const dirs = [INTERCEPTS_DIR, ...readdirSync(INTERCEPTS_DIR, { withFileTypes: true })
+    .filter((d) => d.isDirectory())
+    .map((d) => path.join(INTERCEPTS_DIR, d.name))];
+  return dirs.map((d) => path.join(d, name)).find((f) => existsSync(f));
+}
+const arg0 = process.argv[2];
+const input = arg0 && !existsSync(arg0) ? (findIntercept(arg0) ?? arg0) : arg0;
 if (!input || input.startsWith("--") || !existsSync(input)) {
-  console.error("Usage: npm run enrich -- <path/to/sheet.xlsx> [--min N] [--max N] [--refresh]");
+  console.error("Usage: npm run enrich -- <sheet.xlsx in war/recruits/intercepts/opp<N>, or a path> [--min N] [--max N] [--refresh]");
   process.exit(1);
 }
 const min = arg("min") ? Number(arg("min")) : null;
 const max = arg("max") ? Number(arg("max")) : null;
 
-const outDir = path.dirname(input);
+// Mirror the intercepts layout: a sheet from intercepts/opp1/ goes to
+// dossiers/opp1/. Sheets from anywhere else go to dossiers/ itself.
 const base = path.basename(input, path.extname(input));
+const oppFolder = (() => {
+  const parent = path.resolve(input, "..");
+  return path.dirname(parent) === path.resolve(INTERCEPTS_DIR) ? path.basename(parent) : "";
+})();
+const outDir = path.join(process.env.DOSSIERS_DIR ?? "../recruits/dossiers", oppFolder);
+mkdirSync(outDir, { recursive: true });
 const accounts = readAccounts(input);
 const done = process.argv.includes("--refresh") ? new Set<string>() : alreadyEnriched(outDir, base);
 const todo = accounts.filter((a) => !done.has(key(a.platform, a.handle)));

@@ -5,10 +5,12 @@ import * as XLSX from 'xlsx';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Same folder the scraper writes to (war/recruits); override with OUTPUT_DIR.
+// war/recruits/intercepts/opp<N>: links pulled from the opps, one folder per
+// opp slot, not enriched yet (the scraper's `enrich` turns these into
+// war/recruits/dossiers). Override the base with OUTPUT_DIR.
 const OUTPUT_DIR = process.env.OUTPUT_DIR
   ? path.resolve(process.env.OUTPUT_DIR)
-  : path.resolve(__dirname, '../../recruits');
+  : path.resolve(__dirname, '../../recruits/intercepts');
 
 
 const RESERVED = new Set(['p', 'reel', 'reels', 'explore', 'stories', 'accounts', 'video', 'channel', 'tv', 'share', 't', 'user']);
@@ -39,7 +41,7 @@ function freePath(file) {
 }
 
 /**
- * Writes one strategy's prospects to war/recruits as an .xlsx.
+ * Writes one strategy's prospects to war/recruits/intercepts/opp<N> as an .xlsx.
  * File names are `opp<N>-strat-<M>-<YYYY-MM-DD_HHmm>.xlsx`, keyed by slot
  * number only. The scraper's files are `<search-name>-<YYYY-MM-DD>.xlsx`, so
  * the two can't collide, and the time suffix stops same-day reruns from
@@ -49,8 +51,11 @@ function freePath(file) {
 export function saveProspects(strategyId, prospects, { partial = false } = {}) {
   const slug = strategyId.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
   const stamp = new Date().toISOString().slice(0, 16).replace('T', '_').replace(':', '');
-  fs.mkdirSync(OUTPUT_DIR, { recursive: true });
-  const file = freePath(path.join(OUTPUT_DIR, `${slug}-${stamp}${partial ? '-partial' : ''}.xlsx`));
+  // Folder per opp slot, from the "OPP<N>/strat-<M>" id (slot number only,
+  // never the opp's name; see AGENTS.md).
+  const oppDir = path.join(OUTPUT_DIR, slug.split('-strat-')[0] || 'other');
+  fs.mkdirSync(oppDir, { recursive: true });
+  const file = freePath(path.join(oppDir, `${slug}-${stamp}${partial ? '-partial' : ''}.xlsx`));
 
   // URL columns first (what the Prospecting import keys off), then the bare
   // username for each so the sheet is readable/usable without the URLs.

@@ -62,8 +62,10 @@ if (process.argv.includes("--all")) {
 }
 
 const known = process.argv.includes("--no-dedupe") ? new Set<string>() : await loadKnown();
-// Sheets land in war/recruits (sibling of this scraper folder); override with OUTPUT_DIR.
-const outDir = process.env.OUTPUT_DIR ?? "../recruits";
+// Search sheets land in war/recruits/leads (open-web finds, already with
+// profile stats); override with OUTPUT_DIR. See war/recruits layout in
+// war/fuckem/HOWTOUSE.md.
+const outDir = process.env.OUTPUT_DIR ?? "../recruits/leads";
 mkdirSync(outDir, { recursive: true });
 const date = new Date().toISOString().slice(0, 10);
 const combined = new Map<string, Prospect>();

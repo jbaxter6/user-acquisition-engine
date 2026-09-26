@@ -165,6 +165,11 @@
 - Verified `enrich` end-to-end without touching real sites: a local HTTPS server served the saved IG/TikTok pages, and a headless Chrome with host-resolver rules mapped instagram.com/tiktok.com to it. Covered a full run, Ctrl-C then resume, blocked accounts, and the 5-failure stop. Found and fixed `XLSX.readFile` being unavailable under tsx (ESM build). 15 new tests for the sheet reader (31 total in the scraper).
 - Expired/revoked Instagram tokens (Meta error 190) now flag the account (`accounts.token_invalid_at`, set in metaFetch, cleared on reconnect); Sync redirects to the Instagram login after a 2s notice, and the chip turns red with a Reconnect button on the account
 
+### 2026-09-26
+- Split `war/recruits/` into `intercepts/` (fuckem, links only), `dossiers/` (`enrich` output, upload these) and `leads/` (scraper searches, already have stats); `enrich` takes a bare file name from `intercepts/`; existing sheets moved; `.gitignore` now ignores every `.xlsx`/`.xls`/`.csv` except `prospect-import-template.xlsx`
+- fuckem now saves into one folder per opp slot (`intercepts/opp1/`, `opp2/`, ...; slot number only); `enrich` finds a bare file name in any of them and writes to the matching `dossiers/opp<N>/`
+- Rewrote war/fuckem/HOWTOUSE.md as the 3-step find → enrich → upload pipeline, with a folder guide
+
 ## Documentation Index
 - [Project Overview](README.md) — vision, problem statement, and 3-module architecture
 - [Unified Master Inbox setup & platform API constraints](README.md) — how to run client/server, Instagram credential setup, why TikTok/Twitch are manual-only
@@ -196,6 +201,7 @@
 - [Excel column mapping](client/src/lib/prospectImport.ts) — auto-detects likely columns by header name, `xlsx` loaded via dynamic import
 - [Worklog rules (Claude)](.claude/skills/worklog/SKILL.md) — how WORKLOG.md is maintained, for Claude Code
 - [Worklog rules (Copilot)](.github/copilot-instructions.md) — same rules, for GitHub Copilot Chat
+- [Opp → enrich → upload pipeline + recruits folders](war/fuckem/HOWTOUSE.md) — how to run fuckem, enrich its sheets with the scraper, and which `war/recruits` folder to upload from
 - [Opp discovery workflow](war/fuckem/README.md) — direct-to-opportunity prospecting flow using env-driven `OPP1_URL`/`OPP2_URL` slots and numbered strategy folders
 - [Opp naming policy](war/fuckem/AGENTS.md) — explicit rule to never reference specific opportunity names in code, filenames, or docs
 - [Opp strategy runbook](war/fuckem/OPP1/strat-1/run.js) — live extractor for the first numbered opp, following carousel cards to profile pages and collecting social links

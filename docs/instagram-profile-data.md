@@ -48,11 +48,12 @@ fuckem finds creators on opportunity sites and records their social
 *links*; it never visits the social profiles, so its sheets have no
 follower counts. Rather than teaching fuckem to read profiles (its browser
 isn't logged in, and Instagram walls logged-out visitors fast), the scraper
-gets an `enrich` command that fills in any sheet in `war/recruits`:
+gets an `enrich` command that fills in fuckem's sheets in `war/recruits/intercepts/opp<N>`
+(output goes to the matching `war/recruits/dossiers/opp<N>`; scraper searches go to `war/recruits/leads`):
 
 ```
 cd war/scraper
-npm run enrich -- ../recruits/<sheet>.xlsx [--min N] [--max N] [--refresh]
+npm run enrich -- <sheet>.xlsx [--min N] [--max N] [--refresh]   # bare name = intercepts/opp<N>/<sheet>.xlsx
 ```
 
 - Reads either layout: one row per creator (fuckem's `Instagram`/`TikTok`/

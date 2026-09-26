@@ -5,5 +5,14 @@ dist/
 server/data/
 *.log
 .DS_Store
-war/recruits/
+
+# Spreadsheets hold scraped prospect data: never commit them, wherever they
+# end up (including every folder under war/recruits, whose folder layout
+# itself IS committed via .gitkeep files). The Prospecting page's "Download template" is generated in the
+# browser (client/src/lib/prospectImport.ts), but if a template file is ever
+# checked in, it's the one exception.
+*.xlsx
+*.xls
+*.csv
+!prospect-import-template.xlsx
 war/fuckem/OPP1/strat-2/.state.json
