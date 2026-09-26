@@ -10,7 +10,7 @@
 - [ ] Redeploy with the Sync backfill/timestamp-repair fix and relative timestamps (none pushed yet)
 - [ ] Click "Sync now" again after that deploy — now repairs any existing message's wrong timestamp in place (not just new messages), and avatar backfill; confirm ordering/timestamps look right afterward across your existing conversations
 - [ ] Visually verify the new platform icon badges/filters, account filter, and relative timestamps in a real browser once deployed — only checked via typecheck/build/local scripted verification, no real render check
-- [ ] Now that real messages flow, clean up the temporary diagnostic `console.log` lines in `sync.ts`/`webhooks.ts` added while debugging the Development-mode block
+- [ ] Redeploy the log privacy fix (none pushed yet): DM text, webhook payloads, participant profiles and the Instagram OAuth token no longer go to Railway's logs.
 - [ ] Sync now fetches every message's detail on every run (not just new ones), to support timestamp repair — fine at current volume, but worth revisiting (e.g. only re-check messages from the last N days) if conversation history grows large enough that repeated full-history syncs become slow or hit rate limits
 - [ ] Once one account connects, add satellite accounts as Instagram Testers and connect each via "+ Connect another Instagram account"
 - [ ] If an existing whitelisted Twitch app/credentials exist, wire a real `TwitchAdapter` (same pattern as `InstagramAdapter`)

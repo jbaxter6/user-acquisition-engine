@@ -109,15 +109,13 @@ async function runSync(
     pageCount++;
     const pageRes = await metaFetch(account.id, "sync.list", nextUrl);
     const pageRaw = await pageRes.text();
-    console.log(
-      `Instagram conversations page ${pageCount} for @${account.username} (ig_user_id=${account.ig_user_id}):`,
-      pageRes.status,
-      pageRaw,
-    );
     if (!pageRes.ok) {
       throw new Error(`listing conversations failed: ${pageRaw}`);
     }
     const page = JSON.parse(pageRaw) as ConversationsListResponse;
+    console.log(
+      `Instagram conversations page ${pageCount} for @${account.username}: ${page.data.length} conversation(s), next=${Boolean(page.paging?.next)}`,
+    );
     conversations.push(...page.data);
     nextUrl = page.paging?.next;
   }
@@ -172,12 +170,7 @@ async function runSync(
         );
         continue;
       }
-      const detailRaw = await detailRes.text();
-      console.log(
-        `Message detail for ${messageId} (existing db row: ${existing?.id ?? "none"}):`,
-        detailRaw,
-      );
-      const detail = JSON.parse(detailRaw) as MessageDetailResponse;
+      const detail = (await detailRes.json()) as MessageDetailResponse;
       if (!detail.message) continue;
 
       const isOutbound = detail.from.id === account.ig_user_id;

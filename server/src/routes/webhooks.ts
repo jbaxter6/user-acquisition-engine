@@ -41,7 +41,11 @@ export function webhooksRouter(): Router {
   // says which of our accounts (main or satellite) the message came in on.
   router.post("/instagram", (req, res) => {
     const body = req.body as InstagramWebhookBody;
-    console.log("Instagram webhook received:", JSON.stringify(body));
+    // Log shape only — payloads carry DM text, which must not reach the host's logs.
+    console.log(
+      "Instagram webhook received:",
+      (body.entry ?? []).flatMap((e) => (e.changes ?? []).map((c) => c.field)),
+    );
 
     for (const entry of body.entry ?? []) {
       for (const change of entry.changes ?? []) {

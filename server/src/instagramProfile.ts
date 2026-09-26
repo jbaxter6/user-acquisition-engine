@@ -20,8 +20,10 @@ export async function fetchParticipantProfile(
 
   const res = await metaFetch(accountId, "profile", url);
   const raw = await res.text();
-  console.log(`Participant profile lookup for ${igsid}:`, res.status, raw);
-  if (!res.ok) return null;
+  if (!res.ok) {
+    console.error(`Participant profile lookup for ${igsid} failed:`, res.status, raw);
+    return null;
+  }
   const data = JSON.parse(raw) as { username?: string; profile_pic?: string };
   return { username: data.username, profilePicUrl: data.profile_pic };
 }

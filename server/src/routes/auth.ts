@@ -180,10 +180,6 @@ export function authRouter(): Router {
       const shortLivedRaw = (await shortLivedRes.json()) as
         | ShortLivedTokenResponse
         | { access_token: string };
-      console.log(
-        "Instagram short-lived token exchange response:",
-        JSON.stringify(shortLivedRaw),
-      );
       // Meta's docs describe this as `{ data: [{ access_token, ... }] }`, but
       // some app configs return the token object directly — handle both.
       const shortLivedToken =
@@ -192,7 +188,7 @@ export function authRouter(): Router {
           : shortLivedRaw.access_token;
       if (!shortLivedToken) {
         throw new Error(
-          `unexpected token exchange response shape: ${JSON.stringify(shortLivedRaw)}`,
+          `unexpected token exchange response shape: keys ${Object.keys(shortLivedRaw).join(", ")}`,
         );
       }
 
