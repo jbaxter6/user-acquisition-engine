@@ -1,38 +1,21 @@
 # Work Log
 
 ## Todos
-- [ ] Redeploy the "Download template" button on Prospecting (none pushed yet) — verified the generated file round-trips through the app's own parser/auto-mapper correctly, not yet clicked in a real browser
-- [ ] Redeploy and visually verify the new message templates feature (create/edit/archive, template picker in the prospect composer, effectiveness stats) — only checked via typecheck and a scripted API smoke test, no real browser render check
-- [ ] Redeploy the duplicate-message fix + startup cleanup pass (none pushed yet); click "Sync now" again afterward and confirm the "Bondo" thread (and others) now show one copy of each message with the correct original timestamp
-- [ ] Confirm exact current state of the Meta app (Live mode confirmed; unclear whether `instagram_business_manage_messages` is at Standard or Advanced Access, and whether the in-progress App Review submission still needs finishing or was superseded by publishing) — matters for whether non-tester creators can message in yet
-- [ ] Set `SITE_PASSWORD` in Railway's env vars (added to the code but not yet confirmed set in production)
-- [ ] Finish/confirm App Review submission for `instagram_business_manage_messages` if still required for full (non-tester) production use — screenshots/screencast requirements were mid-submission when messages started working
-- [ ] Redeploy with the Sync backfill/timestamp-repair fix and relative timestamps (none pushed yet)
-- [ ] Click "Sync now" again after that deploy — now repairs any existing message's wrong timestamp in place (not just new messages), and avatar backfill; confirm ordering/timestamps look right afterward across your existing conversations
-- [ ] Visually verify the new platform icon badges/filters, account filter, and relative timestamps in a real browser once deployed — only checked via typecheck/build/local scripted verification, no real render check
-- [ ] Redeploy the log privacy fix (none pushed yet): DM text, webhook payloads, participant profiles and the Instagram OAuth token no longer go to Railway's logs.
-- [ ] Sync now fetches every message's detail on every run (not just new ones), to support timestamp repair — fine at current volume, but worth revisiting (e.g. only re-check messages from the last N days) if conversation history grows large enough that repeated full-history syncs become slow or hit rate limits
+- [ ] Replies to manually-contacted prospects land in a second thread. "Mark sent manually" keys the conversation by username (`routes/prospects.ts`, `resolved_ig_user_id` is never set now that the Business Discovery send path is gone), but the webhook keys the reply by the sender's IGSID, and `upsertConversation` matches on external_id only. Needs a merge step (e.g. on the first inbound from an IGSID whose resolved username matches a username-keyed thread), or drop the unused `resolved_ig_user_id` column if we go another way
+- [ ] Confirm exact current state of the Meta app (Live mode confirmed; unclear whether `instagram_business_manage_messages` is at Standard or Advanced Access, and whether the in-progress App Review submission still needs finishing or was superseded by publishing). Matters for whether non-tester creators can message in yet
+- [ ] Finish/confirm App Review submission for `instagram_business_manage_messages` if still required for full (non-tester) production use. Screenshots/screencast requirements were mid-submission when messages started working
+- [ ] Sync now fetches every message's detail on every run (not just new ones), to support timestamp repair. Fine at current volume, but worth revisiting (e.g. only re-check messages from the last N days) if conversation history grows large enough that repeated full-history syncs become slow or hit rate limits
 - [ ] Once one account connects, add satellite accounts as Instagram Testers and connect each via "+ Connect another Instagram account"
 - [ ] If an existing whitelisted Twitch app/credentials exist, wire a real `TwitchAdapter` (same pattern as `InstagramAdapter`)
-- [ ] Choose scraping provider integration (e.g. Modash, Phantombuster) for the Discovery module — the actual roadmap item: automation that finds matching accounts by criteria, vs. today's manual Excel import
+- [ ] Choose scraping provider integration (e.g. Modash, Phantombuster) for the Discovery module. The actual roadmap item: automation that finds matching accounts by criteria, vs. today's manual Excel import
 - [ ] Design satellite account linking/config mechanism for the Distribution module (multiple connected accounts, not just one)
-- [ ] Add auth/login to the inbox app itself (currently unauthenticated, local-only)
 - [ ] Replace SQLite with a shared/hosted DB before multi-VA or production use
-- [ ] Redeploy the Prospecting page (Excel import, prospect cards, message/mark-contacted) — none of it pushed yet
-- [ ] Confirm whether Business Discovery's returned account ID actually works as a real messaging recipient ID — unverified assumption in `server/src/prospecting.ts`; the first real "Send via API" attempt on a prospect will tell us
-- [ ] Real cold-send to a prospect will likely fail with a Meta messaging-window error most of the time — expected, not a bug; "Mark sent manually" is the intended fallback, not an afterthought
-- [ ] Redeploy the "not yet engaged" avatar treatment + Sync's skip of doomed profile lookups (none pushed yet)
-- [ ] Redeploy multi-platform Prospecting import (platform column mapping, default-platform selector, platform filter, TikTok/Twitch manual-only messaging) — merged cleanly with the concurrent templates work, verified via typecheck/build/API smoke test, no browser check
-- [ ] Redeploy the Profiles page (none pushed yet) and click through it in a real browser on prod. Verified so far only in headless Chrome against a scratch DB, desktop and mobile
 - [ ] Decide the open questions in docs/profiles-architecture.md §9 (attribute list, weighted scoring, one platform per profile, "Profiles" vs "Personas"). Phase 1 shipped with the recommended defaults
 - [ ] Check which accounts are logged into `~/.outreach-chrome` (the `npm run chrome` window) AND `war/scraper/.browser-profile` (the fallback every run actually used until the 127.0.0.1 fix): per war/IMPORTANT.md, neither may be a Smooth account
 - [ ] Link same-creator accounts on upload when an enriched row came from one fuckem row with several socials (`prospect_links`)
 - [ ] Run a real logged-in scrape (Instagram + TikTok) and check the new sheet columns fill in. The readers were only tested against logged-out saved pages; the IG category label only renders when logged in
 - [ ] Save a logged-in Instagram profile page as a fixture (war/scraper/fixtures) to replace the simulated logged-in test; add the "and N more" links dialog so the full link list can be read
-- [ ] Redeploy the prospect profile-data import + card attributes (none pushed yet)
 - [ ] Sync `follower_count` / `is_verified_user` from Instagram's messaging API for prospects who've replied, into `prospect_attributes` with source `instagram_api`
-- [ ] Redeploy the Meta API usage meter (none pushed yet) and check the Instagram chip + panel in a real browser. Verified only via typecheck, unit tests, and the endpoint against a scratch DB
-- [ ] After the first real Meta call on the deployed server, read the `Meta usage headers seen:` log line and confirm which usage header graph.instagram.com sends (parser accepts both X-Business-Use-Case-Usage and X-App-Usage)
 
 ## Accomplishments
 ### 2026-09-23 (continued)
@@ -169,6 +152,12 @@
 - Split `war/recruits/` into `intercepts/` (fuckem, links only), `dossiers/` (`enrich` output, upload these) and `leads/` (scraper searches, already have stats); `enrich` takes a bare file name from `intercepts/`; existing sheets moved; `.gitignore` now ignores every `.xlsx`/`.xls`/`.csv` except `prospect-import-template.xlsx`
 - fuckem now saves into one folder per opp slot (`intercepts/opp1/`, `opp2/`, ...; slot number only); `enrich` finds a bare file name in any of them and writes to the matching `dossiers/opp<N>/`
 - Rewrote war/fuckem/HOWTOUSE.md as the 3-step find → enrich → upload pipeline, with a folder guide
+- Deployed and verified on prod: site password + login page, Inbox (platform badges/filters, account filter, relative timestamps, "not yet engaged" avatar ring), Sync (duplicate cleanup, timestamp repair, avatar backfill, ordering), Prospecting (multi-platform Excel import, template download, profile-data attributes, "Mark sent manually"), Templates tab, Profiles page (desktop + mobile), Meta API usage meter, and the log privacy fix.
+- Stopped logging DM text, webhook payloads, participant profiles and the Instagram OAuth token to the server logs (`sync.ts`, `routes/webhooks.ts`, `instagramProfile.ts`, `routes/auth.ts`).
+- Added CI (`.github/workflows/ci.yml`): server, client and scraper jobs run type-checks, lint (client), tests and builds on every push/PR. Needs no secrets
+- Added server route tests (51 new, 87 total): session gate, prospects, templates, profiles, inbox/webhook/send, Instagram connect/Sync/token revocation/disconnect. Real app on a random port (`createApp()` split out of `index.ts` into `app.ts`), throwaway DB per file, Meta API faked (`src/test/harness.ts`); `npm run typecheck` now covers test files
+- Added client tests (72) for `src/lib`: sheet import/column mapping, handle parsing, counts, relative time, profile criteria, API errors
+- Fixed, found by the new tests: Disconnect 500'd for any account with conversations/prospects (foreign keys), so it's now a soft disconnect (`accounts.disconnected_at`, token wiped) and reconnecting restores the same account and its threads; Sync over-counted its Meta calls (second-resolution timestamps), so it's now counted by call id; the import's Followers column dropped "12,500"/"1.2M"/"10k" values
 
 ## Documentation Index
 - [Project Overview](README.md) — vision, problem statement, and 3-module architecture
@@ -208,3 +197,5 @@
 - [Meta API usage meter](docs/meta-api-usage-meter.md) — plan + as-built notes: which Meta limits apply, where our calls come from, thresholds, navbar chip UI
 - [Meta API call wrapper](server/src/meta/metaFetch.ts) — the only way the server calls Meta; counts calls and stores Meta's usage reading per account
 - [WAR account safety rule](war/IMPORTANT.md) — why the scraper must never run logged into a Smooth social account, and the pre-run check
+- [CI workflow](.github/workflows/ci.yml) — what runs on every push: per-package type-check, lint, tests, build
+- [Server test harness](server/src/test/harness.ts) — `useTestServer()` (real app, throwaway DB) and `useFakeMeta()` for route tests

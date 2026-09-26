@@ -86,7 +86,7 @@ export function webhooksRouter(): Router {
           change.value?.message?.mid,
         );
         // Not awaited — avatar lookup shouldn't delay the webhook ack Meta expects.
-        if (account)
+        if (account && !account.disconnected_at)
           void backfillParticipantAvatar(conversation, account.access_token);
       }
     }

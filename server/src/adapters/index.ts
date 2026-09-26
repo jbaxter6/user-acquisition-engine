@@ -1,7 +1,7 @@
 import type { MessagingAdapter, Platform } from "./types.js";
 import { InstagramAdapter } from "./instagram.js";
 import { StubAdapter } from "./stub.js";
-import { getAccountById, listAccounts } from "../db.js";
+import { getActiveAccountById, listAccounts } from "../db.js";
 
 const tiktok = new StubAdapter("tiktok");
 const twitch = new StubAdapter("twitch");
@@ -13,7 +13,8 @@ const youtube = new StubAdapter("youtube");
  * callers check `.canSend` before relying on sendMessage().
  */
 export function getInstagramAdapterForAccount(accountId: number): MessagingAdapter {
-  const account = getAccountById(accountId);
+  // Disconnected accounts have no token: record sends as manual instead.
+  const account = getActiveAccountById(accountId);
   if (!account) return new StubAdapter("instagram");
   return new InstagramAdapter(account.id, account.ig_user_id, account.access_token);
 }

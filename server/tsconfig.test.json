@@ -1,0 +1,8 @@
+{
+  // Type-checks everything, tests included (tsconfig.json leaves tests out
+  // of the build). Used by `npm run typecheck` and CI.
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "noEmit": true, "rootDir": "." },
+  "include": ["src", "vitest.config.ts"],
+  "exclude": []
+}

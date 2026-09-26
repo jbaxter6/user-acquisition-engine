@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import {
   deleteAccount,
   getAccountById,
+  getActiveAccountById,
   listAccounts,
   upsertAccount,
 } from "../db.js";
@@ -87,7 +88,7 @@ export function authRouter(): Router {
   // exists (webhook delivery appears gated behind App Review even for
   // tester-to-tester conversations).
   router.post("/instagram/accounts/:id/sync", async (req, res) => {
-    const account = getAccountById(Number(req.params.id));
+    const account = getActiveAccountById(Number(req.params.id));
     if (!account) return res.status(404).json({ error: "account not found" });
 
     try {

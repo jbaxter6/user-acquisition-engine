@@ -85,14 +85,19 @@ export const ATTRIBUTE_FIELD_LABELS = Object.fromEntries(
 
 export type ImportMapping = Partial<Record<ProspectField | AttributeField, string>>;
 
+// A count cell: a number, or text like "12,500", "1.2M", "10k". Blank or
+// unreadable is undefined (unknown), never 0.
+function readCount(raw: unknown): number | undefined {
+  if (raw == null) return undefined;
+  if (typeof raw === "number") return Number.isFinite(raw) && raw >= 0 ? raw : undefined;
+  const s = String(raw).trim();
+  return s ? parseCount(s) ?? undefined : undefined;
+}
+
 // Blank cells return undefined (unknown), never 0 / false.
 function readCell(kind: ValueKind, raw: unknown, field: AttributeField): unknown {
   if (raw == null) return undefined;
-  if (kind === "count") {
-    if (typeof raw === "number") return Number.isFinite(raw) && raw >= 0 ? raw : undefined;
-    const s = String(raw).trim();
-    return s ? parseCount(s) ?? undefined : undefined;
-  }
+  if (kind === "count") return readCount(raw);
   const s = String(raw).trim();
   if (!s) return undefined;
   if (kind === "boolean") {
@@ -289,13 +294,12 @@ export function applyMapping(
     // The username cell may hold a bare handle, an @handle, or a full profile URL.
     const username = handleFromUrl(row[mapping.username]);
     if (!username) continue;
-    const followersRaw = mapping.followers ? row[mapping.followers] : undefined;
-    const followers = followersRaw != null && followersRaw !== "" ? Number(followersRaw) : undefined;
+    const followers = mapping.followers ? readCount(row[mapping.followers]) : undefined;
     out.push({
       username,
       platform: mapping.platform ? normalizePlatform(row[mapping.platform], defaultPlatform) : defaultPlatform,
       displayName: mapping.displayName ? String(row[mapping.displayName] ?? "").trim() || undefined : undefined,
-      followers: Number.isFinite(followers) ? followers : undefined,
+      followers,
       notes: mapping.notes ? String(row[mapping.notes] ?? "").trim() || undefined : undefined,
       email: mapping.email ? String(row[mapping.email] ?? "").trim() || undefined : undefined,
       attributes: readAttributes(row, mapping),

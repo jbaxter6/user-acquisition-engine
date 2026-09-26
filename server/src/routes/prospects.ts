@@ -7,6 +7,7 @@ import {
   ensureProspectForParticipant,
   findConversationByHandle,
   getAccountById,
+  getActiveAccountById,
   listConversationsByHandle,
   getConversationAvatarInfo,
   getFirstOutboundMessage,
@@ -214,7 +215,7 @@ export function prospectsRouter(): Router {
         return res
           .status(400)
           .json({ error: "accountId is required for Instagram prospects" });
-      if (!getAccountById(accountId))
+      if (!getActiveAccountById(accountId))
         return res.status(400).json({ error: "connected account not found" });
     }
     if (!text?.trim()) {

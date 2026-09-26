@@ -100,6 +100,10 @@ for (const migration of [
   "ALTER TABLE accounts ADD COLUMN profile_picture_url TEXT",
   // Set when Meta rejects the token (error 190); cleared on reconnect.
   "ALTER TABLE accounts ADD COLUMN token_invalid_at TEXT",
+  // Disconnect is a soft delete: conversations and prospects reference the
+  // account (foreign keys), and reconnecting the same Instagram account
+  // should bring its threads back. See deleteAccount.
+  "ALTER TABLE accounts ADD COLUMN disconnected_at TEXT",
   "ALTER TABLE conversations ADD COLUMN participant_avatar_url TEXT",
   "ALTER TABLE messages ADD COLUMN template_id INTEGER REFERENCES message_templates(id)",
   `CREATE TABLE IF NOT EXISTS prospect_channels (
@@ -311,6 +315,7 @@ export interface AccountRow {
   access_token: string;
   connected_at: string;
   token_invalid_at: string | null;
+  disconnected_at: string | null;
 }
 
 export interface ConversationRow {
@@ -1111,7 +1116,7 @@ export function listAccounts(platform = "instagram"): AccountRow[] {
     .prepare<
       [string],
       AccountRow
-    >("SELECT * FROM accounts WHERE platform = ? ORDER BY connected_at ASC")
+    >("SELECT * FROM accounts WHERE platform = ? AND disconnected_at IS NULL ORDER BY connected_at ASC")
     .all(platform);
 }
 
@@ -1145,6 +1150,7 @@ export function upsertAccount(input: {
        username = excluded.username,
        profile_picture_url = excluded.profile_picture_url,
        access_token = excluded.access_token,
+       disconnected_at = NULL,
        token_invalid_at = CASE
          WHEN excluded.access_token = accounts.access_token THEN accounts.token_invalid_at
          ELSE NULL
@@ -1171,8 +1177,21 @@ export function markAccountTokenInvalid(id: number): void {
   ).run(id);
 }
 
+/**
+ * Disconnects an account: hides it and wipes its token, but keeps the row so
+ * its conversations/prospects (which reference it) survive. Reconnecting the
+ * same Instagram account (upsertAccount) brings it back with its threads.
+ */
 export function deleteAccount(id: number): void {
-  db.prepare("DELETE FROM accounts WHERE id = ?").run(id);
+  db.prepare(
+    "UPDATE accounts SET disconnected_at = datetime('now'), access_token = '' WHERE id = ?",
+  ).run(id);
+}
+
+/** A connected (not disconnected) account, or undefined. */
+export function getActiveAccountById(id: number): AccountRow | undefined {
+  const account = getAccountById(id);
+  return account && !account.disconnected_at ? account : undefined;
 }
 
 export function upsertConversation(
@@ -1809,19 +1828,25 @@ export function saveMetaUsageReading(
   );
 }
 
-/** SQLite's current time, in the same format as created_at columns. */
-export function sqliteNow(): string {
-  return (db.prepare("SELECT datetime('now') AS now").get() as { now: string })
-    .now;
+/** Id of the newest Meta call row: a watermark for "calls made after this". */
+export function lastMetaCallId(): number {
+  return (
+    db.prepare("SELECT COALESCE(MAX(id), 0) AS id FROM meta_api_calls").get() as { id: number }
+  ).id;
 }
 
-/** Counts this account's Meta calls since `since` and stores it as the last Sync's cost. */
-export function recordSyncCost(accountId: number, since: string): number {
+/**
+ * Counts this account's Meta calls after `afterId` (from lastMetaCallId) and
+ * stores it as the last Sync's cost. By id, not time: created_at only has
+ * one-second resolution, so a time cutoff also counted calls made just
+ * before the sync started.
+ */
+export function recordSyncCost(accountId: number, afterId: number): number {
   const { calls } = db
     .prepare(
-      "SELECT COUNT(*) AS calls FROM meta_api_calls WHERE account_id = ? AND created_at >= ?",
+      "SELECT COUNT(*) AS calls FROM meta_api_calls WHERE account_id = ? AND id > ?",
     )
-    .get(accountId, since) as { calls: number };
+    .get(accountId, afterId) as { calls: number };
   db.prepare(
     `INSERT INTO meta_api_usage (account_id, last_sync_calls, last_sync_at)
      VALUES (?, ?, datetime('now'))

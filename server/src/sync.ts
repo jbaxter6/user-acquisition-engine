@@ -7,7 +7,7 @@ import {
   insertMessage,
   recomputeConversationLastMessageAt,
   recordSyncCost,
-  sqliteNow,
+  lastMetaCallId,
   updateMessageCreatedAt,
   upsertAccount,
   upsertConversation,
@@ -56,12 +56,12 @@ export async function syncInstagramAccount(
 ): Promise<{ conversations: number; newMessages: number; apiCalls: number }> {
   // Record what this sync cost in Meta calls (shown in the usage meter),
   // even if it fails partway.
-  const startedAt = sqliteNow();
+  const callsBefore = lastMetaCallId();
   try {
     const result = await runSync(account);
-    return { ...result, apiCalls: recordSyncCost(account.id, startedAt) };
+    return { ...result, apiCalls: recordSyncCost(account.id, callsBefore) };
   } catch (err) {
-    recordSyncCost(account.id, startedAt);
+    recordSyncCost(account.id, callsBefore);
     throw err;
   }
 }
