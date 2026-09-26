@@ -1,5 +1,6 @@
-# Type-checks, lints, tests and builds every package on each push and PR,
-# so breakage shows up before a deploy. Tests use throwaway databases and a
+# Type-checks, lints, tests and builds the app (server + client) on each
+# push and PR, so breakage shows up before a deploy. war/ is left out on
+# purpose: it's local tooling, not part of the deployed app. Tests use throwaway databases and a
 # faked Meta API: no secrets or network access needed.
 name: CI
 
@@ -48,20 +49,3 @@ jobs:
       - run: npm test
       - run: npm run build
 
-  scraper:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: war/scraper
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: war/scraper/package-lock.json
-      - run: npm ci
-      - run: npx tsc --noEmit -p tsconfig.json
-      # The profile-reader tests drive the runner's preinstalled Chrome
-      # against saved pages (fixtures/); nothing hits Instagram or TikTok.
-      - run: npm test
