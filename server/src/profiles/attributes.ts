@@ -13,7 +13,11 @@ export type AttributeType =
   | "number"
   | "enum"
   | "keywords"
-  | "boolean";
+  | "boolean"
+  // Display-only types: stored and shown on prospect cards, never offered
+  // as Profile criteria.
+  | "text"
+  | "list";
 
 export type Operator =
   | "between"
@@ -36,10 +40,13 @@ export interface AttributeDef {
   unit?: string;
   options?: { value: string; label: string }[];
   description: string;
-  // Whether any prospect data source populates this today. Criteria on
-  // attributes without data are allowed (they start counting once a source
-  // comes online) — the UI just flags them.
-  hasData: boolean;
+  // False for display-only attributes (pronouns, links…) — the Profiles
+  // editor won't offer them and validateCriteria rejects them.
+  filterable: boolean;
+  // Platforms where some prospect data source (scraper → import) fills this
+  // today. Criteria on attributes without data are allowed (they start
+  // counting once a source comes online) — the UI just flags them.
+  hasData: Platform[];
 }
 
 export const OPERATORS_BY_TYPE: Record<AttributeType, Operator[]> = {
@@ -49,6 +56,8 @@ export const OPERATORS_BY_TYPE: Record<AttributeType, Operator[]> = {
   enum: ["in", "not_in"],
   keywords: ["contains_any", "contains_none"],
   boolean: ["is"],
+  text: [],
+  list: [],
 };
 
 const ALL: Platform[] = ["instagram", "tiktok", "twitch", "youtube"];
@@ -112,7 +121,30 @@ export const ATTRIBUTES: AttributeDef[] = [
     type: "count",
     unit: "followers",
     description: "Total follower count.",
-    hasData: true,
+    filterable: true,
+    hasData: ["instagram", "tiktok", "twitch"],
+  },
+  {
+    key: "following",
+    label: "Following",
+    group: "audience",
+    platforms: ["instagram", "tiktok"],
+    type: "count",
+    unit: "following",
+    description: "How many accounts they follow.",
+    filterable: true,
+    hasData: ["instagram", "tiktok"],
+  },
+  {
+    key: "likes_total",
+    label: "Total likes",
+    group: "audience",
+    platforms: ["tiktok"],
+    type: "count",
+    unit: "likes",
+    description: "Lifetime likes across all videos, as shown on the profile (rounded, e.g. 2.7B).",
+    filterable: true,
+    hasData: ["tiktok"],
   },
   {
     key: "subscribers",
@@ -122,7 +154,8 @@ export const ATTRIBUTES: AttributeDef[] = [
     type: "count",
     unit: "subscribers",
     description: "Channel subscriber count.",
-    hasData: false,
+    filterable: true,
+    hasData: [],
   },
   {
     key: "engagement_rate",
@@ -132,7 +165,8 @@ export const ATTRIBUTES: AttributeDef[] = [
     type: "percent",
     unit: "%",
     description: "Average (likes + comments) per post, as a % of followers.",
-    hasData: false,
+    filterable: true,
+    hasData: [],
   },
   {
     key: "avg_views",
@@ -142,7 +176,8 @@ export const ATTRIBUTES: AttributeDef[] = [
     type: "count",
     unit: "views",
     description: "Average views per post (Reels on Instagram).",
-    hasData: false,
+    filterable: true,
+    hasData: [],
   },
   {
     key: "avg_concurrent_viewers",
@@ -152,7 +187,8 @@ export const ATTRIBUTES: AttributeDef[] = [
     type: "count",
     unit: "viewers",
     description: "Average concurrent viewers across recent streams.",
-    hasData: false,
+    filterable: true,
+    hasData: [],
   },
   // ---- Content ----
   {
@@ -163,7 +199,8 @@ export const ATTRIBUTES: AttributeDef[] = [
     type: "count",
     unit: "posts",
     description: "Lifetime number of posts / videos.",
-    hasData: false,
+    filterable: true,
+    hasData: ["instagram"],
   },
   {
     key: "posts_per_week",
@@ -173,7 +210,8 @@ export const ATTRIBUTES: AttributeDef[] = [
     type: "number",
     unit: "/ week",
     description: "Recent posting cadence.",
-    hasData: false,
+    filterable: true,
+    hasData: [],
   },
   {
     key: "hours_streamed_per_week",
@@ -183,7 +221,8 @@ export const ATTRIBUTES: AttributeDef[] = [
     type: "number",
     unit: "hrs / week",
     description: "Recent average weekly stream time.",
-    hasData: false,
+    filterable: true,
+    hasData: [],
   },
   {
     key: "primary_category",
@@ -193,7 +232,8 @@ export const ATTRIBUTES: AttributeDef[] = [
     type: "keywords",
     description:
       "Content niche (e.g. fitness, beauty) — or primary game on Twitch.",
-    hasData: false,
+    filterable: true,
+    hasData: ["instagram"],
   },
   {
     key: "bio_keywords",
@@ -202,7 +242,8 @@ export const ATTRIBUTES: AttributeDef[] = [
     platforms: ALL,
     type: "keywords",
     description: "Words appearing in the account's bio / channel description.",
-    hasData: false,
+    filterable: true,
+    hasData: [],
   },
   // ---- Identity ----
   {
@@ -217,7 +258,8 @@ export const ATTRIBUTES: AttributeDef[] = [
       { value: "personal", label: "Personal" },
     ],
     description: "Instagram account type.",
-    hasData: false,
+    filterable: true,
+    hasData: [],
   },
   {
     key: "broadcaster_type",
@@ -231,7 +273,8 @@ export const ATTRIBUTES: AttributeDef[] = [
       { value: "none", label: "Neither" },
     ],
     description: "Twitch Partner / Affiliate status.",
-    hasData: false,
+    filterable: true,
+    hasData: [],
   },
   {
     key: "verified",
@@ -240,7 +283,8 @@ export const ATTRIBUTES: AttributeDef[] = [
     platforms: ["instagram", "tiktok", "youtube"],
     type: "boolean",
     description: "Has the platform's verified badge.",
-    hasData: false,
+    filterable: true,
+    hasData: ["instagram", "tiktok"],
   },
   {
     key: "country",
@@ -250,7 +294,8 @@ export const ATTRIBUTES: AttributeDef[] = [
     type: "enum",
     options: COUNTRIES,
     description: "Where the creator is based.",
-    hasData: false,
+    filterable: true,
+    hasData: [],
   },
   {
     key: "language",
@@ -260,7 +305,8 @@ export const ATTRIBUTES: AttributeDef[] = [
     type: "enum",
     options: LANGUAGES,
     description: "Primary language of their content.",
-    hasData: false,
+    filterable: true,
+    hasData: [],
   },
   {
     key: "has_email",
@@ -269,7 +315,59 @@ export const ATTRIBUTES: AttributeDef[] = [
     platforms: ALL,
     type: "boolean",
     description: "We have an email address on file for them.",
-    hasData: true,
+    filterable: true,
+    hasData: ALL,
+  },
+  {
+    key: "is_private",
+    label: "Private account",
+    group: "identity",
+    platforms: ["instagram", "tiktok"],
+    type: "boolean",
+    description: "Their posts are hidden from non-followers.",
+    filterable: true,
+    hasData: ["instagram", "tiktok"],
+  },
+  // ---- Display-only (shown on prospect cards, not filterable) ----
+  {
+    key: "pronouns",
+    label: "Pronouns",
+    group: "identity",
+    platforms: ["instagram"],
+    type: "text",
+    description: "As listed on their profile. For personalizing messages, not for targeting.",
+    filterable: false,
+    hasData: ["instagram"],
+  },
+  {
+    key: "links",
+    label: "Links",
+    group: "identity",
+    platforms: ALL,
+    type: "list",
+    description: "Link(s) in bio.",
+    filterable: false,
+    hasData: ["instagram", "tiktok"],
+  },
+  {
+    key: "mentions",
+    label: "Mentioned accounts",
+    group: "identity",
+    platforms: ALL,
+    type: "list",
+    description: "@handles named in their bio — often a second account or collaborator.",
+    filterable: false,
+    hasData: ["instagram", "tiktok"],
+  },
+  {
+    key: "highlights",
+    label: "Highlights",
+    group: "content",
+    platforms: ["instagram"],
+    type: "list",
+    description: "Story highlight titles.",
+    filterable: false,
+    hasData: ["instagram"],
   },
 ];
 
@@ -341,6 +439,10 @@ export function validateCriteria(input: unknown, platform: Platform): Result {
     const def = typeof c.attribute === "string" ? getAttribute(c.attribute) : undefined;
     if (!def) {
       errors.push(`${at}: unknown attribute "${String(c.attribute)}"`);
+      return;
+    }
+    if (!def.filterable) {
+      errors.push(`${at}: "${def.label}" can't be used as a criterion`);
       return;
     }
     if (!def.platforms.includes(platform)) {
@@ -452,4 +554,48 @@ export function incompatibleCriteria(
   platform: Platform,
 ): Criterion[] {
   return criteria.filter((c) => !getAttribute(c.attribute)?.platforms.includes(platform));
+}
+
+// ---- Prospect attribute values ----
+
+const MAX_TEXT = 500;
+const MAX_LIST_ITEM = 200;
+
+// Validates one observed value (from an import or the scraper) for storage
+// in prospect_attributes. Returns the normalized value, or undefined if it
+// doesn't fit the attribute — callers skip those rather than failing the
+// whole row.
+export function normalizeAttributeValue(
+  def: AttributeDef,
+  value: unknown,
+): number | boolean | string | string[] | undefined {
+  switch (def.type) {
+    case "count":
+    case "number":
+    case "percent": {
+      if (!isNonNegNumber(value)) return undefined;
+      if (def.type === "percent" && value > 100) return undefined;
+      return value;
+    }
+    case "boolean":
+      return typeof value === "boolean" ? value : undefined;
+    case "enum": {
+      if (typeof value !== "string") return undefined;
+      return def.options?.some((o) => o.value === value) ? value : undefined;
+    }
+    case "text": {
+      if (typeof value !== "string" || !value.trim()) return undefined;
+      return value.trim().slice(0, MAX_TEXT);
+    }
+    case "keywords":
+    case "list": {
+      const items = (Array.isArray(value) ? value : [value])
+        .filter((v): v is string => typeof v === "string")
+        .map((v) => v.trim().slice(0, MAX_LIST_ITEM))
+        .map((v) => (def.type === "keywords" ? v.toLowerCase() : v))
+        .filter(Boolean);
+      const unique = Array.from(new Set(items)).slice(0, MAX_LIST_ITEMS);
+      return unique.length ? unique : undefined;
+    }
+  }
 }

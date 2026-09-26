@@ -60,6 +60,10 @@ export function defaultCriterion(
       return { ...base, operator: "contains_any", value: [] };
     case "boolean":
       return { ...base, operator: "is", value: true };
+    case "text":
+    case "list":
+      // Display-only attributes are filtered out of the editor's picker.
+      throw new Error(`${def.key} can't be used as a criterion`);
   }
 }
 

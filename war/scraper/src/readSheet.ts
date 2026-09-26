@@ -1,8 +1,15 @@
 import * as XLSX from "xlsx";
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { key } from "./known.js";
 import type { Platform } from "./types.js";
+
+// XLSX.readFile isn't available in xlsx's ESM build (what tsx loads), so read
+// the bytes ourselves — works under both tsx and vitest.
+function loadRows(file: string): Record<string, unknown>[] {
+  const wb = XLSX.read(readFileSync(file));
+  return XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[wb.SheetNames[0]], { defval: "" });
+}
 
 export interface Account {
   platform: Platform;
@@ -45,8 +52,7 @@ const header = (row: Record<string, unknown>, name: string) =>
  *     columns (fuckem), falling back to `<Platform> Username` columns
  */
 export function readAccounts(file: string): Account[] {
-  const wb = XLSX.readFile(file);
-  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[wb.SheetNames[0]], { defval: "" });
+  const rows = loadRows(file);
   if (!rows.length) return [];
 
   const out = new Map<string, Account>();
@@ -90,8 +96,7 @@ export function alreadyEnriched(outDir: string, inputBase: string): Set<string> 
   if (!existsSync(outDir)) return done;
   for (const f of readdirSync(outDir)) {
     if (!f.startsWith(`${inputBase}-enriched`) || !f.endsWith(".xlsx")) continue;
-    const wb = XLSX.readFile(path.join(outDir, f));
-    for (const row of XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[wb.SheetNames[0]])) {
+    for (const row of loadRows(path.join(outDir, f))) {
       if (row.Username && row.Platform && row.Followers !== undefined && row.Followers !== "") {
         done.add(key(String(row.Platform), String(row.Username)));
       }

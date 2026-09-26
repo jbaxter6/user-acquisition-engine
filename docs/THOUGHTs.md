@@ -2,5 +2,20 @@ Scraper should open chrome driver navigate to instagram, search the searchbar fo
 
 It should do the same for Tiktok so we can ensure we get some key metrics per profile like followers/followercount and etc.
 
-Then when we upload we should see all those attributes we captured when we used the scraper on the prospect card.
+Then when we upload we should see all those attributes we captured when we used the scraper on the prospect card thats in the ui.
+
+On our profiles page we should be able  create personas
+
+Instagram i would i have a field that says 
+
+Follower count > | <  x
+Following count > | < x
+
+Tiktok would likely be identical.
+
+This is for our cold prospecting.
+
+Once they message us back we can start syncing profiles via the api.  
+
+I hope that makes sense
 

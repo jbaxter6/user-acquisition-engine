@@ -1,8 +1,87 @@
 # Instagram Profile Data — What We Can Collect
 
-Status: **Draft for review**. No code changes yet.
+Status: **MVP built (2026-09-25)**, not yet run against a live logged-in
+scrape. The rest of this doc is the longer-term inventory.
 Feeds Phase 2 (prospect attributes) and Phase 3 (matching) of
 [profiles-architecture.md](profiles-architecture.md).
+
+## MVP: header-only, both platforms (from docs/THOUGHTs.md)
+
+Decisions:
+- **IG discovery unchanged.** It keeps finding handles from the keyword
+  page's own background responses. Profile *data* comes from the screen only.
+- **TikTok profile reads move to the screen.** It currently parses the
+  page's embedded `__UNIVERSAL_DATA_FOR_REHYDRATION__` JSON, which holds far
+  more than is displayed. It now reads the `data-e2e` elements instead.
+- **Excel stays the handoff.** A human reviews each sheet before uploading;
+  a direct POST to the app is a later step.
+
+Scope (light depth only, no hovers or post clicks yet):
+
+| | Instagram | TikTok |
+|---|---|---|
+| Counts | followers (exact, from the tooltip), following, posts | followers, following, likes (as displayed, e.g. "163M") |
+| Identity | display name, pronouns, category label, verified | display name, verified |
+| Bio | bio text, @mentions, email in bio | bio text, @mentions, email in bio |
+| Other | first link + "and N more" count, highlight titles, private | link, private |
+
+Verified against live pages (logged out) saved 2026-09-25:
+- IG header: bio is the `span` inside `header div[role=button]`, the link
+  sits in `header button:has(svg[aria-label="Link icon"])`, the verified
+  badge is `svg[aria-label="Verified"]`, the exact follower count is in a
+  `span[title]`, and highlights are anchors labelled "View … highlight". The
+  `og:description` meta has **stale** counts, so it's used only as a
+  fallback (e.g. posts, which the logged-out header omits).
+- TikTok: `data-e2e` = `user-title`, `user-subtitle`, `following-count`,
+  `followers-count`, `likes-count`, `user-bio`, `user-link`; the verified
+  badge is the `svg` right after `user-subtitle`.
+
+App side (Phase 2 of profiles-architecture.md, narrowed):
+`prospect_attributes` table; the import maps the new columns onto registry
+attributes; prospect cards show them; the registry gains `following`,
+`likes_total` and `is_private`, plus display-only (non-filterable) `pronouns`,
+`links`, `mentions` and `highlights`.
+
+### Enriching sheets that only have links (fuckem)
+
+fuckem finds creators on opportunity sites and records their social
+*links*; it never visits the social profiles, so its sheets have no
+follower counts. Rather than teaching fuckem to read profiles (its browser
+isn't logged in, and Instagram walls logged-out visitors fast), the scraper
+gets an `enrich` command that fills in any sheet in `war/recruits`:
+
+```
+cd war/scraper
+npm run enrich -- ../recruits/<sheet>.xlsx [--min N] [--max N] [--refresh]
+```
+
+- Reads either layout: one row per creator (fuckem's `Instagram`/`TikTok`/
+  `YouTube`/`Twitch` link columns) or one row per account (the scraper's
+  `Username` + `Platform`).
+- Visits each Instagram/TikTok account in the logged-in Chrome using the
+  same on-screen readers, and writes `<sheet>-enriched.xlsx` in the
+  scraper's column format, which the app already maps.
+- YouTube/Twitch accounts pass through as rows without stats (no YouTube
+  reader yet; the Twitch source uses Twitch's API, which the UI-only rule
+  rules out here). Accounts that fail to load are kept with blank stats,
+  never dropped.
+- Keeps everyone by default; `--min`/`--max` optionally drop accounts
+  outside a follower range.
+- **Resume:** skips accounts already enriched from the same input (read from
+  its earlier `-enriched` outputs), so rerunning after a Ctrl-C continues
+  where it stopped. It doesn't skip by `seen.json`, because that also holds
+  handles copied from the app, including bare fuckem uploads that still
+  need stats. `--refresh` re-reads everything.
+- Ctrl-C/crash saves `-enriched-partial.xlsx`; enriched handles are added to
+  `seen.json` so searches don't rediscover them.
+
+Follow-up: when one input row holds several accounts (same creator on IG +
+TikTok), link them as the same person on upload (`prospect_links`).
+
+Later: clicking "and N more" for the full links list (needs a logged-in
+fixture to build against), hover/post depth, and Linktree visits.
+Instagram's messaging API sync of `follower_count`/`is_verified_user` for
+people who've replied is also later.
 
 ## Ground rule
 

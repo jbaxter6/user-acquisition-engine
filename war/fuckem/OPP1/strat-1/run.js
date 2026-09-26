@@ -1,6 +1,6 @@
 import { chromium } from 'playwright';
 import { fileURLToPath } from 'node:url';
-import { saveProspects } from '../../lib/saveProspects.js';
+import { runAndSave } from '../../lib/gracefulExit.js';
 
 function assertTargetUrl() {
   const value = (process.env.OPP1_URL || '').trim();
@@ -126,7 +126,17 @@ function extractSocialsFromProfile(page) {
   });
 }
 
-export async function runStrategy() {
+// Same record can be reached twice; keep the first per name + profile URL.
+function dedupe(records) {
+  const unique = new Map();
+  for (const record of records) {
+    const key = `${record.name}|${record.profileUrl}`;
+    if (!unique.has(key)) unique.set(key, record);
+  }
+  return [...unique.values()];
+}
+
+export async function runStrategy({ onPartial } = {}) {
   const targetUrl = assertTargetUrl();
   const browser = await chromium.launch({ headless: true });
 
@@ -139,6 +149,8 @@ export async function runStrategy() {
 
     const candidates = await extractProfileCandidates(page);
     const results = [];
+    // If the run is interrupted, whatever's in `results` gets saved.
+    onPartial?.(() => dedupe(results));
 
     for (const item of candidates) {
       const handle = extractHandle(item.title);
@@ -182,13 +194,8 @@ export async function runStrategy() {
       }
     }
 
-    const unique = new Map();
-    for (const record of results) {
-      const key = `${record.name}|${record.profileUrl}`;
-      if (!unique.has(key)) unique.set(key, record);
-    }
-
-    return { source: targetUrl, count: unique.size, prospects: [...unique.values()] };
+    const prospects = dedupe(results);
+    return { source: targetUrl, count: prospects.length, prospects };
   } finally {
     await browser.close();
   }
@@ -196,10 +203,5 @@ export async function runStrategy() {
 
 // `npm run opp1strat1` runs this file directly: scrape, then save to war/recruits.
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  runStrategy()
-    .then((result) => saveProspects('OPP1/strat-1', result.prospects))
-    .catch((error) => {
-      console.error(error instanceof Error ? error.message : error);
-      process.exit(1);
-    });
+  runAndSave('OPP1/strat-1', runStrategy).catch(() => process.exit(1));
 }

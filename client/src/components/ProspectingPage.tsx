@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import type {
@@ -12,14 +12,17 @@ import {
   detectWideLayout,
   downloadProspectTemplate,
   expandWideRows,
+  ATTRIBUTE_FIELD_LABELS,
+  ATTRIBUTE_FIELDS,
   FIELD_LABELS,
   parseSpreadsheet,
   PROSPECT_FIELDS,
   type MappedProspect,
   type ParsedSheet,
   type WideExpansion,
-  type ProspectField,
+  type ImportMapping,
 } from "../lib/prospectImport";
+import { ProspectAttributes } from "./ProspectAttributes";
 import { Avatar } from "./Avatar";
 import { PlatformBadge } from "./PlatformBadge";
 import { PlatformIcon } from "./PlatformIcon";
@@ -120,7 +123,7 @@ export function ProspectingPage() {
   const importPanelRef = useRef<HTMLDivElement>(null);
   const [sheet, setSheet] = useState<ParsedSheet | null>(null);
   const [mapping, setMapping] = useState<
-    Partial<Record<ProspectField, string>>
+    ImportMapping
   >({});
   // Set when the sheet is one-row-per-creator (Instagram/TikTok/... columns);
   // then there's nothing to map, just a summary and Import.
@@ -311,7 +314,15 @@ export function ProspectingPage() {
     try {
       const result = await api.bulkImportProspects(mapped);
       setImportResult(
-        `Imported ${result.inserted} new prospect(s), skipped ${result.skipped} already on file.`,
+        [
+          `Imported ${result.inserted} new prospect(s), skipped ${result.skipped} already on file.`,
+          result.enriched ? `Refreshed profile data on ${result.enriched} existing prospect(s).` : "",
+          result.attributesDropped
+            ? `${result.attributesDropped} profile value(s) didn't fit their field and were skipped.`
+            : "",
+        ]
+          .filter(Boolean)
+          .join(" "),
       );
       setSheet(null);
       setWide(null);
@@ -460,26 +471,37 @@ export function ProspectingPage() {
             </label>
 
             <div className="prospecting__mapping-grid">
-              {PROSPECT_FIELDS.map((field) => (
-                <label key={field} className="prospecting__mapping-row">
-                  <span>{FIELD_LABELS[field]}</span>
-                  <select
-                    value={mapping[field] ?? ""}
-                    onChange={(e) =>
-                      setMapping((m) => ({
-                        ...m,
-                        [field]: e.target.value || undefined,
-                      }))
-                    }
-                  >
-                    <option value="">— none —</option>
-                    {sheet.headers.map((h) => (
-                      <option key={h} value={h}>
-                        {h}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+              {[...PROSPECT_FIELDS, ...ATTRIBUTE_FIELDS].map((field, i) => (
+                <Fragment key={field}>
+                  {i === PROSPECT_FIELDS.length && (
+                    <p className="prospecting__mapping-section">
+                      Profile data (scraper columns, optional)
+                    </p>
+                  )}
+                  <label className="prospecting__mapping-row">
+                    <span>
+                      {field in FIELD_LABELS
+                        ? FIELD_LABELS[field as keyof typeof FIELD_LABELS]
+                        : ATTRIBUTE_FIELD_LABELS[field as keyof typeof ATTRIBUTE_FIELD_LABELS]}
+                    </span>
+                    <select
+                      value={mapping[field] ?? ""}
+                      onChange={(e) =>
+                        setMapping((m) => ({
+                          ...m,
+                          [field]: e.target.value || undefined,
+                        }))
+                      }
+                    >
+                      <option value="">— none —</option>
+                      {sheet.headers.map((h) => (
+                        <option key={h} value={h}>
+                          {h}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </Fragment>
               ))}
             </div>
             <button
@@ -929,13 +951,9 @@ function ProspectCard({
         </div>
       )}
 
-      {(prospect.followers != null || prospect.notes) && (
+      {(prospect.followers != null || prospect.notes || prospect.attributes) && (
         <div className="prospect-card__about">
-          {prospect.followers != null && (
-            <p className="prospect-card__meta">
-              {prospect.followers.toLocaleString()} followers
-            </p>
-          )}
+          <ProspectAttributes prospect={prospect} />
           {prospect.notes && (
             <p className="prospect-card__notes" title={prospect.notes}>
               {prospect.notes}

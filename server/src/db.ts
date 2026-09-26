@@ -149,6 +149,19 @@ for (const migration of [
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     archived_at TEXT
   )`,
+  // Observed facts about a prospect (following count, verified, links…),
+  // keyed by the attribute registry (profiles/attributes.ts) so every source
+  // — spreadsheet import, scraper, later the messaging API — writes one
+  // place and the matcher reads one place. Latest value per attribute;
+  // source + observed_at say where/when it came from.
+  `CREATE TABLE IF NOT EXISTS prospect_attributes (
+    prospect_id INTEGER NOT NULL REFERENCES prospects(id) ON DELETE CASCADE,
+    attribute TEXT NOT NULL,
+    value_json TEXT NOT NULL,
+    source TEXT NOT NULL,
+    observed_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (prospect_id, attribute)
+  )`,
 ]) {
   try {
     db.exec(migration);
@@ -356,6 +369,53 @@ export interface ProspectInput {
   notes?: string;
   email?: string;
   source?: string;
+  // Already validated against the registry (routes/prospects.ts).
+  attributes?: Record<string, unknown>;
+}
+
+export interface ProspectAttributeValue {
+  value: unknown;
+  source: string;
+  observed_at: string;
+}
+
+export function listProspectAttributes(
+  prospectId: number,
+): Record<string, ProspectAttributeValue> {
+  const rows = db
+    .prepare<
+      [number],
+      { attribute: string; value_json: string; source: string; observed_at: string }
+    >("SELECT attribute, value_json, source, observed_at FROM prospect_attributes WHERE prospect_id = ?")
+    .all(prospectId);
+  return Object.fromEntries(
+    rows.map((r) => [
+      r.attribute,
+      { value: JSON.parse(r.value_json), source: r.source, observed_at: r.observed_at },
+    ]),
+  );
+}
+
+// Latest observation wins: re-importing a fresher sheet updates values.
+export function upsertProspectAttributes(
+  prospectId: number,
+  attributes: Record<string, unknown>,
+  source: string,
+): number {
+  const stmt = db.prepare(
+    `INSERT INTO prospect_attributes (prospect_id, attribute, value_json, source, observed_at)
+     VALUES (?, ?, ?, ?, datetime('now'))
+     ON CONFLICT(prospect_id, attribute) DO UPDATE SET
+       value_json = excluded.value_json,
+       source = excluded.source,
+       observed_at = excluded.observed_at`,
+  );
+  let n = 0;
+  for (const [key, value] of Object.entries(attributes)) {
+    stmt.run(prospectId, key, JSON.stringify(value), source);
+    n++;
+  }
+  return n;
 }
 
 export type ProspectSort = "recent" | "newest" | "name";
@@ -949,7 +1009,14 @@ export function linkProspectManager(
   return getProspectById(prospectId)!;
 }
 
-export function bulkInsertProspects(prospects: ProspectInput[]): number {
+// Inserts new prospects (existing handles are left as-is) and records any
+// attributes on both new and existing ones — so re-importing a fresher
+// scraper sheet refreshes the numbers without touching manual edits to the
+// prospect itself.
+export function bulkInsertProspects(prospects: ProspectInput[]): {
+  inserted: number;
+  enriched: number;
+} {
   const insert = db.prepare(
     `INSERT INTO prospects (platform, username, display_name, followers, notes, email, source)
      VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -957,7 +1024,9 @@ export function bulkInsertProspects(prospects: ProspectInput[]): number {
   );
   const insertAll = db.transaction((rows: ProspectInput[]) => {
     let inserted = 0;
+    let enriched = 0;
     for (const p of rows) {
+      const source = p.source ?? "excel_upload";
       const result = insert.run(
         p.platform,
         p.username,
@@ -965,22 +1034,25 @@ export function bulkInsertProspects(prospects: ProspectInput[]): number {
         p.followers ?? null,
         p.notes ?? null,
         p.email ?? null,
-        p.source ?? "excel_upload",
+        source,
       );
+      const prospect = getProspectByUsername(p.platform, p.username);
+      if (!prospect) continue;
       if (result.changes > 0) {
         inserted++;
-        const prospect = getProspectByUsername(p.platform, p.username);
-        if (prospect) {
-          attachProspectChannel(
-            prospect.id,
-            prospect.platform,
-            prospect.username,
-            prospect.conversation_id ?? null,
-          );
-        }
+        attachProspectChannel(
+          prospect.id,
+          prospect.platform,
+          prospect.username,
+          prospect.conversation_id ?? null,
+        );
+      }
+      if (p.attributes && Object.keys(p.attributes).length) {
+        upsertProspectAttributes(prospect.id, p.attributes, source);
+        if (result.changes === 0) enriched++;
       }
     }
-    return inserted;
+    return { inserted, enriched };
   });
   return insertAll(prospects);
 }

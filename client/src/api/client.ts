@@ -135,7 +135,13 @@ export const api = {
   },
 
   bulkImportProspects: (prospects: MappedProspect[]) =>
-    request<{ received: number; inserted: number; skipped: number }>(
+    request<{
+      received: number;
+      inserted: number;
+      skipped: number;
+      enriched: number;
+      attributesDropped: number;
+    }>(
       "/api/prospects/bulk",
       {
         method: "POST",

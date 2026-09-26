@@ -1,4 +1,5 @@
 import type { Platform } from "../types";
+import { parseCount } from "./formatCount";
 
 export interface ParsedSheet {
   headers: string[];
@@ -40,6 +41,74 @@ export const PROSPECT_FIELDS: ProspectField[] = [
 ];
 export { FIELD_LABELS };
 
+// ---- Profile data columns (what the scraper writes; see war/scraper) ----
+// Each maps onto an attribute registry key (server/src/profiles/attributes.ts).
+// The server re-validates every value and drops any that don't fit the
+// attribute or the row's platform, so a TikTok-only column on an Instagram
+// row is harmless.
+
+export type AttributeField =
+  | "following"
+  | "posts"
+  | "likes"
+  | "verified"
+  | "private"
+  | "category"
+  | "pronouns"
+  | "links"
+  | "mentions"
+  | "highlights";
+
+type ValueKind = "count" | "boolean" | "text" | "list";
+
+const ATTRIBUTE_FIELD_DEFS: Record<
+  AttributeField,
+  { key: string; label: string; kind: ValueKind; match: RegExp }
+> = {
+  following: { key: "following", label: "Following", kind: "count", match: /^(following|following[_ ]?count)$/i },
+  posts: { key: "post_count", label: "Posts", kind: "count", match: /^(posts|post[_ ]?count|media[_ ]?count|videos)$/i },
+  likes: { key: "likes_total", label: "Total likes (TikTok)", kind: "count", match: /^(likes|total[_ ]?likes|hearts)$/i },
+  verified: { key: "verified", label: "Verified", kind: "boolean", match: /^(verified|is[_ ]?verified)$/i },
+  private: { key: "is_private", label: "Private account", kind: "boolean", match: /^(private|is[_ ]?private)$/i },
+  category: { key: "primary_category", label: "Category", kind: "list", match: /^(category|category[_ ]?label)$/i },
+  pronouns: { key: "pronouns", label: "Pronouns", kind: "text", match: /^pronouns$/i },
+  links: { key: "links", label: "Links", kind: "list", match: /^(links?|website|link[_ ]?in[_ ]?bio)$/i },
+  mentions: { key: "mentions", label: "Mentions", kind: "list", match: /^(mentions|mentioned)$/i },
+  highlights: { key: "highlights", label: "Highlights", kind: "list", match: /^highlights$/i },
+};
+
+export const ATTRIBUTE_FIELDS = Object.keys(ATTRIBUTE_FIELD_DEFS) as AttributeField[];
+
+export const ATTRIBUTE_FIELD_LABELS = Object.fromEntries(
+  ATTRIBUTE_FIELDS.map((f) => [f, ATTRIBUTE_FIELD_DEFS[f].label]),
+) as Record<AttributeField, string>;
+
+export type ImportMapping = Partial<Record<ProspectField | AttributeField, string>>;
+
+// Blank cells return undefined (unknown), never 0 / false.
+function readCell(kind: ValueKind, raw: unknown, field: AttributeField): unknown {
+  if (raw == null) return undefined;
+  if (kind === "count") {
+    if (typeof raw === "number") return Number.isFinite(raw) && raw >= 0 ? raw : undefined;
+    const s = String(raw).trim();
+    return s ? parseCount(s) ?? undefined : undefined;
+  }
+  const s = String(raw).trim();
+  if (!s) return undefined;
+  if (kind === "boolean") {
+    if (/^(yes|y|true|1)$/i.test(s)) return true;
+    if (/^(no|n|false|0)$/i.test(s)) return false;
+    return undefined;
+  }
+  if (kind === "text") return s;
+  const items = s
+    .split(",")
+    .map((v) => v.trim())
+    .map((v) => (field === "mentions" ? v.replace(/^@/, "") : v))
+    .filter(Boolean);
+  return items.length ? items : undefined;
+}
+
 const AUTO_MATCH: Record<ProspectField, RegExp> = {
   username: /^(username|handle|ig[_ ]?handle|instagram|account)$/i,
   platform: /^(platform|network|social|site|source[_ ]?platform)$/i,
@@ -49,10 +118,14 @@ const AUTO_MATCH: Record<ProspectField, RegExp> = {
   email: /^(email|e-?mail)$/i,
 };
 
-export function autoMapColumns(headers: string[]): Partial<Record<ProspectField, string>> {
-  const mapping: Partial<Record<ProspectField, string>> = {};
+export function autoMapColumns(headers: string[]): ImportMapping {
+  const mapping: ImportMapping = {};
   for (const field of PROSPECT_FIELDS) {
     const match = headers.find((h) => AUTO_MATCH[field].test(h.trim()));
+    if (match) mapping[field] = match;
+  }
+  for (const field of ATTRIBUTE_FIELDS) {
+    const match = headers.find((h) => ATTRIBUTE_FIELD_DEFS[field].match.test(h.trim()));
     if (match) mapping[field] = match;
   }
   return mapping;
@@ -84,6 +157,7 @@ export interface MappedProspect {
   followers?: number;
   notes?: string;
   email?: string;
+  attributes?: Record<string, unknown>;
 }
 
 // One row per creator with a column per social — the same layout the
@@ -206,7 +280,7 @@ export async function downloadProspectTemplate(): Promise<void> {
 
 export function applyMapping(
   rows: Record<string, unknown>[],
-  mapping: Partial<Record<ProspectField, string>>,
+  mapping: ImportMapping,
   defaultPlatform: Platform
 ): MappedProspect[] {
   if (!mapping.username) return [];
@@ -224,7 +298,20 @@ export function applyMapping(
       followers: Number.isFinite(followers) ? followers : undefined,
       notes: mapping.notes ? String(row[mapping.notes] ?? "").trim() || undefined : undefined,
       email: mapping.email ? String(row[mapping.email] ?? "").trim() || undefined : undefined,
+      attributes: readAttributes(row, mapping),
     });
   }
   return out;
+}
+
+function readAttributes(row: Record<string, unknown>, mapping: ImportMapping): Record<string, unknown> | undefined {
+  const out: Record<string, unknown> = {};
+  for (const field of ATTRIBUTE_FIELDS) {
+    const col = mapping[field];
+    if (!col) continue;
+    const def = ATTRIBUTE_FIELD_DEFS[field];
+    const value = readCell(def.kind, row[col], field);
+    if (value !== undefined) out[def.key] = value;
+  }
+  return Object.keys(out).length ? out : undefined;
 }

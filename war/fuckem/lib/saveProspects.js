@@ -29,18 +29,28 @@ export function handleFromUrl(raw) {
   }
 }
 
+/** `file`, or `file-2`, `file-3`… if it's taken — never overwrite an earlier run's sheet. */
+function freePath(file) {
+  const ext = path.extname(file);
+  const base = file.slice(0, -ext.length);
+  let candidate = file;
+  for (let n = 2; fs.existsSync(candidate); n++) candidate = `${base}-${n}${ext}`;
+  return candidate;
+}
+
 /**
  * Writes one strategy's prospects to war/recruits as an .xlsx.
  * File names are `opp<N>-strat-<M>-<YYYY-MM-DD_HHmm>.xlsx`, keyed by slot
  * number only. The scraper's files are `<search-name>-<YYYY-MM-DD>.xlsx`, so
  * the two can't collide, and the time suffix stops same-day reruns from
- * overwriting each other.
+ * overwriting each other. `partial: true` (an interrupted or failed run)
+ * adds a "-partial" suffix so it's obvious the run didn't finish.
  */
-export function saveProspects(strategyId, prospects) {
+export function saveProspects(strategyId, prospects, { partial = false } = {}) {
   const slug = strategyId.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
   const stamp = new Date().toISOString().slice(0, 16).replace('T', '_').replace(':', '');
   fs.mkdirSync(OUTPUT_DIR, { recursive: true });
-  const file = path.join(OUTPUT_DIR, `${slug}-${stamp}.xlsx`);
+  const file = freePath(path.join(OUTPUT_DIR, `${slug}-${stamp}${partial ? '-partial' : ''}.xlsx`));
 
   // URL columns first (what the Prospecting import keys off), then the bare
   // username for each so the sheet is readable/usable without the URLs.

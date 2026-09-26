@@ -153,6 +153,14 @@ export interface Prospect {
   contacts?: ProspectContact[];
   channels?: ProspectChannel[];
   links?: ProspectLink[];
+  // Observed profile data (scraper/import), keyed by attribute registry key.
+  attributes?: Record<string, ProspectAttributeValue>;
+}
+
+export interface ProspectAttributeValue {
+  value: unknown;
+  source: string;
+  observed_at: string;
 }
 
 // ---- Target profiles ("Profiles" page) ----
@@ -165,7 +173,10 @@ export type AttributeType =
   | "number"
   | "enum"
   | "keywords"
-  | "boolean";
+  | "boolean"
+  // Display-only (shown on prospect cards, not usable as criteria).
+  | "text"
+  | "list";
 
 export type CriterionOperator =
   | "between"
@@ -188,7 +199,9 @@ export interface AttributeDef {
   unit?: string;
   options?: { value: string; label: string }[];
   description: string;
-  hasData: boolean;
+  filterable: boolean;
+  // Platforms where a data source fills this today.
+  hasData: Platform[];
 }
 
 export interface AttributeRegistry {

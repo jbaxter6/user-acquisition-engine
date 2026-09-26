@@ -90,7 +90,7 @@ export function ProfileEditor({
     () => new Map(registry.attributes.map((a) => [a.key, a])),
     [registry],
   );
-  const available = attributesFor(registry.attributes, draft.platform);
+  const available = attributesFor(registry.attributes, draft.platform).filter((a) => a.filterable);
   const archived = !!profile?.archived_at;
 
   const problems = draft.criteria.filter((c) => {
@@ -201,6 +201,7 @@ export function ProfileEditor({
               key={c.id}
               criterion={c}
               def={def}
+              hasData={def.hasData.includes(draft.platform)}
               operators={registry.operators[def.type]}
               showErrors={showErrors}
               onChange={(next) => updateCriterion(c.id, next)}
@@ -209,7 +210,11 @@ export function ProfileEditor({
             />
           );
         })}
-        <AddCriterion attributes={available} onAdd={(key) => addCriterion(key, mode)} />
+        <AddCriterion
+          attributes={available}
+          platform={draft.platform}
+          onAdd={(key) => addCriterion(key, mode)}
+        />
       </section>
     );
   };
@@ -344,9 +349,11 @@ export function ProfileEditor({
 
 function AddCriterion({
   attributes,
+  platform,
   onAdd,
 }: {
   attributes: AttributeDef[];
+  platform: Platform;
   onAdd: (key: string) => void;
 }) {
   const groups = (Object.keys(GROUP_LABEL) as (keyof typeof GROUP_LABEL)[])
@@ -371,7 +378,7 @@ function AddCriterion({
             {items.map((a) => (
               <option key={a.key} value={a.key}>
                 {a.label}
-                {a.hasData ? "" : " (no data yet)"}
+                {a.hasData.includes(platform) ? "" : " (no data yet)"}
               </option>
             ))}
           </optgroup>

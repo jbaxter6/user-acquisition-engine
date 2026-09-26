@@ -14,6 +14,8 @@ import { IconX } from "./icons";
 interface Props {
   criterion: DraftCriterion;
   def: AttributeDef;
+  // Whether a data source fills this attribute on the profile's platform.
+  hasData: boolean;
   operators: CriterionOperator[];
   showErrors: boolean;
   onChange: (next: DraftCriterion) => void;
@@ -27,6 +29,7 @@ interface Props {
 export function CriterionRow({
   criterion,
   def,
+  hasData,
   operators,
   showErrors,
   onChange,
@@ -49,7 +52,7 @@ export function CriterionRow({
       <div className="criterion__main">
         <div className="criterion__label" title={def.description}>
           {def.label}
-          {!def.hasData && (
+          {!hasData && (
             <span
               className="criterion__nodata"
               title="No prospect data source fills this yet — it's saved on the profile and will start counting once one does."

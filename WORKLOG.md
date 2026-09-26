@@ -25,9 +25,10 @@
 - [ ] Redeploy multi-platform Prospecting import (platform column mapping, default-platform selector, platform filter, TikTok/Twitch manual-only messaging) — merged cleanly with the concurrent templates work, verified via typecheck/build/API smoke test, no browser check
 - [ ] Redeploy the Profiles page (none pushed yet) and click through it in a real browser on prod. Verified so far only in headless Chrome against a scratch DB, desktop and mobile
 - [ ] Decide the open questions in docs/profiles-architecture.md §9 (attribute list, weighted scoring, one platform per profile, "Profiles" vs "Personas"). Phase 1 shipped with the recommended defaults
-- [ ] Decide whether IG keyword discovery keeps passively reading Instagram's JSON responses or switches to reading the rendered grid (docs/instagram-profile-data.md §1, conflicts with the UI-only rule)
-- [ ] Save rendered-page fixtures (profile, "and 1 more" links dialog, post modal, Reels tab) to confirm the scraper selectors in docs/instagram-profile-data.md §2
-- [ ] Build Profiles Phase 2: `prospect_attributes` table + map spreadsheet columns onto registry attributes in the Prospecting import
+- [ ] Run a real logged-in scrape (Instagram + TikTok) and check the new sheet columns fill in. The readers were only tested against logged-out saved pages; the IG category label only renders when logged in
+- [ ] Save a logged-in Instagram profile page as a fixture (war/scraper/fixtures) to replace the simulated logged-in test; add the "and N more" links dialog so the full link list can be read
+- [ ] Redeploy the prospect profile-data import + card attributes (none pushed yet)
+- [ ] Sync `follower_count` / `is_verified_user` from Instagram's messaging API for prospects who've replied, into `prospect_attributes` with source `instagram_api`
 
 ## Accomplishments
 ### 2026-09-23 (continued)
@@ -142,6 +143,17 @@
 - Added vitest to `server/` (`npm test`; test files excluded from the tsc build) with 15 tests covering the criteria validator's edge cases.
 - Built the Profiles page (`/profiles`, nav between Prospecting and Templates): list with platform filter/search/criteria preview chips, and an editor whose value controls are chosen by attribute type (so new registry entries need no UI change). It also has "10k"/"1.2M" count input, a confirm on platform switch, unsaved-changes guards, Cmd+S, and a stacked mobile layout.
 
+- Decided with the user: prospect profile data is collected from the rendered page only (no Instagram/TikTok APIs); IG keyword discovery may keep reading Instagram's own background responses to find handles; scraper output stays Excel with a manual upload for now. Documented in docs/instagram-profile-data.md.
+- Scraper now reads everything shown at the top of a profile, not just followers: `war/scraper/src/profiles/` (in-page DOM snapshot + pure parser per platform). Instagram gets followers (exact, from the tooltip), following, posts, verified, private, category, pronouns, bio, @mentions, first link + "and N more" count, highlights. TikTok gets followers, following, total likes, verified, private, bio, link, @mentions. TikTok switched off the embedded rehydration JSON to the on-screen `data-e2e` elements. Removed the unused `IG_APP_ID`.
+- Checked selectors against real pages saved logged out (trimmed copies in `war/scraper/fixtures/`). Found that Instagram's meta description has stale counts (so the header is primary), and that line-based text reads depend on CSS (so name/pronouns/category read per element). Added vitest to the scraper (16 tests).
+- Scraper Excel gained Following/Posts/Likes/Verified/Private/Category/Pronouns/Bio/Mentions/Links/More Links/Highlights columns.
+- Built Profiles Phase 2 (narrowed): `prospect_attributes` table (latest value per registry attribute + source + observed_at); `/api/prospects/bulk` accepts per-row `attributes`, validated per value against the registry (bad ones dropped and counted, not failing the row). Re-importing refreshes attributes on existing prospects without touching their manual fields. Prospect list includes `attributes`.
+- Registry: added Following (IG/TikTok), Total likes (TikTok), Private account, plus display-only `pronouns`/`links`/`mentions`/`highlights` (`filterable: false`, rejected as criteria). `hasData` is now per-platform, so the Profiles editor only says "has data" where a source actually fills it.
+- Import auto-maps the new scraper columns (new "Profile data" section in the mapping step), and prospect cards show stats, Verified/Private/category/pronouns badges, clickable links/@mentions, and highlights. Verified end-to-end in headless Chrome: uploaded a scraper-format sheet built from the real pages twice (second upload refreshed rather than duplicated).
+
+- Graceful exit for both prospecting tools (`war/scraper/src/gracefulExit.ts`, `war/fuckem/lib/gracefulExit.js`): Ctrl-C, closing the terminal (SIGHUP) or `kill` (SIGTERM), and crashes mid-run now write everything collected so far to a `-partial.xlsx` instead of losing it. The scraper collects via a new `onProspect` callback per source; fuckem strategies report via `onPartial`, and one `runAndSave` helper covers both `npm run opp1` and the per-strategy commands. strat-2 exports from its in-memory state, so profiles read since the last `.state.json` save aren't lost. Verified with real process-group signals through `npm run` → node/tsx.
+- Fixed a data-loss bug found while testing: output sheets were overwritten by same-day (scraper) or same-minute (fuckem) reruns, while their handles stayed in `seen.json` and were never scraped again. Both tools now pick a free `-2`, `-3`… name.
+
 ## Documentation Index
 - [Project Overview](README.md) — vision, problem statement, and 3-module architecture
 - [Unified Master Inbox setup & platform API constraints](README.md) — how to run client/server, Instagram credential setup, why TikTok/Twitch are manual-only
@@ -165,6 +177,8 @@
 - [Profiles architecture](docs/profiles-architecture.md) — plan for target profiles/personas, attribute registry, matchmaking semantics and phases 1–4
 - [Profile attribute registry](server/src/profiles/attributes.ts) — per-platform filterable attributes + criteria validation; the contract for Profiles, import and matching
 - [Profiles API](server/src/routes/profiles.ts) — CRUD, duplicate, archive/restore, and `/attributes` (the form schema)
+- [Scraper profile readers](war/scraper/src/profiles/) — on-screen Instagram/TikTok header reads (DOM snapshot + pure parser), tested against saved pages in war/scraper/fixtures
+- [Prospect attributes](server/src/db.ts) — `prospect_attributes` table; import via `/api/prospects/bulk` `attributes`; displayed by client/src/components/ProspectAttributes.tsx
 - [Profiles UI](client/src/components/ProfilesPage.tsx) — list + editor; criterion controls in `CriterionRow.tsx`, logic in `lib/profileCriteria.ts`
 - [Templates API](server/src/routes/templates.ts) — CRUD + archive + `/stats` for message templates
 - [Templates UI](client/src/components/TemplatesPanel.tsx) — create/edit/archive templates and view effectiveness, on the Prospecting page

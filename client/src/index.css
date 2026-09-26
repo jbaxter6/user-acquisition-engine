@@ -3716,3 +3716,88 @@ button:disabled {
     grid-column: 1 / -1;
   }
 }
+
+/* ---- Prospect profile data (scraped attributes) ---- */
+.prospecting__mapping-section {
+  grid-column: 1 / -1;
+  margin: 10px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+.prospect-attrs {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.prospect-attrs__stats {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.prospect-attrs__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.prospect-attrs__badge {
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+}
+
+.prospect-attrs__badge--verified {
+  color: #7aa2ff;
+  border-color: rgba(91, 140, 255, 0.4);
+}
+
+.prospect-attrs__badge--private {
+  color: #f5c542;
+  border-color: rgba(245, 197, 66, 0.35);
+}
+
+.prospect-attrs__badge--dim {
+  color: var(--text-dim);
+}
+
+.prospect-attrs__links {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 12px;
+  min-width: 0;
+}
+
+.prospect-attrs__links a {
+  color: #7aa2ff;
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.prospect-attrs__links a:hover {
+  text-decoration: underline;
+}
+
+.prospect-attrs__highlights {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

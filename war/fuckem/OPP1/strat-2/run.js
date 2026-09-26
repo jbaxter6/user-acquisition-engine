@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { chromium } from 'playwright';
 import { fileURLToPath } from 'node:url';
-import { saveProspects } from '../../lib/saveProspects.js';
+import { runAndSave } from '../../lib/gracefulExit.js';
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
 const KEYWORDS_FILE = path.join(DIR, 'keywords.txt');
@@ -113,10 +113,22 @@ async function readProfile(page, origin, username) {
   return { username, name: data.name || username, profileUrl, ...data.socials };
 }
 
-export async function runStrategy() {
+// Everything read but not yet exported (includes leftovers from a crashed
+// run). Marks them exported and persists that, so they're not re-exported.
+function takePending(state) {
+  const pending = Object.values(state.users).filter((u) => u.record && !u.exported);
+  pending.forEach((u) => (u.exported = true));
+  saveState(state);
+  return pending.map((u) => u.record);
+}
+
+export async function runStrategy({ onPartial } = {}) {
   const targetUrl = assertTargetUrl();
   const origin = new URL(targetUrl).origin;
   const state = loadState();
+  // If interrupted, export from the in-memory state — includes profiles read
+  // since the last saveState.
+  onPartial?.(() => takePending(state));
 
   // Build the query queue: fresh keywords, plus unfinished splits of any
   // saturated queries from earlier runs.
@@ -175,19 +187,11 @@ export async function runStrategy() {
     saveState(state);
   }
 
-  // Export everything read but not yet exported (includes leftovers from a crashed run).
-  const pending = Object.values(state.users).filter((u) => u.record && !u.exported);
-  pending.forEach((u) => (u.exported = true));
-  saveState(state);
-  return { source: targetUrl, count: pending.length, prospects: pending.map((u) => u.record) };
+  const prospects = takePending(state);
+  return { source: targetUrl, count: prospects.length, prospects };
 }
 
 // `npm run opp1strat2` runs this file directly: scrape, then save to war/recruits.
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  runStrategy()
-    .then((result) => saveProspects('OPP1/strat-2', result.prospects))
-    .catch((error) => {
-      console.error(error instanceof Error ? error.message : error);
-      process.exit(1);
-    });
+  runAndSave('OPP1/strat-2', runStrategy).catch(() => process.exit(1));
 }

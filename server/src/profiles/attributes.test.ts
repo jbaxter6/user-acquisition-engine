@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { incompatibleCriteria, validateCriteria, type Criterion } from "./attributes.js";
+import {
+  getAttribute,
+  incompatibleCriteria,
+  normalizeAttributeValue,
+  validateCriteria,
+  type Criterion,
+} from "./attributes.js";
 
 const base = { id: "c1", mode: "required" } as const;
 
@@ -139,5 +145,42 @@ describe("incompatibleCriteria", () => {
     ];
     expect(incompatibleCriteria(criteria, "twitch").map((c) => c.id)).toEqual(["b"]);
     expect(incompatibleCriteria(criteria, "youtube").map((c) => c.id)).toEqual(["a", "b"]);
+  });
+});
+
+describe("display-only attributes", () => {
+  it("can't be used as criteria", () => {
+    expect(errorsOf([{ ...base, attribute: "links", operator: "contains_any", value: ["x"] }])[0]).toMatch(
+      /can't be used as a criterion/,
+    );
+  });
+});
+
+describe("normalizeAttributeValue", () => {
+  const def = (k: string) => getAttribute(k)!;
+
+  it("accepts non-negative counts and rejects junk", () => {
+    expect(normalizeAttributeValue(def("following"), 752)).toBe(752);
+    expect(normalizeAttributeValue(def("following"), 0)).toBe(0);
+    expect(normalizeAttributeValue(def("following"), -1)).toBeUndefined();
+    expect(normalizeAttributeValue(def("following"), "752")).toBeUndefined();
+  });
+
+  it("requires real booleans", () => {
+    expect(normalizeAttributeValue(def("verified"), true)).toBe(true);
+    expect(normalizeAttributeValue(def("verified"), "Yes")).toBeUndefined();
+  });
+
+  it("lowercases keywords but keeps list items as written", () => {
+    expect(normalizeAttributeValue(def("primary_category"), "Digital creator")).toEqual(["digital creator"]);
+    expect(normalizeAttributeValue(def("links"), ["linktr.ee/Caitlin", " ", "linktr.ee/Caitlin"])).toEqual([
+      "linktr.ee/Caitlin",
+    ]);
+    expect(normalizeAttributeValue(def("mentions"), [])).toBeUndefined();
+  });
+
+  it("trims text and drops empty text", () => {
+    expect(normalizeAttributeValue(def("pronouns"), " she/her ")).toBe("she/her");
+    expect(normalizeAttributeValue(def("pronouns"), "  ")).toBeUndefined();
   });
 });
