@@ -1,4 +1,5 @@
 import type { MessagingAdapter, SendResult } from "./types.js";
+import { metaFetch } from "../meta/metaFetch.js";
 
 const GRAPH_API_VERSION = "v21.0";
 
@@ -14,10 +15,12 @@ export class InstagramAdapter implements MessagingAdapter {
   platform = "instagram" as const;
   canSend = true;
 
+  private accountId: number;
   private igUserId: string;
   private accessToken: string;
 
-  constructor(igUserId: string, accessToken: string) {
+  constructor(accountId: number, igUserId: string, accessToken: string) {
+    this.accountId = accountId;
     this.igUserId = igUserId;
     this.accessToken = accessToken;
   }
@@ -27,7 +30,7 @@ export class InstagramAdapter implements MessagingAdapter {
       this.accessToken
     )}`;
 
-    const res = await fetch(url, {
+    const res = await metaFetch(this.accountId, "send", url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

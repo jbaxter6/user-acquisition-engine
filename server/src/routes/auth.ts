@@ -7,6 +7,7 @@ import {
   upsertAccount,
 } from "../db.js";
 import { syncInstagramAccount } from "../sync.js";
+import { metaFetch } from "../meta/metaFetch.js";
 
 const GRAPH_API_VERSION = "v21.0";
 const STATE_TTL_MS = 10 * 60 * 1000;
@@ -161,7 +162,9 @@ export function authRouter(): Router {
         redirect_uri: redirectUri(),
         code,
       });
-      const shortLivedRes = await fetch(
+      const shortLivedRes = await metaFetch(
+        null,
+        "auth",
         "https://api.instagram.com/oauth/access_token",
         {
           method: "POST",
@@ -194,7 +197,7 @@ export function authRouter(): Router {
       longLivedUrl.searchParams.set("grant_type", "ig_exchange_token");
       longLivedUrl.searchParams.set("client_secret", appSecret);
       longLivedUrl.searchParams.set("access_token", shortLivedToken);
-      const longLivedRes = await fetch(longLivedUrl);
+      const longLivedRes = await metaFetch(null, "auth", longLivedUrl);
       if (!longLivedRes.ok)
         throw new Error(`token exchange failed: ${await longLivedRes.text()}`);
       const { access_token: longLivedToken } =
@@ -214,7 +217,7 @@ export function authRouter(): Router {
       );
       validationUrl.searchParams.set("fields", "user_id,username");
       validationUrl.searchParams.set("access_token", normalizedToken);
-      const validationRes = await fetch(validationUrl);
+      const validationRes = await metaFetch(null, "auth", validationUrl);
       if (!validationRes.ok) {
         throw new Error(
           `token validation failed: ${await validationRes.text()}`,
@@ -230,12 +233,12 @@ export function authRouter(): Router {
         "user_id,username,profile_picture_url",
       );
       profileUrl.searchParams.set("access_token", normalizedToken);
-      const profileRes = await fetch(profileUrl);
+      const profileRes = await metaFetch(null, "auth", profileUrl);
       if (!profileRes.ok)
         throw new Error(`profile lookup failed: ${await profileRes.text()}`);
       const profile = (await profileRes.json()) as ProfileResponse;
 
-      upsertAccount({
+      const account = upsertAccount({
         igUserId: profile.user_id,
         username: profile.username,
         profilePictureUrl: profile.profile_picture_url,
@@ -251,7 +254,9 @@ export function authRouter(): Router {
       );
       subscribeUrl.searchParams.set("subscribed_fields", "messages");
       subscribeUrl.searchParams.set("access_token", normalizedToken);
-      const subscribeRes = await fetch(subscribeUrl, { method: "POST" });
+      const subscribeRes = await metaFetch(account.id, "auth", subscribeUrl, {
+        method: "POST",
+      });
       if (!subscribeRes.ok) {
         console.error(
           `Webhook subscription failed for @${profile.username}:`,

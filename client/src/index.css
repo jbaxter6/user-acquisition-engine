@@ -149,6 +149,65 @@ body {
   background: #e5484d;
 }
 
+/* Meta API usage (docs/meta-api-usage-meter.md): amber = getting high,
+   red = over. Same red as disconnected. */
+.platform-status-dot--warn {
+  background: #f5a524;
+}
+
+.platform-status-dot--over {
+  background: #e5484d;
+}
+
+/* Mini bar in the Instagram chip: highest Meta-reported usage %. */
+.usage-meter {
+  width: 22px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.usage-meter__fill {
+  display: block;
+  height: 100%;
+  background: #4caf50;
+  transition: width 0.3s ease;
+}
+
+.usage-meter--warn .usage-meter__fill {
+  background: #f5a524;
+}
+
+.usage-meter--over .usage-meter__fill {
+  background: #e5484d;
+}
+
+.account-connection__identity-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.account-connection__usage {
+  font-size: 11px;
+  color: var(--text-dim);
+  cursor: help;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.account-connection__usage--warn {
+  color: #f5a524;
+}
+
+.account-connection__usage--over {
+  color: #e5484d;
+}
+
 .account-connection {
   position: relative;
 }

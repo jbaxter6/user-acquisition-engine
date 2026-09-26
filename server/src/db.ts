@@ -4,6 +4,7 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { Platform } from "./adapters/types.js";
 import type { Criterion } from "./profiles/attributes.js";
+import type { MetaCallKind, MetaUsageReading } from "./meta/usage.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // DATA_DIR lets a deploy point this at a mounted persistent volume (e.g.
@@ -161,6 +162,30 @@ for (const migration of [
     source TEXT NOT NULL,
     observed_at TEXT NOT NULL DEFAULT (datetime('now')),
     PRIMARY KEY (prospect_id, attribute)
+  )`,
+  // Every call made to Meta, via meta/metaFetch.ts — feeds the navbar
+  // usage meter (docs/meta-api-usage-meter.md). account_id is null for
+  // OAuth calls made before the account row exists.
+  `CREATE TABLE IF NOT EXISTS meta_api_calls (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER,
+    kind TEXT NOT NULL,
+    status INTEGER NOT NULL,
+    throttled INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS meta_api_calls_account_time ON meta_api_calls(account_id, created_at)",
+  // Latest utilization Meta reported for each account, plus what the last
+  // Sync cost. One row per account.
+  `CREATE TABLE IF NOT EXISTS meta_api_usage (
+    account_id INTEGER PRIMARY KEY,
+    call_count_pct REAL,
+    total_time_pct REAL,
+    total_cputime_pct REAL,
+    regain_access_minutes INTEGER,
+    updated_at TEXT,
+    last_sync_calls INTEGER,
+    last_sync_at TEXT
   )`,
 ]) {
   try {
@@ -1729,4 +1754,141 @@ export function getMessageTemplateStats(): MessageTemplateStats[] {
       ),
     };
   });
+}
+
+// ---- Meta API usage meter (docs/meta-api-usage-meter.md) ----
+
+// Call rows only matter for the last 24h; keep 30 days for debugging.
+db.prepare(
+  "DELETE FROM meta_api_calls WHERE created_at < datetime('now', '-30 days')",
+).run();
+
+export function recordMetaCall(input: {
+  accountId: number | null;
+  kind: MetaCallKind;
+  status: number;
+  throttled: boolean;
+}): void {
+  db.prepare(
+    "INSERT INTO meta_api_calls (account_id, kind, status, throttled) VALUES (?, ?, ?, ?)",
+  ).run(input.accountId, input.kind, input.status, input.throttled ? 1 : 0);
+}
+
+export function saveMetaUsageReading(
+  accountId: number,
+  reading: MetaUsageReading,
+): void {
+  db.prepare(
+    `INSERT INTO meta_api_usage (account_id, call_count_pct, total_time_pct, total_cputime_pct, regain_access_minutes, updated_at)
+     VALUES (?, ?, ?, ?, ?, datetime('now'))
+     ON CONFLICT(account_id) DO UPDATE SET
+       call_count_pct = excluded.call_count_pct,
+       total_time_pct = excluded.total_time_pct,
+       total_cputime_pct = excluded.total_cputime_pct,
+       regain_access_minutes = excluded.regain_access_minutes,
+       updated_at = excluded.updated_at`,
+  ).run(
+    accountId,
+    reading.callCountPct,
+    reading.totalTimePct,
+    reading.totalCputimePct,
+    reading.regainAccessMinutes,
+  );
+}
+
+/** SQLite's current time, in the same format as created_at columns. */
+export function sqliteNow(): string {
+  return (db.prepare("SELECT datetime('now') AS now").get() as { now: string })
+    .now;
+}
+
+/** Counts this account's Meta calls since `since` and stores it as the last Sync's cost. */
+export function recordSyncCost(accountId: number, since: string): number {
+  const { calls } = db
+    .prepare(
+      "SELECT COUNT(*) AS calls FROM meta_api_calls WHERE account_id = ? AND created_at >= ?",
+    )
+    .get(accountId, since) as { calls: number };
+  db.prepare(
+    `INSERT INTO meta_api_usage (account_id, last_sync_calls, last_sync_at)
+     VALUES (?, ?, datetime('now'))
+     ON CONFLICT(account_id) DO UPDATE SET
+       last_sync_calls = excluded.last_sync_calls,
+       last_sync_at = excluded.last_sync_at`,
+  ).run(accountId, calls);
+  return calls;
+}
+
+export interface MetaUsageSummaryRow {
+  lastHour: number;
+  last24h: number;
+  sendsLastHour: number;
+  throttledLastHour: number;
+  throttledLast24h: number;
+  lastThrottledAt: string | null;
+  byKind: Record<string, number>;
+  // Meta's own reading; null when it's more than a day old, since it only
+  // updates when we make a call.
+  reading: (MetaUsageReading & { updatedAt: string }) | null;
+  lastSyncCalls: number | null;
+  lastSyncAt: string | null;
+}
+
+export function getMetaUsageSummary(accountId: number): MetaUsageSummaryRow {
+  const counts = db
+    .prepare(
+      `SELECT
+         COALESCE(SUM(created_at >= datetime('now', '-1 hour')), 0) AS lastHour,
+         COUNT(*) AS last24h,
+         COALESCE(SUM(kind = 'send' AND created_at >= datetime('now', '-1 hour')), 0) AS sendsLastHour,
+         COALESCE(SUM(throttled AND created_at >= datetime('now', '-1 hour')), 0) AS throttledLastHour,
+         COALESCE(SUM(throttled), 0) AS throttledLast24h,
+         MAX(CASE WHEN throttled THEN created_at END) AS lastThrottledAt
+       FROM meta_api_calls
+       WHERE account_id = ? AND created_at >= datetime('now', '-1 day')`,
+    )
+    .get(accountId) as Omit<MetaUsageSummaryRow, "byKind" | "reading" | "lastSyncCalls" | "lastSyncAt">;
+
+  const kinds = db
+    .prepare(
+      `SELECT kind, COUNT(*) AS calls FROM meta_api_calls
+       WHERE account_id = ? AND created_at >= datetime('now', '-1 day')
+       GROUP BY kind`,
+    )
+    .all(accountId) as { kind: string; calls: number }[];
+
+  const usage = db
+    .prepare(
+      `SELECT *, updated_at >= datetime('now', '-1 day') AS fresh
+       FROM meta_api_usage WHERE account_id = ?`,
+    )
+    .get(accountId) as
+    | {
+        call_count_pct: number | null;
+        total_time_pct: number | null;
+        total_cputime_pct: number | null;
+        regain_access_minutes: number | null;
+        updated_at: string | null;
+        last_sync_calls: number | null;
+        last_sync_at: string | null;
+        fresh: number | null;
+      }
+    | undefined;
+
+  return {
+    ...counts,
+    byKind: Object.fromEntries(kinds.map((k) => [k.kind, k.calls])),
+    reading:
+      usage?.updated_at && usage.fresh
+        ? {
+            callCountPct: usage.call_count_pct,
+            totalTimePct: usage.total_time_pct,
+            totalCputimePct: usage.total_cputime_pct,
+            regainAccessMinutes: usage.regain_access_minutes,
+            updatedAt: usage.updated_at,
+          }
+        : null,
+    lastSyncCalls: usage?.last_sync_calls ?? null,
+    lastSyncAt: usage?.last_sync_at ?? null,
+  };
 }

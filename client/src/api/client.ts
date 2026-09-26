@@ -6,6 +6,7 @@ import type {
   Message,
   MessageTemplate,
   MessageTemplateStats,
+  MetaUsageResponse,
   Platform,
   Prospect,
   TargetProfile,
@@ -71,7 +72,7 @@ export const api = {
     }),
 
   syncInstagramAccount: (id: number) =>
-    request<{ conversations: number; newMessages: number }>(
+    request<{ conversations: number; newMessages: number; apiCalls: number }>(
       `/auth/instagram/accounts/${id}/sync`,
       {
         method: "POST",
@@ -86,11 +87,14 @@ export const api = {
   listMessages: (conversationId: number) =>
     request<Message[]>(`/api/conversations/${conversationId}/messages`),
 
+  // Sends go through Meta, so nudge the usage meter to refresh.
   sendMessage: (conversationId: number, text: string) =>
     request<Message>(`/api/conversations/${conversationId}/messages`, {
       method: "POST",
       body: JSON.stringify({ text }),
-    }),
+    }).finally(() => window.dispatchEvent(new Event("meta-usage-changed"))),
+
+  metaUsage: () => request<MetaUsageResponse>("/api/meta/usage"),
 
   addManualMessage: (input: {
     platform: Platform;

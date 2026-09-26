@@ -6,6 +6,8 @@ import {
   getMessageByExternalId,
   insertMessage,
   recomputeConversationLastMessageAt,
+  recordSyncCost,
+  sqliteNow,
   updateMessageCreatedAt,
   upsertAccount,
   upsertConversation,
@@ -13,6 +15,7 @@ import {
   type ConversationRow,
 } from "./db.js";
 import { backfillParticipantAvatar } from "./instagramProfile.js";
+import { metaFetch } from "./meta/metaFetch.js";
 
 const GRAPH_API_VERSION = "v21.0";
 
@@ -50,6 +53,21 @@ function toSqliteUtc(isoTimestamp: string): string {
  */
 export async function syncInstagramAccount(
   account: AccountRow,
+): Promise<{ conversations: number; newMessages: number; apiCalls: number }> {
+  // Record what this sync cost in Meta calls (shown in the usage meter),
+  // even if it fails partway.
+  const startedAt = sqliteNow();
+  try {
+    const result = await runSync(account);
+    return { ...result, apiCalls: recordSyncCost(account.id, startedAt) };
+  } catch (err) {
+    recordSyncCost(account.id, startedAt);
+    throw err;
+  }
+}
+
+async function runSync(
+  account: AccountRow,
 ): Promise<{ conversations: number; newMessages: number }> {
   // Opportunistically refresh the avatar/username for accounts connected
   // before profile_picture_url was tracked, since we're already spending
@@ -59,7 +77,7 @@ export async function syncInstagramAccount(
   );
   profileUrl.searchParams.set("fields", "user_id,username,profile_picture_url");
   profileUrl.searchParams.set("access_token", account.access_token);
-  const profileRes = await fetch(profileUrl);
+  const profileRes = await metaFetch(account.id, "profile", profileUrl);
   if (profileRes.ok) {
     const profile = (await profileRes.json()) as {
       username?: string;
@@ -89,7 +107,7 @@ export async function syncInstagramAccount(
 
   while (nextUrl && pageCount < MAX_PAGES) {
     pageCount++;
-    const pageRes = await fetch(nextUrl);
+    const pageRes = await metaFetch(account.id, "sync.list", nextUrl);
     const pageRaw = await pageRes.text();
     console.log(
       `Instagram conversations page ${pageCount} for @${account.username} (ig_user_id=${account.ig_user_id}):`,
@@ -113,7 +131,7 @@ export async function syncInstagramAccount(
     messagesUrl.searchParams.set("fields", "messages");
     messagesUrl.searchParams.set("access_token", account.access_token);
 
-    const messagesRes = await fetch(messagesUrl);
+    const messagesRes = await metaFetch(account.id, "sync.thread", messagesUrl);
     if (!messagesRes.ok) {
       console.error(
         `fetching conversation ${conversation.id} failed:`,
@@ -146,7 +164,7 @@ export async function syncInstagramAccount(
       detailUrl.searchParams.set("fields", "id,created_time,from,to,message");
       detailUrl.searchParams.set("access_token", account.access_token);
 
-      const detailRes = await fetch(detailUrl);
+      const detailRes = await metaFetch(account.id, "sync.message", detailUrl);
       if (!detailRes.ok) {
         console.error(
           `fetching message ${messageId} failed:`,

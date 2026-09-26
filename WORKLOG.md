@@ -29,6 +29,8 @@
 - [ ] Save a logged-in Instagram profile page as a fixture (war/scraper/fixtures) to replace the simulated logged-in test; add the "and N more" links dialog so the full link list can be read
 - [ ] Redeploy the prospect profile-data import + card attributes (none pushed yet)
 - [ ] Sync `follower_count` / `is_verified_user` from Instagram's messaging API for prospects who've replied, into `prospect_attributes` with source `instagram_api`
+- [ ] Redeploy the Meta API usage meter (none pushed yet) and check the Instagram chip + panel in a real browser. Verified only via typecheck, unit tests, and the endpoint against a scratch DB
+- [ ] After the first real Meta call on the deployed server, read the `Meta usage headers seen:` log line and confirm which usage header graph.instagram.com sends (parser accepts both X-Business-Use-Case-Usage and X-App-Usage)
 
 ## Accomplishments
 ### 2026-09-23 (continued)
@@ -153,6 +155,8 @@
 
 - Graceful exit for both prospecting tools (`war/scraper/src/gracefulExit.ts`, `war/fuckem/lib/gracefulExit.js`): Ctrl-C, closing the terminal (SIGHUP) or `kill` (SIGTERM), and crashes mid-run now write everything collected so far to a `-partial.xlsx` instead of losing it. The scraper collects via a new `onProspect` callback per source; fuckem strategies report via `onPartial`, and one `runAndSave` helper covers both `npm run opp1` and the per-strategy commands. strat-2 exports from its in-memory state, so profiles read since the last `.state.json` save aren't lost. Verified with real process-group signals through `npm run` → node/tsx.
 - Fixed a data-loss bug found while testing: output sheets were overwritten by same-day (scraper) or same-minute (fuckem) reruns, while their handles stayed in `seen.json` and were never scraped again. Both tools now pick a free `-2`, `-3`… name.
+- Added the Meta API usage meter: every Meta call now goes through `server/src/meta/metaFetch.ts`, logged to `meta_api_calls` with Meta's reported % and last sync cost in `meta_api_usage`; `GET /api/meta/usage`; the Instagram navbar chip's dot turns amber/red with a mini usage bar, and each account in the panel shows calls/h, 24h, Meta %, and last sync cost. Warn only; send thresholds 30/60 per hour via `META_SENDS_WARN`/`META_SENDS_MAX`. 14 unit tests
+- Expanded war/IMPORTANT.md (never run WAR logged into a Smooth social account; use a throwaway), linked it from the WAR how-tos, and made the scraper print a reminder on every browser open
 
 ## Documentation Index
 - [Project Overview](README.md) — vision, problem statement, and 3-module architecture
@@ -188,3 +192,6 @@
 - [Opp discovery workflow](war/fuckem/README.md) — direct-to-opportunity prospecting flow using env-driven `OPP1_URL`/`OPP2_URL` slots and numbered strategy folders
 - [Opp naming policy](war/fuckem/AGENTS.md) — explicit rule to never reference specific opportunity names in code, filenames, or docs
 - [Opp strategy runbook](war/fuckem/OPP1/strat-1/run.js) — live extractor for the first numbered opp, following carousel cards to profile pages and collecting social links
+- [Meta API usage meter](docs/meta-api-usage-meter.md) — plan + as-built notes: which Meta limits apply, where our calls come from, thresholds, navbar chip UI
+- [Meta API call wrapper](server/src/meta/metaFetch.ts) — the only way the server calls Meta; counts calls and stores Meta's usage reading per account
+- [WAR account safety rule](war/IMPORTANT.md) — why the scraper must never run logged into a Smooth social account, and the pre-run check

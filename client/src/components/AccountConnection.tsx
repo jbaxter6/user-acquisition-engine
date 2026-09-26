@@ -4,7 +4,43 @@ import { api } from "../api/client";
 import { Avatar } from "./Avatar";
 import { PlatformIcon } from "./PlatformIcon";
 import { IconRefresh, IconX, Spinner } from "./icons";
-import type { InstagramAccount } from "../types";
+import { formatRelativeTime } from "../lib/relativeTime";
+import type { InstagramAccount, MetaAccountUsage, MetaUsageLevel, MetaUsageResponse } from "../types";
+
+const USAGE_POLL_MS = 60_000;
+const LEVEL_RANK: Record<MetaUsageLevel, number> = { ok: 0, warn: 1, over: 2 };
+const KIND_LABELS: Record<string, string> = {
+  "sync.list": "sync: conversation lists",
+  "sync.thread": "sync: threads",
+  "sync.message": "sync: messages",
+  profile: "profile lookups",
+  send: "sends",
+  auth: "connect",
+};
+
+// One-line summary under each account in the panel; hover for the breakdown.
+function usageLine(u: MetaAccountUsage): string {
+  const parts = [`${u.calls.lastHour} calls/h`, `${u.calls.last24h}/24h`];
+  if (u.meta?.highestPct != null) parts.push(`Meta ${Math.round(u.meta.highestPct)}%`);
+  if (u.lastSyncCalls != null) parts.push(`last sync ${u.lastSyncCalls} calls`);
+  return parts.join(" · ");
+}
+
+function usageTooltip(u: MetaAccountUsage, t: MetaUsageResponse["thresholds"]): string {
+  const lines = [
+    `Sends in the last hour: ${u.sendsLastHour} (amber at ${t.sendsWarn}, red at ${t.sendsOver})`,
+    u.meta
+      ? `Meta-reported usage: calls ${u.meta.callCountPct ?? "?"}%, time ${u.meta.totalTimePct ?? "?"}%, CPU ${u.meta.totalCputimePct ?? "?"}% (updated ${formatRelativeTime(u.meta.updatedAt)})`
+      : "Meta-reported usage: no reading in the last 24h",
+    "",
+    "Calls in the last 24h:",
+    ...Object.entries(u.calls.byKind).map(([kind, n]) => `  ${KIND_LABELS[kind] ?? kind}: ${n}`),
+  ];
+  if (u.calls.last24h === 0) lines.push("  none");
+  if (u.lastThrottledAt) lines.push("", `Throttled by Meta ${formatRelativeTime(u.lastThrottledAt)}`);
+  if (u.meta?.regainAccessMinutes) lines.push(`Meta estimates access back in ${u.meta.regainAccessMinutes} min`);
+  return lines.join("\n");
+}
 
 interface Props {
   accounts: InstagramAccount[];
@@ -17,6 +53,30 @@ export function AccountConnection({ accounts, onChange }: Props) {
   const [syncingId, setSyncingId] = useState<number | null>(null);
   // setSyncingAll is only used by the disabled auto-sync block below.
   const [syncingAll] = useState(false);
+  const [usage, setUsage] = useState<MetaUsageResponse | null>(null);
+
+  // Meta API usage meter (docs/meta-api-usage-meter.md). Reading it costs
+  // no Meta calls, so polling is cheap.
+  const refreshUsage = () => {
+    api.metaUsage().then(setUsage).catch(() => {});
+  };
+
+  useEffect(() => {
+    refreshUsage();
+    const timer = window.setInterval(refreshUsage, USAGE_POLL_MS);
+    window.addEventListener("meta-usage-changed", refreshUsage);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("meta-usage-changed", refreshUsage);
+    };
+  }, []);
+
+  const usageById = new Map(usage?.accounts.map((u) => [u.accountId, u]));
+  const worstLevel = (usage?.accounts ?? []).reduce<MetaUsageLevel>(
+    (worst, u) => (LEVEL_RANK[u.level] > LEVEL_RANK[worst] ? u.level : worst),
+    "ok",
+  );
+  const highestMetaPct = Math.max(0, ...(usage?.accounts ?? []).map((u) => u.meta?.highestPct ?? 0));
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -77,12 +137,15 @@ export function AccountConnection({ accounts, onChange }: Props) {
     setSyncingId(id);
     try {
       const result = await api.syncInstagramAccount(id);
-      setBanner(`Synced: ${result.conversations} conversation(s), ${result.newMessages} new message(s).`);
+      setBanner(
+        `Synced: ${result.conversations} conversation(s), ${result.newMessages} new message(s), ${result.apiCalls} Meta API call(s).`,
+      );
       onChange();
     } catch (err) {
       setBanner(`Sync failed: ${String(err)}`);
     } finally {
       setSyncingId(null);
+      refreshUsage();
     }
   };
 
@@ -91,15 +154,28 @@ export function AccountConnection({ accounts, onChange }: Props) {
       <button
         className="platform-status-btn"
         onClick={() => setOpen((o) => !o)}
-        title={accounts.length > 0 ? `${accounts.length} Instagram account(s) connected` : "No Instagram accounts connected"}
+        title={
+          accounts.length === 0
+            ? "No Instagram accounts connected"
+            : `${accounts.length} Instagram account(s) connected. Meta API usage: ${
+                worstLevel === "over" ? "over the limit, ease off" : worstLevel === "warn" ? "getting high" : "fine"
+              } (highest Meta-reported ${Math.round(highestMetaPct)}%)`
+        }
       >
         <span
           className={
-            accounts.length > 0 ? "platform-status-dot platform-status-dot--connected" : "platform-status-dot platform-status-dot--disconnected"
+            accounts.length === 0
+              ? "platform-status-dot platform-status-dot--disconnected"
+              : `platform-status-dot platform-status-dot--${worstLevel === "ok" ? "connected" : worstLevel}`
           }
         />
         <PlatformIcon platform="instagram" size={14} />
         <span>{accounts.length}</span>
+        {accounts.length > 0 && (
+          <span className={`usage-meter usage-meter--${worstLevel}`} aria-hidden="true">
+            <span className="usage-meter__fill" style={{ width: `${Math.min(100, highestMetaPct)}%` }} />
+          </span>
+        )}
       </button>
       {open && (
         <div className="account-connection__panel">
@@ -120,7 +196,17 @@ export function AccountConnection({ accounts, onChange }: Props) {
                 <li key={a.id}>
                   <span className="account-connection__identity">
                     <Avatar src={a.profilePictureUrl} label={a.username ?? a.igUserId} size={26} />
-                    @{a.username ?? a.igUserId}
+                    <span className="account-connection__identity-text">
+                      @{a.username ?? a.igUserId}
+                      {usageById.get(a.id) && usage && (
+                        <span
+                          className={`account-connection__usage account-connection__usage--${usageById.get(a.id)!.level}`}
+                          title={usageTooltip(usageById.get(a.id)!, usage.thresholds)}
+                        >
+                          {usageLine(usageById.get(a.id)!)}
+                        </span>
+                      )}
+                    </span>
                   </span>
                   <span className="account-connection__actions">
                     <button

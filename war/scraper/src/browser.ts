@@ -12,7 +12,16 @@ export async function openBrowser(): Promise<{ page: Page; close: () => Promise<
     const browser = await chromium.connectOverCDP(cdp);
     const page = await browser.contexts()[0].newPage();
     console.log(`Attached to your Chrome at ${cdp}`);
-    return { page, close: () => page.close() };
+    // Close our tab, then disconnect. browser.close() on a CDP connection
+    // only detaches, so your Chrome stays open, but without it the open
+    // connection keeps Node running after the scrape finishes.
+    return {
+      page,
+      close: async () => {
+        await page.close().catch(() => {});
+        await browser.close();
+      },
+    };
   } catch {
     console.log(`No Chrome found at ${cdp} (run \`npm run chrome\` first to reuse a logged-in session). Launching a separate browser...`);
     const context = await chromium.launchPersistentContext(".browser-profile", {

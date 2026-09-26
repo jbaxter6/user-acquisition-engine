@@ -42,6 +42,33 @@ export interface InstagramAccount {
   connectedAt: string;
 }
 
+// GET /api/meta/usage — see docs/meta-api-usage-meter.md.
+export type MetaUsageLevel = "ok" | "warn" | "over";
+
+export interface MetaAccountUsage {
+  accountId: number;
+  username: string | null;
+  calls: { lastHour: number; last24h: number; byKind: Record<string, number> };
+  sendsLastHour: number;
+  meta: {
+    callCountPct: number | null;
+    totalTimePct: number | null;
+    totalCputimePct: number | null;
+    regainAccessMinutes: number | null;
+    highestPct: number | null;
+    updatedAt: string;
+  } | null;
+  lastThrottledAt: string | null;
+  lastSyncCalls: number | null;
+  lastSyncAt: string | null;
+  level: MetaUsageLevel;
+}
+
+export interface MetaUsageResponse {
+  thresholds: { metaPctWarn: number; metaPctOver: number; sendsWarn: number; sendsOver: number };
+  accounts: MetaAccountUsage[];
+}
+
 export interface MessageTemplate {
   id: number;
   name: string;
