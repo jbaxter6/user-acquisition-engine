@@ -6,7 +6,7 @@ Ideas for making the scraper better, roughly in priority order. Check items off 
 
 - [x] 1. Dedup memory (`seen.json` + prod check) — done, see `src/known.ts`
 - [ ] 2. Handle-list mode
-- [ ] 3. Save results as we go
+- [x] 3. Save results as we go — done as save-on-interrupt/crash, see `src/gracefulExit.ts`
 
 Then 5 (more TikTok discovery) and 4 (scoring).
 
@@ -19,9 +19,10 @@ Then 5 (more TikTok discovery) and 4 (scoring).
 - `--handles file.txt` source that only reads public profiles for a supplied list.
 - Fallback when TikTok/Instagram login is blocked; also useful for enriching lists from Modash or manual finds.
 
-## 3. Resume and save as you go
-- Write results after every profile, not only at the end.
-- A rate limit, captcha, or crash midway currently loses the whole run (Instagram stops early on a 429; TikTok doesn't).
+## 3. Resume and save as you go — DONE
+- Ctrl-C, closing the terminal, `kill`, or a crash (rate limit, captcha) writes everything accepted so far to `<search>-<date>-partial.xlsx` and remembers those handles in `seen.json`.
+- Sheets are never overwritten (`-2`, `-3`… suffixes). Same-day reruns used to overwrite the earlier sheet while its handles stayed in `seen.json`, which lost them for good.
+- Not done: resuming an interrupted search where it stopped (a rerun just continues past the already-seen handles, which is close).
 
 ## 4. Better scoring, not just filtering
 - Extra columns: engagement (recent views/likes ÷ followers), posting frequency, last post date, "music review" relevance score from bio/captions.
@@ -43,4 +44,4 @@ Then 5 (more TikTok discovery) and 4 (scoring).
 
 ## 8. Reliability
 - Health checks that flag when a selector/endpoint stops working (e.g. zero results from a search that used to return dozens).
-- Small tests against saved page snapshots so TikTok/Instagram changes are caught quickly.
+- Small tests against saved page snapshots so TikTok/Instagram changes are caught quickly. **Started:** profile-header readers are tested against saved pages in `fixtures/` (`npm test`). Discovery (search pages) isn't covered yet.

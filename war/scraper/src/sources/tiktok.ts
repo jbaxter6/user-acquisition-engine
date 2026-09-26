@@ -1,8 +1,9 @@
 import type { Page } from "playwright";
 import { openBrowser } from "../browser.js";
 import type { Prospect, SourceOptions } from "../types.js";
+import type { ProfileDetails } from "../profiles/parse.js";
+import { parseTikTok, snapshotTikTok } from "../profiles/tiktok.js";
 
-const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const humanDelay = (min = 3000, max = 7000) => sleep(min + Math.random() * (max - min));
 
@@ -35,32 +36,13 @@ async function collectHandles(page: Page, tab: "user" | "live", query: string, w
   return [...handles];
 }
 
-interface ProfileData {
-  uniqueId: string;
-  nickname: string;
-  signature: string;
-  followers: number;
-}
-
-async function readProfile(page: Page, handle: string): Promise<ProfileData | null> {
+// Load the profile and read what's on screen (see profiles/tiktok.ts).
+export async function readTikTokProfile(page: Page, handle: string): Promise<ProfileDetails & { handle: string } | null> {
   await page.goto(`https://www.tiktok.com/@${handle}`, { waitUntil: "domcontentloaded" });
-  const raw = await page
-    .locator("script#__UNIVERSAL_DATA_FOR_REHYDRATION__")
-    .textContent({ timeout: 10000 })
-    .catch(() => null);
-  if (!raw) return null;
-  try {
-    const info = JSON.parse(raw)["__DEFAULT_SCOPE__"]?.["webapp.user-detail"]?.userInfo;
-    if (!info?.user) return null;
-    return {
-      uniqueId: info.user.uniqueId,
-      nickname: info.user.nickname ?? "",
-      signature: info.user.signature ?? "",
-      followers: info.stats?.followerCount ?? 0,
-    };
-  } catch {
-    return null;
-  }
+  await page.waitForSelector('[data-e2e="user-subtitle"]', { timeout: 10000 }).catch(() => null);
+  const snap = await snapshotTikTok(page);
+  if (!snap?.subtitle) return null;
+  return { ...parseTikTok(snap), handle: snap.subtitle };
 }
 
 async function scrape(tab: "user" | "live", opts: SourceOptions): Promise<Prospect[]> {
@@ -75,24 +57,27 @@ async function scrape(tab: "user" | "live", opts: SourceOptions): Promise<Prospe
       if (out.length >= opts.limit) break;
       if (opts.skip?.has(`tiktok:${handle.toLowerCase()}`)) continue;
       await humanDelay();
-      const p = await readProfile(page, handle);
+      const p = await readTikTokProfile(page, handle);
       if (!p) {
         console.log(`  @${handle}: couldn't read profile (blocked or missing), skipping`);
         continue;
       }
-      if (p.followers < opts.minFollowers || p.followers > opts.maxFollowers) continue;
-      if (opts.keywords.length && !opts.keywords.some((k) => p.signature.toLowerCase().includes(k))) continue;
+      const followers = p.followers ?? 0;
+      if (followers < opts.minFollowers || followers > opts.maxFollowers) continue;
+      if (opts.keywords.length && !opts.keywords.some((k) => p.bio.toLowerCase().includes(k))) continue;
 
       out.push({
-        username: p.uniqueId,
+        username: p.handle,
         platform: "tiktok",
-        displayName: p.nickname,
-        followers: p.followers,
-        notes: p.signature.replace(/\s+/g, " ").slice(0, 500),
-        email: p.signature.match(EMAIL_RE)?.[0] ?? "",
-        url: `https://www.tiktok.com/@${p.uniqueId}`,
+        displayName: p.displayName,
+        followers,
+        notes: p.bio.replace(/\s+/g, " ").slice(0, 500),
+        email: p.email,
+        url: `https://www.tiktok.com/@${p.handle}`,
+        details: p,
       });
-      console.log(`  + @${p.uniqueId} (${p.followers.toLocaleString()} followers) [${out.length}/${opts.limit}]`);
+      opts.onProspect?.(out[out.length - 1]);
+      console.log(`  + @${p.handle} (${followers.toLocaleString()} followers) [${out.length}/${opts.limit}]`);
     }
   } finally {
     await close();

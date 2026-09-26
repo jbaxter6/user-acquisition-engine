@@ -75,6 +75,7 @@ export async function scrapeTwitch(opts: SourceOptions): Promise<Prospect[]> {
       email: bio.match(EMAIL_RE)?.[0] ?? "",
       url: `https://twitch.tv/${s.login}`,
     });
+    opts.onProspect?.(out[out.length - 1]);
   }
   return out;
 }

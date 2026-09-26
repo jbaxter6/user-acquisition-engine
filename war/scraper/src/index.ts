@@ -1,9 +1,10 @@
-import * as XLSX from "xlsx";
 import { mkdirSync, readFileSync } from "node:fs";
 import { scrapeTwitch } from "./sources/twitch.js";
 import { scrapeTikTok, scrapeTikTokLive } from "./sources/tiktok.js";
 import { scrapeInstagram } from "./sources/instagram.js";
 import { loadKnown, rememberScraped } from "./known.js";
+import { saveOnInterrupt } from "./gracefulExit.js";
+import { writeSheet } from "./sheet.js";
 import type { Prospect, SourceOptions } from "./types.js";
 
 interface Search extends Partial<Omit<SourceOptions, "minFollowers" | "maxFollowers">> {
@@ -26,22 +27,6 @@ const sources: Record<string, (o: SourceOptions) => Promise<Prospect[]>> = {
 };
 
 const listed: Search[] = JSON.parse(readFileSync("searches.json", "utf8"));
-
-function writeSheet(file: string, prospects: Prospect[]) {
-  const rows = prospects.map((p) => ({
-    Username: p.username,
-    Platform: p.platform,
-    "Display Name": p.displayName,
-    Followers: p.followers,
-    Notes: p.notes,
-    Email: p.email,
-    URL: p.url,
-  }));
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "Prospects");
-  XLSX.writeFile(wb, file);
-  console.log(`Wrote ${rows.length} prospects to ${file}`);
-}
 
 // Which searches to run: --list, --search <name>, --all, or an ad-hoc one from flags.
 if (process.argv.includes("--list")) {
@@ -90,6 +75,22 @@ for (const s of toRun) {
     continue;
   }
   console.log(`\n=== ${s.name} ===`);
+
+  // Everything accepted so far this search. If the run is interrupted
+  // (Ctrl-C, terminal closed) or crashes (rate limit, captcha), these still
+  // get written — to a "-partial" file so it's obvious the search didn't
+  // finish — and remembered, so the next run doesn't redo them.
+  const collected: Prospect[] = [];
+  const savePartial = () => {
+    if (collected.length === 0) {
+      console.log(`${s.name}: nothing collected yet, no file written.`);
+      return;
+    }
+    writeSheet(`${outDir}/${s.name}-${date}-partial.xlsx`, collected);
+    rememberScraped(known, collected);
+  };
+  const release = saveOnInterrupt(savePartial);
+
   try {
     const prospects = await run({
       category: s.category ?? "",
@@ -98,12 +99,17 @@ for (const s of toRun) {
       limit: s.limit ?? 100,
       keywords: (s.keywords ?? []).map((k) => k.toLowerCase()),
       skip: known,
+      onProspect: (p) => collected.push(p),
     });
     writeSheet(`${outDir}/${s.name}-${date}.xlsx`, prospects);
     rememberScraped(known, prospects);
     for (const p of prospects) combined.set(`${p.platform}:${p.username}`, p);
   } catch (err) {
     console.error(`${s.name} failed:`, err instanceof Error ? err.message : err);
+    savePartial();
+    for (const p of collected) combined.set(`${p.platform}:${p.username}`, p);
+  } finally {
+    release();
   }
 }
 

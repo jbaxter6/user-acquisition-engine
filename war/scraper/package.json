@@ -4,9 +4,11 @@
   "type": "module",
   "scripts": {
     "scrape": "tsx --env-file=.env src/index.ts",
+    "enrich": "tsx --env-file=.env src/enrich.ts",
     "chrome": "open -na \"Google Chrome\" --args --remote-debugging-port=9222 --user-data-dir=$HOME/.outreach-chrome https://www.tiktok.com",
     "list": "npm run scrape -- --list",
-    "all": "npm run scrape -- --all"
+    "all": "npm run scrape -- --all",
+    "test": "vitest run"
   },
   "dependencies": {
     "playwright": "^1.63.0",
@@ -15,6 +17,7 @@
   "devDependencies": {
     "@types/node": "^22.0.0",
     "tsx": "^4.19.0",
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "vitest": "^3.2.7"
   }
 }
