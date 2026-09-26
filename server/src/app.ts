@@ -13,6 +13,7 @@ import { prospectsRouter } from "./routes/prospects.js";
 import { templatesRouter } from "./routes/templates.js";
 import { profilesRouter } from "./routes/profiles.js";
 import { metaRouter } from "./routes/meta.js";
+import { backupRouter } from "./routes/backup.js";
 import { isSignedOutVisitor, sessionRouter, siteAuth } from "./siteAuth.js";
 import "./db.js";
 
@@ -105,6 +106,7 @@ export function createApp(): express.Express {
   app.use("/api/templates", templatesRouter());
   app.use("/api/profiles", profilesRouter());
   app.use("/api/meta", metaRouter());
+  app.use("/api/backup", backupRouter());
   app.use("/auth", authRouter());
   app.use("/auth/tiktok", tiktokLoginRouter());
 

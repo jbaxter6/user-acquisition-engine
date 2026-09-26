@@ -9,7 +9,7 @@ import type { MetaCallKind, MetaUsageReading } from "./meta/usage.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // DATA_DIR lets a deploy point this at a mounted persistent volume (e.g.
 // Railway) instead of the ephemeral local ../data folder used in dev.
-const dataDir = process.env.DATA_DIR ?? path.join(__dirname, "..", "data");
+export const dataDir = process.env.DATA_DIR ?? path.join(__dirname, "..", "data");
 fs.mkdirSync(dataDir, { recursive: true });
 
 export const db = new Database(path.join(dataDir, "inbox.db"));

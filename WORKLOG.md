@@ -9,13 +9,14 @@
 - [ ] If an existing whitelisted Twitch app/credentials exist, wire a real `TwitchAdapter` (same pattern as `InstagramAdapter`)
 - [ ] Choose scraping provider integration (e.g. Modash, Phantombuster) for the Discovery module. The actual roadmap item: automation that finds matching accounts by criteria, vs. today's manual Excel import
 - [ ] Design satellite account linking/config mechanism for the Distribution module (multiple connected accounts, not just one)
-- [ ] Replace SQLite with a shared/hosted DB before multi-VA or production use
+- [ ] Move off SQLite only when we need a second server instance or outgrow one machine (a few VAs at once is fine: WAL mode, tiny writes)
 - [ ] Decide the open questions in docs/profiles-architecture.md §9 (attribute list, weighted scoring, one platform per profile, "Profiles" vs "Personas"). Phase 1 shipped with the recommended defaults
 - [ ] Check which accounts are logged into `~/.outreach-chrome` (the `npm run chrome` window) AND `war/scraper/.browser-profile` (the fallback every run actually used until the 127.0.0.1 fix): per war/IMPORTANT.md, neither may be a Smooth account
 - [ ] Link same-creator accounts on upload when an enriched row came from one fuckem row with several socials (`prospect_links`)
 - [ ] Run a real logged-in scrape (Instagram + TikTok) and check the new sheet columns fill in. The readers were only tested against logged-out saved pages; the IG category label only renders when logged in
 - [ ] Save a logged-in Instagram profile page as a fixture (war/scraper/fixtures) to replace the simulated logged-in test; add the "and N more" links dialog so the full link list can be read
 - [ ] Sync `follower_count` / `is_verified_user` from Instagram's messaging API for prospects who've replied, into `prospect_attributes` with source `instagram_api`
+- [ ] Protect against losing the Railway volume itself: turn on Railway volume backups, or regularly download `GET /api/backup` somewhere else (the nightly snapshots live on the same volume)
 
 ## Accomplishments
 ### 2026-09-23 (continued)
@@ -159,6 +160,7 @@
 - Added server route tests (51 new, 87 total): session gate, prospects, templates, profiles, inbox/webhook/send, Instagram connect/Sync/token revocation/disconnect. Real app on a random port (`createApp()` split out of `index.ts` into `app.ts`), throwaway DB per file, Meta API faked (`src/test/harness.ts`); `npm run typecheck` now covers test files
 - Added client tests (72) for `src/lib`: sheet import/column mapping, handle parsing, counts, relative time, profile criteria, API errors
 - Fixed, found by the new tests: Disconnect 500'd for any account with conversations/prospects (foreign keys), so it's now a soft disconnect (`accounts.disconnected_at`, token wiped) and reconnecting restores the same account and its threads; Sync over-counted its Meta calls (second-resolution timestamps), so it's now counted by call id; the import's Followers column dropped "12,500"/"1.2M"/"10k" values
+- Added database backups (`server/src/backup.ts`): a snapshot of `inbox.db` on startup and then daily into `$DATA_DIR/backups/`, keeping the newest 7 (self-contained files, safe while the app runs); `GET /api/backup` downloads a fresh copy (behind the site password) for keeping off the server
 
 ## Documentation Index
 - [Project Overview](README.md) — vision, problem statement, and 3-module architecture
@@ -200,3 +202,4 @@
 - [WAR account safety rule](war/IMPORTANT.md) — why the scraper must never run logged into a Smooth social account, and the pre-run check
 - [CI workflow](.github/workflows/ci.yml) — what runs on every push: per-package type-check, lint, tests, build
 - [Server test harness](server/src/test/harness.ts) — `useTestServer()` (real app, throwaway DB) and `useFakeMeta()` for route tests
+- [Database backups](server/src/backup.ts) — daily snapshots kept on the volume (newest 7) and the `GET /api/backup` download
