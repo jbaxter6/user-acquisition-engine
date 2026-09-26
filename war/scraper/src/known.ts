@@ -7,11 +7,7 @@ export const key = (platform: string, username: string) => `${platform}:${userna
 // Everyone we should not scrape again: the prod database plus anyone this
 // machine has already scraped (they may not be uploaded yet).
 export async function loadKnown(): Promise<Set<string>> {
-  const known = new Set<string>();
-
-  if (existsSync(SEEN_FILE)) {
-    for (const k of JSON.parse(readFileSync(SEEN_FILE, "utf8")) as string[]) known.add(k);
-  }
+  const known = loadSeen();
   console.log(`Local seen.json: ${known.size} handles`);
 
   const base = process.env.OUTREACH_URL?.replace(/\/$/, "");
@@ -37,6 +33,15 @@ export async function loadKnown(): Promise<Set<string>> {
     console.error(`Could not check prod (${err instanceof Error ? err.message : err}). Continuing with local history only.`);
   }
   return known;
+}
+
+// Just this machine's history (seen.json), without the prod check.
+export function loadSeen(): Set<string> {
+  const seen = new Set<string>();
+  if (existsSync(SEEN_FILE)) {
+    for (const k of JSON.parse(readFileSync(SEEN_FILE, "utf8")) as string[]) seen.add(k);
+  }
+  return seen;
 }
 
 export function rememberScraped(known: Set<string>, prospects: Prospect[]) {

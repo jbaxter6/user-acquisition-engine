@@ -1,4 +1,5 @@
 import { Router } from "express";
+import type { Platform } from "../adapters/types.js";
 import {
   bulkInsertProspects,
   countProspectsByStatus,
@@ -16,6 +17,7 @@ import {
   listProspectChannels,
   listProspectContacts,
   listProspectHandles,
+  listProspectAttributes,
   listProspectLinks,
   listProspects,
   markProspectContacted,
@@ -27,6 +29,7 @@ import {
   type ProspectSort,
 } from "../db.js";
 import { normalizeHandle } from "../handle.js";
+import { getAttribute, normalizeAttributeValue } from "../profiles/attributes.js";
 
 const PLATFORMS = ["instagram", "tiktok", "twitch", "youtube"];
 
@@ -91,6 +94,7 @@ export function prospectsRouter(): Router {
           channels: listProspectChannels(prospect.id),
           contacts: listProspectContacts(prospect.id),
           links: listProspectLinks(prospect.id),
+          attributes: listProspectAttributes(prospect.id),
           existing_conversation_id: existingConversationId,
           threads,
           first_outbound_message: earliestOutbound,
@@ -122,9 +126,10 @@ export function prospectsRouter(): Router {
     }
 
     const rows: ProspectInput[] = [];
+    let attributesDropped = 0;
     for (const p of prospects) {
       if (typeof p !== "object" || p === null) continue;
-      const { username, platform, displayName, followers, notes, email } =
+      const { username, platform, displayName, followers, notes, email, attributes } =
         p as Record<string, unknown>;
       if (typeof username !== "string") continue;
       const handle = normalizeHandle(username);
@@ -140,7 +145,26 @@ export function prospectsRouter(): Router {
         followers: typeof followers === "number" ? followers : undefined,
         notes: typeof notes === "string" ? notes : undefined,
         email: typeof email === "string" ? email : undefined,
+        attributes: {} as Record<string, unknown>,
       };
+      // Each attribute is checked against the registry: unknown keys, keys
+      // not on this platform, and values of the wrong shape are dropped
+      // individually rather than rejecting the row.
+      if (attributes && typeof attributes === "object") {
+        for (const [key, value] of Object.entries(attributes)) {
+          const def = getAttribute(key);
+          if (!def || !def.platforms.includes(row.platform as Platform)) {
+            attributesDropped++;
+            continue;
+          }
+          const normalized = normalizeAttributeValue(def, value);
+          if (normalized === undefined) {
+            attributesDropped++;
+            continue;
+          }
+          row.attributes[key] = normalized;
+        }
+      }
       rows.push(row);
     }
 
@@ -150,7 +174,7 @@ export function prospectsRouter(): Router {
         .json({ error: "no valid rows (each needs at least a username)" });
     }
 
-    const inserted = bulkInsertProspects(rows);
+    const { inserted, enriched } = bulkInsertProspects(rows);
 
     res
       .status(201)
@@ -158,6 +182,9 @@ export function prospectsRouter(): Router {
         received: rows.length,
         inserted,
         skipped: rows.length - inserted,
+        // Already-known prospects whose attributes were refreshed.
+        enriched,
+        attributesDropped,
       });
   });
 

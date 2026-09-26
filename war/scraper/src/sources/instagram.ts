@@ -1,53 +1,44 @@
 import type { Page } from "playwright";
 import { openBrowser } from "../browser.js";
 import type { Prospect, SourceOptions } from "../types.js";
+import type { ProfileDetails } from "../profiles/parse.js";
+import { parseInstagram, snapshotInstagram } from "../profiles/instagram.js";
 
-const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const humanDelay = (min = 6000, max = 12000) => sleep(min + Math.random() * (max - min));
 
-// Instagram's web app calls these JSON endpoints itself; we call them from
-// inside the logged-in page so the session cookies apply.
-function parseCount(raw: string): number {
-  const m = raw.replace(/,/g, "").match(/([\d.]+)\s*([KMB])?/i);
-  if (!m) return 0;
-  const mult = { K: 1e3, M: 1e6, B: 1e9 }[(m[2] ?? "").toUpperCase() as "K"] ?? 1;
-  return Math.round(parseFloat(m[1]) * mult);
-}
-
-// Visit the profile like a person would and read the public header.
-async function readProfile(page: Page, handle: string) {
+// Visit the profile like a person would and read what's on screen (see
+// profiles/instagram.ts). Null if the header never rendered.
+export async function readInstagramProfile(page: Page, handle: string): Promise<ProfileDetails | null> {
   await page.goto(`https://www.instagram.com/${handle}/`, { waitUntil: "domcontentloaded" });
-  const meta = await page
-    .locator('meta[property="og:description"]')
-    .getAttribute("content", { timeout: 8000 })
-    .catch(() => null);
-  const followersRaw = meta?.match(/([\d.,]+[KMB]?)\s+Followers/i)?.[1];
-  if (!followersRaw) return null;
-  const fullName = meta?.match(/from (.+?) \(@/)?.[1] ?? "";
-  const header = await page.locator("header").first().innerText({ timeout: 3000 }).catch(() => "");
-  return { followers: parseCount(followersRaw), bio: header.replace(/\s+/g, " "), fullName };
+  await page.waitForSelector("header", { timeout: 8000 }).catch(() => null);
+  const snap = await snapshotInstagram(page);
+  if (!snap) return null;
+  const details = parseInstagram(snap, handle);
+  return details.followers == null ? null : details;
 }
 
-const IG_APP_ID = "936619743392459";
+// Waits (up to 5 min) for the person to log into Instagram in the browser.
+export async function waitForInstagramLogin(page: Page): Promise<void> {
+  await page.goto("https://www.instagram.com/", { waitUntil: "domcontentloaded" });
+  const loggedIn = async () =>
+    (await page.context().cookies("https://www.instagram.com")).some((c) => c.name === "sessionid");
+  if (await loggedIn()) return;
+  console.log("Not logged into Instagram. Log in in the browser window (waiting up to 5 min)...");
+  const deadline = Date.now() + 300000;
+  while (!(await loggedIn())) {
+    if (Date.now() > deadline) throw new Error("Timed out waiting for Instagram login.");
+    await sleep(2000);
+  }
+  await sleep(3000);
+}
 
 export async function scrapeInstagram(opts: SourceOptions): Promise<Prospect[]> {
   const { page, close } = await openBrowser();
   const out: Prospect[] = [];
 
   try {
-    await page.goto("https://www.instagram.com/", { waitUntil: "domcontentloaded" });
-    const loggedIn = async () =>
-      (await page.context().cookies("https://www.instagram.com")).some((c) => c.name === "sessionid");
-    if (!(await loggedIn())) {
-      console.log("Not logged into Instagram. Log in in the browser window (waiting up to 5 min)...");
-      const deadline = Date.now() + 300000;
-      while (!(await loggedIn())) {
-        if (Date.now() > deadline) throw new Error("Timed out waiting for Instagram login.");
-        await sleep(2000);
-      }
-      await sleep(3000);
-    }
+    await waitForInstagramLogin(page);
 
     // The keyword page (the reel grid you see under Search) loads its posts as
     // JSON. Listen for those responses and collect each post's author.
@@ -95,24 +86,26 @@ export async function scrapeInstagram(opts: SourceOptions): Promise<Prospect[]> 
       if (out.length >= opts.limit) break;
       if (opts.skip?.has(`instagram:${handle.toLowerCase()}`)) continue;
       await humanDelay();
-      const prof = await readProfile(page, handle);
+      const prof = await readInstagramProfile(page, handle);
       if (!prof) {
         console.log(`  @${handle}: couldn't read profile (missing or blocked), skipping`);
         continue;
       }
-      const { followers, bio, fullName } = prof;
+      const followers = prof.followers ?? 0;
       if (followers < opts.minFollowers || followers > opts.maxFollowers) continue;
-      if (opts.keywords.length && !opts.keywords.some((k) => bio.toLowerCase().includes(k))) continue;
+      if (opts.keywords.length && !opts.keywords.some((k) => prof.bio.toLowerCase().includes(k))) continue;
 
       out.push({
         username: handle,
         platform: "instagram",
-        displayName: fullName,
+        displayName: prof.displayName,
         followers,
-        notes: bio.replace(/\s+/g, " ").slice(0, 500),
-        email: bio.match(EMAIL_RE)?.[0] ?? "",
+        notes: prof.bio.replace(/\s+/g, " ").slice(0, 500),
+        email: prof.email,
         url: `https://www.instagram.com/${handle}/`,
+        details: prof,
       });
+      opts.onProspect?.(out[out.length - 1]);
       console.log(`  + @${handle} (${followers.toLocaleString()} followers) [${out.length}/${opts.limit}]`);
     }
   } finally {

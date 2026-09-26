@@ -15,7 +15,7 @@ const youtube = new StubAdapter("youtube");
 export function getInstagramAdapterForAccount(accountId: number): MessagingAdapter {
   const account = getAccountById(accountId);
   if (!account) return new StubAdapter("instagram");
-  return new InstagramAdapter(account.ig_user_id, account.access_token);
+  return new InstagramAdapter(account.id, account.ig_user_id, account.access_token);
 }
 
 /** Non-account-scoped adapters for platforms with no login flow (TikTok, Twitch, YouTube). */

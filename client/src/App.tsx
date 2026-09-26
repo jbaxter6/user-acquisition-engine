@@ -15,6 +15,7 @@ import { IconLogOut } from "./components/icons";
 import { AccountConnection } from "./components/AccountConnection";
 import { PlatformStatusChip } from "./components/PlatformStatusChip";
 import { ProspectingPage } from "./components/ProspectingPage";
+import { ProfilesPage } from "./components/ProfilesPage";
 import { TemplatesPanel } from "./components/TemplatesPanel";
 import type {
   Conversation,
@@ -144,6 +145,14 @@ function AppShell() {
               Prospecting
             </NavLink>
             <NavLink
+              to="/profiles"
+              className={({ isActive }) =>
+                isActive ? "nav-btn nav-btn--active" : "nav-btn"
+              }
+            >
+              Profiles
+            </NavLink>
+            <NavLink
               to="/templates"
               className={({ isActive }) =>
                 isActive ? "nav-btn nav-btn--active" : "nav-btn"
@@ -209,6 +218,7 @@ function AppShell() {
           path="/prospecting"
           element={<ProspectingPage />}
         />
+        <Route path="/profiles" element={<ProfilesPage />} />
         <Route path="/templates" element={<TemplatesPanel />} />
         <Route path="*" element={<Navigate to="/inbox" replace />} />
       </Routes>

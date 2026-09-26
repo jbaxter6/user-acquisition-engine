@@ -42,6 +42,33 @@ export interface InstagramAccount {
   connectedAt: string;
 }
 
+// GET /api/meta/usage — see docs/meta-api-usage-meter.md.
+export type MetaUsageLevel = "ok" | "warn" | "over";
+
+export interface MetaAccountUsage {
+  accountId: number;
+  username: string | null;
+  calls: { lastHour: number; last24h: number; byKind: Record<string, number> };
+  sendsLastHour: number;
+  meta: {
+    callCountPct: number | null;
+    totalTimePct: number | null;
+    totalCputimePct: number | null;
+    regainAccessMinutes: number | null;
+    highestPct: number | null;
+    updatedAt: string;
+  } | null;
+  lastThrottledAt: string | null;
+  lastSyncCalls: number | null;
+  lastSyncAt: string | null;
+  level: MetaUsageLevel;
+}
+
+export interface MetaUsageResponse {
+  thresholds: { metaPctWarn: number; metaPctOver: number; sendsWarn: number; sendsOver: number };
+  accounts: MetaAccountUsage[];
+}
+
 export interface MessageTemplate {
   id: number;
   name: string;
@@ -153,4 +180,89 @@ export interface Prospect {
   contacts?: ProspectContact[];
   channels?: ProspectChannel[];
   links?: ProspectLink[];
+  // Observed profile data (scraper/import), keyed by attribute registry key.
+  attributes?: Record<string, ProspectAttributeValue>;
+}
+
+export interface ProspectAttributeValue {
+  value: unknown;
+  source: string;
+  observed_at: string;
+}
+
+// ---- Target profiles ("Profiles" page) ----
+// Mirrors server/src/profiles/attributes.ts — the server's registry is the
+// source of truth and is fetched at runtime; these are just the shapes.
+
+export type AttributeType =
+  | "count"
+  | "percent"
+  | "number"
+  | "enum"
+  | "keywords"
+  | "boolean"
+  // Display-only (shown on prospect cards, not usable as criteria).
+  | "text"
+  | "list";
+
+export type CriterionOperator =
+  | "between"
+  | "gte"
+  | "lte"
+  | "in"
+  | "not_in"
+  | "contains_any"
+  | "contains_none"
+  | "is";
+
+export type AttributeGroup = "audience" | "content" | "identity";
+
+export interface AttributeDef {
+  key: string;
+  label: string;
+  group: AttributeGroup;
+  platforms: Platform[];
+  type: AttributeType;
+  unit?: string;
+  options?: { value: string; label: string }[];
+  description: string;
+  filterable: boolean;
+  // Platforms where a data source fills this today.
+  hasData: Platform[];
+}
+
+export interface AttributeRegistry {
+  attributes: AttributeDef[];
+  operators: Record<AttributeType, CriterionOperator[]>;
+}
+
+export type CriterionValue = number | boolean | [number, number] | string[];
+
+export interface Criterion {
+  id: string;
+  attribute: string;
+  operator: CriterionOperator;
+  value: CriterionValue;
+  mode: "required" | "preferred";
+  weight?: 1 | 2 | 3;
+}
+
+export interface TargetProfile {
+  id: number;
+  name: string;
+  description: string | null;
+  platform: Platform;
+  criteria: Criterion[];
+  color: string | null;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+}
+
+export interface TargetProfileInput {
+  name: string;
+  description: string | null;
+  platform: Platform;
+  criteria: Criterion[];
+  color: string | null;
 }

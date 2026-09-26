@@ -2,6 +2,9 @@ import Database from "better-sqlite3";
 import path from "node:path";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
+import type { Platform } from "./adapters/types.js";
+import type { Criterion } from "./profiles/attributes.js";
+import type { MetaCallKind, MetaUsageReading } from "./meta/usage.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // DATA_DIR lets a deploy point this at a mounted persistent volume (e.g.
@@ -130,6 +133,59 @@ for (const migration of [
     relationship TEXT NOT NULL DEFAULT 'linked',
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(prospect_id, linked_prospect_id)
+  )`,
+  // Target profiles ("Profiles" in the UI): saved per-platform criteria
+  // describing who we want to reach. Named target_* because "profile"
+  // already means a social account's own profile elsewhere in this
+  // codebase. criteria_json is validated against the attribute registry
+  // (profiles/attributes.ts) on every write. See docs/profiles-architecture.md.
+  `CREATE TABLE IF NOT EXISTS target_profiles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    description TEXT,
+    platform TEXT NOT NULL,
+    criteria_json TEXT NOT NULL DEFAULT '[]',
+    color TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    archived_at TEXT
+  )`,
+  // Observed facts about a prospect (following count, verified, links…),
+  // keyed by the attribute registry (profiles/attributes.ts) so every source
+  // — spreadsheet import, scraper, later the messaging API — writes one
+  // place and the matcher reads one place. Latest value per attribute;
+  // source + observed_at say where/when it came from.
+  `CREATE TABLE IF NOT EXISTS prospect_attributes (
+    prospect_id INTEGER NOT NULL REFERENCES prospects(id) ON DELETE CASCADE,
+    attribute TEXT NOT NULL,
+    value_json TEXT NOT NULL,
+    source TEXT NOT NULL,
+    observed_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (prospect_id, attribute)
+  )`,
+  // Every call made to Meta, via meta/metaFetch.ts — feeds the navbar
+  // usage meter (docs/meta-api-usage-meter.md). account_id is null for
+  // OAuth calls made before the account row exists.
+  `CREATE TABLE IF NOT EXISTS meta_api_calls (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER,
+    kind TEXT NOT NULL,
+    status INTEGER NOT NULL,
+    throttled INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS meta_api_calls_account_time ON meta_api_calls(account_id, created_at)",
+  // Latest utilization Meta reported for each account, plus what the last
+  // Sync cost. One row per account.
+  `CREATE TABLE IF NOT EXISTS meta_api_usage (
+    account_id INTEGER PRIMARY KEY,
+    call_count_pct REAL,
+    total_time_pct REAL,
+    total_cputime_pct REAL,
+    regain_access_minutes INTEGER,
+    updated_at TEXT,
+    last_sync_calls INTEGER,
+    last_sync_at TEXT
   )`,
 ]) {
   try {
@@ -338,6 +394,53 @@ export interface ProspectInput {
   notes?: string;
   email?: string;
   source?: string;
+  // Already validated against the registry (routes/prospects.ts).
+  attributes?: Record<string, unknown>;
+}
+
+export interface ProspectAttributeValue {
+  value: unknown;
+  source: string;
+  observed_at: string;
+}
+
+export function listProspectAttributes(
+  prospectId: number,
+): Record<string, ProspectAttributeValue> {
+  const rows = db
+    .prepare<
+      [number],
+      { attribute: string; value_json: string; source: string; observed_at: string }
+    >("SELECT attribute, value_json, source, observed_at FROM prospect_attributes WHERE prospect_id = ?")
+    .all(prospectId);
+  return Object.fromEntries(
+    rows.map((r) => [
+      r.attribute,
+      { value: JSON.parse(r.value_json), source: r.source, observed_at: r.observed_at },
+    ]),
+  );
+}
+
+// Latest observation wins: re-importing a fresher sheet updates values.
+export function upsertProspectAttributes(
+  prospectId: number,
+  attributes: Record<string, unknown>,
+  source: string,
+): number {
+  const stmt = db.prepare(
+    `INSERT INTO prospect_attributes (prospect_id, attribute, value_json, source, observed_at)
+     VALUES (?, ?, ?, ?, datetime('now'))
+     ON CONFLICT(prospect_id, attribute) DO UPDATE SET
+       value_json = excluded.value_json,
+       source = excluded.source,
+       observed_at = excluded.observed_at`,
+  );
+  let n = 0;
+  for (const [key, value] of Object.entries(attributes)) {
+    stmt.run(prospectId, key, JSON.stringify(value), source);
+    n++;
+  }
+  return n;
 }
 
 export type ProspectSort = "recent" | "newest" | "name";
@@ -931,7 +1034,14 @@ export function linkProspectManager(
   return getProspectById(prospectId)!;
 }
 
-export function bulkInsertProspects(prospects: ProspectInput[]): number {
+// Inserts new prospects (existing handles are left as-is) and records any
+// attributes on both new and existing ones — so re-importing a fresher
+// scraper sheet refreshes the numbers without touching manual edits to the
+// prospect itself.
+export function bulkInsertProspects(prospects: ProspectInput[]): {
+  inserted: number;
+  enriched: number;
+} {
   const insert = db.prepare(
     `INSERT INTO prospects (platform, username, display_name, followers, notes, email, source)
      VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -939,7 +1049,9 @@ export function bulkInsertProspects(prospects: ProspectInput[]): number {
   );
   const insertAll = db.transaction((rows: ProspectInput[]) => {
     let inserted = 0;
+    let enriched = 0;
     for (const p of rows) {
+      const source = p.source ?? "excel_upload";
       const result = insert.run(
         p.platform,
         p.username,
@@ -947,22 +1059,25 @@ export function bulkInsertProspects(prospects: ProspectInput[]): number {
         p.followers ?? null,
         p.notes ?? null,
         p.email ?? null,
-        p.source ?? "excel_upload",
+        source,
       );
+      const prospect = getProspectByUsername(p.platform, p.username);
+      if (!prospect) continue;
       if (result.changes > 0) {
         inserted++;
-        const prospect = getProspectByUsername(p.platform, p.username);
-        if (prospect) {
-          attachProspectChannel(
-            prospect.id,
-            prospect.platform,
-            prospect.username,
-            prospect.conversation_id ?? null,
-          );
-        }
+        attachProspectChannel(
+          prospect.id,
+          prospect.platform,
+          prospect.username,
+          prospect.conversation_id ?? null,
+        );
+      }
+      if (p.attributes && Object.keys(p.attributes).length) {
+        upsertProspectAttributes(prospect.id, p.attributes, source);
+        if (result.changes === 0) enriched++;
       }
     }
-    return inserted;
+    return { inserted, enriched };
   });
   return insertAll(prospects);
 }
@@ -1326,6 +1441,107 @@ export function archiveMessageTemplate(id: number): void {
   ).run(id);
 }
 
+interface TargetProfileDbRow {
+  id: number;
+  name: string;
+  description: string | null;
+  platform: Platform;
+  criteria_json: string;
+  color: string | null;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+}
+
+export interface TargetProfileRow extends Omit<TargetProfileDbRow, "criteria_json"> {
+  criteria: Criterion[];
+}
+
+export interface TargetProfileInput {
+  name: string;
+  description: string | null;
+  platform: Platform;
+  criteria: Criterion[];
+  color: string | null;
+}
+
+function toTargetProfile(row: TargetProfileDbRow): TargetProfileRow {
+  const { criteria_json, ...rest } = row;
+  return { ...rest, criteria: JSON.parse(criteria_json) as Criterion[] };
+}
+
+export function listTargetProfiles(filters: {
+  platform?: string;
+  includeArchived?: boolean;
+}): TargetProfileRow[] {
+  const clauses: string[] = [];
+  const params: string[] = [];
+  if (!filters.includeArchived) clauses.push("archived_at IS NULL");
+  if (filters.platform) {
+    clauses.push("platform = ?");
+    params.push(filters.platform);
+  }
+  const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+  return db
+    .prepare<
+      string[],
+      TargetProfileDbRow
+    >(`SELECT * FROM target_profiles ${where} ORDER BY updated_at DESC, id DESC`)
+    .all(...params)
+    .map(toTargetProfile);
+}
+
+export function getTargetProfileById(id: number): TargetProfileRow | undefined {
+  const row = db
+    .prepare<[number], TargetProfileDbRow>("SELECT * FROM target_profiles WHERE id = ?")
+    .get(id);
+  return row && toTargetProfile(row);
+}
+
+export function createTargetProfile(input: TargetProfileInput): TargetProfileRow {
+  const result = db
+    .prepare(
+      `INSERT INTO target_profiles (name, description, platform, criteria_json, color)
+       VALUES (?, ?, ?, ?, ?)`,
+    )
+    .run(
+      input.name,
+      input.description,
+      input.platform,
+      JSON.stringify(input.criteria),
+      input.color,
+    );
+  return getTargetProfileById(result.lastInsertRowid as number)!;
+}
+
+export function updateTargetProfile(
+  id: number,
+  input: TargetProfileInput,
+): TargetProfileRow | undefined {
+  db.prepare(
+    `UPDATE target_profiles
+     SET name = ?, description = ?, platform = ?, criteria_json = ?, color = ?,
+         updated_at = datetime('now')
+     WHERE id = ?`,
+  ).run(
+    input.name,
+    input.description,
+    input.platform,
+    JSON.stringify(input.criteria),
+    input.color,
+    id,
+  );
+  return getTargetProfileById(id);
+}
+
+export function setTargetProfileArchived(id: number, archived: boolean): void {
+  db.prepare(
+    `UPDATE target_profiles
+     SET archived_at = ${archived ? "datetime('now')" : "NULL"}, updated_at = datetime('now')
+     WHERE id = ?`,
+  ).run(id);
+}
+
 export interface MessageTemplateStats {
   id: number;
   name: string;
@@ -1538,4 +1754,141 @@ export function getMessageTemplateStats(): MessageTemplateStats[] {
       ),
     };
   });
+}
+
+// ---- Meta API usage meter (docs/meta-api-usage-meter.md) ----
+
+// Call rows only matter for the last 24h; keep 30 days for debugging.
+db.prepare(
+  "DELETE FROM meta_api_calls WHERE created_at < datetime('now', '-30 days')",
+).run();
+
+export function recordMetaCall(input: {
+  accountId: number | null;
+  kind: MetaCallKind;
+  status: number;
+  throttled: boolean;
+}): void {
+  db.prepare(
+    "INSERT INTO meta_api_calls (account_id, kind, status, throttled) VALUES (?, ?, ?, ?)",
+  ).run(input.accountId, input.kind, input.status, input.throttled ? 1 : 0);
+}
+
+export function saveMetaUsageReading(
+  accountId: number,
+  reading: MetaUsageReading,
+): void {
+  db.prepare(
+    `INSERT INTO meta_api_usage (account_id, call_count_pct, total_time_pct, total_cputime_pct, regain_access_minutes, updated_at)
+     VALUES (?, ?, ?, ?, ?, datetime('now'))
+     ON CONFLICT(account_id) DO UPDATE SET
+       call_count_pct = excluded.call_count_pct,
+       total_time_pct = excluded.total_time_pct,
+       total_cputime_pct = excluded.total_cputime_pct,
+       regain_access_minutes = excluded.regain_access_minutes,
+       updated_at = excluded.updated_at`,
+  ).run(
+    accountId,
+    reading.callCountPct,
+    reading.totalTimePct,
+    reading.totalCputimePct,
+    reading.regainAccessMinutes,
+  );
+}
+
+/** SQLite's current time, in the same format as created_at columns. */
+export function sqliteNow(): string {
+  return (db.prepare("SELECT datetime('now') AS now").get() as { now: string })
+    .now;
+}
+
+/** Counts this account's Meta calls since `since` and stores it as the last Sync's cost. */
+export function recordSyncCost(accountId: number, since: string): number {
+  const { calls } = db
+    .prepare(
+      "SELECT COUNT(*) AS calls FROM meta_api_calls WHERE account_id = ? AND created_at >= ?",
+    )
+    .get(accountId, since) as { calls: number };
+  db.prepare(
+    `INSERT INTO meta_api_usage (account_id, last_sync_calls, last_sync_at)
+     VALUES (?, ?, datetime('now'))
+     ON CONFLICT(account_id) DO UPDATE SET
+       last_sync_calls = excluded.last_sync_calls,
+       last_sync_at = excluded.last_sync_at`,
+  ).run(accountId, calls);
+  return calls;
+}
+
+export interface MetaUsageSummaryRow {
+  lastHour: number;
+  last24h: number;
+  sendsLastHour: number;
+  throttledLastHour: number;
+  throttledLast24h: number;
+  lastThrottledAt: string | null;
+  byKind: Record<string, number>;
+  // Meta's own reading; null when it's more than a day old, since it only
+  // updates when we make a call.
+  reading: (MetaUsageReading & { updatedAt: string }) | null;
+  lastSyncCalls: number | null;
+  lastSyncAt: string | null;
+}
+
+export function getMetaUsageSummary(accountId: number): MetaUsageSummaryRow {
+  const counts = db
+    .prepare(
+      `SELECT
+         COALESCE(SUM(created_at >= datetime('now', '-1 hour')), 0) AS lastHour,
+         COUNT(*) AS last24h,
+         COALESCE(SUM(kind = 'send' AND created_at >= datetime('now', '-1 hour')), 0) AS sendsLastHour,
+         COALESCE(SUM(throttled AND created_at >= datetime('now', '-1 hour')), 0) AS throttledLastHour,
+         COALESCE(SUM(throttled), 0) AS throttledLast24h,
+         MAX(CASE WHEN throttled THEN created_at END) AS lastThrottledAt
+       FROM meta_api_calls
+       WHERE account_id = ? AND created_at >= datetime('now', '-1 day')`,
+    )
+    .get(accountId) as Omit<MetaUsageSummaryRow, "byKind" | "reading" | "lastSyncCalls" | "lastSyncAt">;
+
+  const kinds = db
+    .prepare(
+      `SELECT kind, COUNT(*) AS calls FROM meta_api_calls
+       WHERE account_id = ? AND created_at >= datetime('now', '-1 day')
+       GROUP BY kind`,
+    )
+    .all(accountId) as { kind: string; calls: number }[];
+
+  const usage = db
+    .prepare(
+      `SELECT *, updated_at >= datetime('now', '-1 day') AS fresh
+       FROM meta_api_usage WHERE account_id = ?`,
+    )
+    .get(accountId) as
+    | {
+        call_count_pct: number | null;
+        total_time_pct: number | null;
+        total_cputime_pct: number | null;
+        regain_access_minutes: number | null;
+        updated_at: string | null;
+        last_sync_calls: number | null;
+        last_sync_at: string | null;
+        fresh: number | null;
+      }
+    | undefined;
+
+  return {
+    ...counts,
+    byKind: Object.fromEntries(kinds.map((k) => [k.kind, k.calls])),
+    reading:
+      usage?.updated_at && usage.fresh
+        ? {
+            callCountPct: usage.call_count_pct,
+            totalTimePct: usage.total_time_pct,
+            totalCputimePct: usage.total_cputime_pct,
+            regainAccessMinutes: usage.regain_access_minutes,
+            updatedAt: usage.updated_at,
+          }
+        : null,
+    lastSyncCalls: usage?.last_sync_calls ?? null,
+    lastSyncAt: usage?.last_sync_at ?? null,
+  };
 }

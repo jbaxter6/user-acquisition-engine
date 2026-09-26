@@ -1,4 +1,5 @@
 import { updateConversationAvatar, type ConversationRow } from "./db.js";
+import { metaFetch } from "./meta/metaFetch.js";
 
 const GRAPH_API_VERSION = "v21.0";
 
@@ -10,13 +11,14 @@ const GRAPH_API_VERSION = "v21.0";
  */
 export async function fetchParticipantProfile(
   igsid: string,
-  accessToken: string
+  accessToken: string,
+  accountId: number | null
 ): Promise<{ username?: string; profilePicUrl?: string } | null> {
   const url = new URL(`https://graph.instagram.com/${GRAPH_API_VERSION}/${igsid}`);
   url.searchParams.set("fields", "username,profile_pic");
   url.searchParams.set("access_token", accessToken);
 
-  const res = await fetch(url);
+  const res = await metaFetch(accountId, "profile", url);
   const raw = await res.text();
   console.log(`Participant profile lookup for ${igsid}:`, res.status, raw);
   if (!res.ok) return null;
@@ -35,7 +37,7 @@ export async function backfillParticipantAvatar(
 ): Promise<void> {
   if (conversation.participant_avatar_url) return;
   try {
-    const profile = await fetchParticipantProfile(conversation.external_id, accessToken);
+    const profile = await fetchParticipantProfile(conversation.external_id, accessToken, conversation.account_id);
     if (profile?.profilePicUrl) {
       updateConversationAvatar(conversation.id, profile.profilePicUrl);
     }

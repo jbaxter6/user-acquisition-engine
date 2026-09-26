@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { saveProspects } from './lib/saveProspects.js';
+import { runAndSave } from './lib/gracefulExit.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -35,10 +35,10 @@ export async function runOpp1() {
         throw new Error(`Strategy ${strategyName} is missing runStrategy().`);
       }
 
-      const strategyResult = await mod.runStrategy();
       const strategyId = `${oppName}/${strategyName}`;
-      const file = saveProspects(strategyId, strategyResult.prospects ?? []);
-      results.push({ strategy: strategyId, file, ...strategyResult });
+      // Saves partial results if interrupted (Ctrl-C / terminal closed) or on error.
+      const result = await runAndSave(strategyId, mod.runStrategy);
+      results.push({ strategy: strategyId, ...result });
     }
   }
 

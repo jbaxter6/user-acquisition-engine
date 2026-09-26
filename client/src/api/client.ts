@@ -1,12 +1,16 @@
 import type {
+  AttributeRegistry,
   Conversation,
   HealthResponse,
   InstagramAccount,
   Message,
   MessageTemplate,
   MessageTemplateStats,
+  MetaUsageResponse,
   Platform,
   Prospect,
+  TargetProfile,
+  TargetProfileInput,
 } from "../types";
 import type { MappedProspect } from "../lib/prospectImport";
 
@@ -68,7 +72,7 @@ export const api = {
     }),
 
   syncInstagramAccount: (id: number) =>
-    request<{ conversations: number; newMessages: number }>(
+    request<{ conversations: number; newMessages: number; apiCalls: number }>(
       `/auth/instagram/accounts/${id}/sync`,
       {
         method: "POST",
@@ -83,11 +87,14 @@ export const api = {
   listMessages: (conversationId: number) =>
     request<Message[]>(`/api/conversations/${conversationId}/messages`),
 
+  // Sends go through Meta, so nudge the usage meter to refresh.
   sendMessage: (conversationId: number, text: string) =>
     request<Message>(`/api/conversations/${conversationId}/messages`, {
       method: "POST",
       body: JSON.stringify({ text }),
-    }),
+    }).finally(() => window.dispatchEvent(new Event("meta-usage-changed"))),
+
+  metaUsage: () => request<MetaUsageResponse>("/api/meta/usage"),
 
   addManualMessage: (input: {
     platform: Platform;
@@ -132,7 +139,13 @@ export const api = {
   },
 
   bulkImportProspects: (prospects: MappedProspect[]) =>
-    request<{ received: number; inserted: number; skipped: number }>(
+    request<{
+      received: number;
+      inserted: number;
+      skipped: number;
+      enriched: number;
+      attributesDropped: number;
+    }>(
       "/api/prospects/bulk",
       {
         method: "POST",
@@ -215,4 +228,33 @@ export const api = {
 
   archiveTemplate: (id: number) =>
     request<{ ok: true }>(`/api/templates/${id}`, { method: "DELETE" }),
+
+  profileAttributes: () =>
+    request<AttributeRegistry>("/api/profiles/attributes"),
+
+  listProfiles: (includeArchived = false) =>
+    request<TargetProfile[]>(
+      `/api/profiles${includeArchived ? "?includeArchived=true" : ""}`,
+    ),
+
+  createProfile: (input: TargetProfileInput) =>
+    request<TargetProfile>("/api/profiles", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+
+  updateProfile: (id: number, input: TargetProfileInput) =>
+    request<TargetProfile>(`/api/profiles/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(input),
+    }),
+
+  duplicateProfile: (id: number) =>
+    request<TargetProfile>(`/api/profiles/${id}/duplicate`, { method: "POST" }),
+
+  archiveProfile: (id: number) =>
+    request<{ ok: true }>(`/api/profiles/${id}`, { method: "DELETE" }),
+
+  restoreProfile: (id: number) =>
+    request<TargetProfile>(`/api/profiles/${id}/restore`, { method: "POST" }),
 };

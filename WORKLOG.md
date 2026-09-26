@@ -23,6 +23,14 @@
 - [ ] Real cold-send to a prospect will likely fail with a Meta messaging-window error most of the time — expected, not a bug; "Mark sent manually" is the intended fallback, not an afterthought
 - [ ] Redeploy the "not yet engaged" avatar treatment + Sync's skip of doomed profile lookups (none pushed yet)
 - [ ] Redeploy multi-platform Prospecting import (platform column mapping, default-platform selector, platform filter, TikTok/Twitch manual-only messaging) — merged cleanly with the concurrent templates work, verified via typecheck/build/API smoke test, no browser check
+- [ ] Redeploy the Profiles page (none pushed yet) and click through it in a real browser on prod. Verified so far only in headless Chrome against a scratch DB, desktop and mobile
+- [ ] Decide the open questions in docs/profiles-architecture.md §9 (attribute list, weighted scoring, one platform per profile, "Profiles" vs "Personas"). Phase 1 shipped with the recommended defaults
+- [ ] Run a real logged-in scrape (Instagram + TikTok) and check the new sheet columns fill in. The readers were only tested against logged-out saved pages; the IG category label only renders when logged in
+- [ ] Save a logged-in Instagram profile page as a fixture (war/scraper/fixtures) to replace the simulated logged-in test; add the "and N more" links dialog so the full link list can be read
+- [ ] Redeploy the prospect profile-data import + card attributes (none pushed yet)
+- [ ] Sync `follower_count` / `is_verified_user` from Instagram's messaging API for prospects who've replied, into `prospect_attributes` with source `instagram_api`
+- [ ] Redeploy the Meta API usage meter (none pushed yet) and check the Instagram chip + panel in a real browser. Verified only via typecheck, unit tests, and the endpoint against a scratch DB
+- [ ] After the first real Meta call on the deployed server, read the `Meta usage headers seen:` log line and confirm which usage header graph.instagram.com sends (parser accepts both X-Business-Use-Case-Usage and X-App-Usage)
 
 ## Accomplishments
 ### 2026-09-23 (continued)
@@ -131,6 +139,25 @@
 - Fixed the live extraction against the Nero discover page: the scraper now follows each live artist card to its profile page, normalizes noisy handle text, and extracts real Instagram/TikTok links from the profile anchors. Verified with `OPP1_URL='https://www.nero.fan/discover' node run-opp1.js` that it returns real prospects instead of zero results.
 - Tightened the carousel logic to target the actual `[role="link"][aria-label]` cards and de-dupe repeated carousel copies by profile URL, so the first live row is fully captured instead of stopping at a partial 4-record slice.
 
+### 2026-09-25
+- Wrote the Profiles architecture plan (docs/profiles-architecture.md): per-platform target profiles, one attribute registry shared by the UI, the future importer and the matcher, must-have/nice-to-have criteria, "unknown" as a first-class match outcome, and a 4-phase rollout through Discovery.
+- Built Profiles Phase 1: attribute registry + `validateCriteria` (`server/src/profiles/attributes.ts`), `target_profiles` table (named so to avoid clashing with the existing social-account "profile" meaning), and `/api/profiles` CRUD + duplicate + archive + restore. A platform change that would drop criteria is refused with a 409, never silently stripped.
+- Added vitest to `server/` (`npm test`; test files excluded from the tsc build) with 15 tests covering the criteria validator's edge cases.
+- Built the Profiles page (`/profiles`, nav between Prospecting and Templates): list with platform filter/search/criteria preview chips, and an editor whose value controls are chosen by attribute type (so new registry entries need no UI change). It also has "10k"/"1.2M" count input, a confirm on platform switch, unsaved-changes guards, Cmd+S, and a stacked mobile layout.
+
+- Decided with the user: prospect profile data is collected from the rendered page only (no Instagram/TikTok APIs); IG keyword discovery may keep reading Instagram's own background responses to find handles; scraper output stays Excel with a manual upload for now. Documented in docs/instagram-profile-data.md.
+- Scraper now reads everything shown at the top of a profile, not just followers: `war/scraper/src/profiles/` (in-page DOM snapshot + pure parser per platform). Instagram gets followers (exact, from the tooltip), following, posts, verified, private, category, pronouns, bio, @mentions, first link + "and N more" count, highlights. TikTok gets followers, following, total likes, verified, private, bio, link, @mentions. TikTok switched off the embedded rehydration JSON to the on-screen `data-e2e` elements. Removed the unused `IG_APP_ID`.
+- Checked selectors against real pages saved logged out (trimmed copies in `war/scraper/fixtures/`). Found that Instagram's meta description has stale counts (so the header is primary), and that line-based text reads depend on CSS (so name/pronouns/category read per element). Added vitest to the scraper (16 tests).
+- Scraper Excel gained Following/Posts/Likes/Verified/Private/Category/Pronouns/Bio/Mentions/Links/More Links/Highlights columns.
+- Built Profiles Phase 2 (narrowed): `prospect_attributes` table (latest value per registry attribute + source + observed_at); `/api/prospects/bulk` accepts per-row `attributes`, validated per value against the registry (bad ones dropped and counted, not failing the row). Re-importing refreshes attributes on existing prospects without touching their manual fields. Prospect list includes `attributes`.
+- Registry: added Following (IG/TikTok), Total likes (TikTok), Private account, plus display-only `pronouns`/`links`/`mentions`/`highlights` (`filterable: false`, rejected as criteria). `hasData` is now per-platform, so the Profiles editor only says "has data" where a source actually fills it.
+- Import auto-maps the new scraper columns (new "Profile data" section in the mapping step), and prospect cards show stats, Verified/Private/category/pronouns badges, clickable links/@mentions, and highlights. Verified end-to-end in headless Chrome: uploaded a scraper-format sheet built from the real pages twice (second upload refreshed rather than duplicated).
+
+- Graceful exit for both prospecting tools (`war/scraper/src/gracefulExit.ts`, `war/fuckem/lib/gracefulExit.js`): Ctrl-C, closing the terminal (SIGHUP) or `kill` (SIGTERM), and crashes mid-run now write everything collected so far to a `-partial.xlsx` instead of losing it. The scraper collects via a new `onProspect` callback per source; fuckem strategies report via `onPartial`, and one `runAndSave` helper covers both `npm run opp1` and the per-strategy commands. strat-2 exports from its in-memory state, so profiles read since the last `.state.json` save aren't lost. Verified with real process-group signals through `npm run` → node/tsx.
+- Fixed a data-loss bug found while testing: output sheets were overwritten by same-day (scraper) or same-minute (fuckem) reruns, while their handles stayed in `seen.json` and were never scraped again. Both tools now pick a free `-2`, `-3`… name.
+- Added the Meta API usage meter: every Meta call now goes through `server/src/meta/metaFetch.ts`, logged to `meta_api_calls` with Meta's reported % and last sync cost in `meta_api_usage`; `GET /api/meta/usage`; the Instagram navbar chip's dot turns amber/red with a mini usage bar, and each account in the panel shows calls/h, 24h, Meta %, and last sync cost. Warn only; send thresholds 30/60 per hour via `META_SENDS_WARN`/`META_SENDS_MAX`. 14 unit tests
+- Expanded war/IMPORTANT.md (never run WAR logged into a Smooth social account; use a throwaway), linked it from the WAR how-tos, and made the scraper print a reminder on every browser open
+
 ## Documentation Index
 - [Project Overview](README.md) — vision, problem statement, and 3-module architecture
 - [Unified Master Inbox setup & platform API constraints](README.md) — how to run client/server, Instagram credential setup, why TikTok/Twitch are manual-only
@@ -150,6 +177,13 @@
 - [Prospecting/Business Discovery](server/src/prospecting.ts) — username → Instagram ID resolution and cold-send attempt for prospects; the ID-as-recipient assumption is unverified
 - [Prospect data model](server/src/db.ts) — `prospects` table, separate pipeline from `conversations`
 - [Message templates](server/src/db.ts) — `message_templates` table + `messages.template_id`, reusable outreach copy with per-template sent/replied/reply-rate stats (`getMessageTemplateStats`)
+- [Instagram profile data inventory](docs/instagram-profile-data.md) — UI-only (no platform APIs) inventory of what the scraper can read from an IG profile via page loads/hovers/clicks, depth levels, storage/snapshot plan, rollout order
+- [Profiles architecture](docs/profiles-architecture.md) — plan for target profiles/personas, attribute registry, matchmaking semantics and phases 1–4
+- [Profile attribute registry](server/src/profiles/attributes.ts) — per-platform filterable attributes + criteria validation; the contract for Profiles, import and matching
+- [Profiles API](server/src/routes/profiles.ts) — CRUD, duplicate, archive/restore, and `/attributes` (the form schema)
+- [Scraper profile readers](war/scraper/src/profiles/) — on-screen Instagram/TikTok header reads (DOM snapshot + pure parser), tested against saved pages in war/scraper/fixtures
+- [Prospect attributes](server/src/db.ts) — `prospect_attributes` table; import via `/api/prospects/bulk` `attributes`; displayed by client/src/components/ProspectAttributes.tsx
+- [Profiles UI](client/src/components/ProfilesPage.tsx) — list + editor; criterion controls in `CriterionRow.tsx`, logic in `lib/profileCriteria.ts`
 - [Templates API](server/src/routes/templates.ts) — CRUD + archive + `/stats` for message templates
 - [Templates UI](client/src/components/TemplatesPanel.tsx) — create/edit/archive templates and view effectiveness, on the Prospecting page
 - [Excel column mapping](client/src/lib/prospectImport.ts) — auto-detects likely columns by header name, `xlsx` loaded via dynamic import
@@ -158,3 +192,6 @@
 - [Opp discovery workflow](war/fuckem/README.md) — direct-to-opportunity prospecting flow using env-driven `OPP1_URL`/`OPP2_URL` slots and numbered strategy folders
 - [Opp naming policy](war/fuckem/AGENTS.md) — explicit rule to never reference specific opportunity names in code, filenames, or docs
 - [Opp strategy runbook](war/fuckem/OPP1/strat-1/run.js) — live extractor for the first numbered opp, following carousel cards to profile pages and collecting social links
+- [Meta API usage meter](docs/meta-api-usage-meter.md) — plan + as-built notes: which Meta limits apply, where our calls come from, thresholds, navbar chip UI
+- [Meta API call wrapper](server/src/meta/metaFetch.ts) — the only way the server calls Meta; counts calls and stores Meta's usage reading per account
+- [WAR account safety rule](war/IMPORTANT.md) — why the scraper must never run logged into a Smooth social account, and the pre-run check
