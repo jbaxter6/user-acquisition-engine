@@ -37,42 +37,40 @@ interface Draft {
   criteria: DraftCriterion[];
 }
 
-function toDraft(profile: TargetProfile | null, platform: Platform): Draft {
-  return profile
+function toDraft(template: TargetProfile | null, platform: Platform): Draft {
+  return template
     ? {
-        name: profile.name,
-        description: profile.description ?? "",
-        platform: profile.platform,
-        color: profile.color,
-        criteria: profile.criteria,
+        name: `${template.name} (copy)`.slice(0, 120),
+        description: template.description ?? "",
+        platform: template.platform,
+        color: template.color,
+        criteria: template.criteria,
       }
     : { name: "", description: "", platform, color: null, criteria: [] };
 }
 
 interface Props {
-  profile: TargetProfile | null;
+  // Pre-fills the form from an existing profile ("Use as template").
+  template: TargetProfile | null;
   defaultPlatform: Platform;
   registry: AttributeRegistry;
-  onSaved: (profile: TargetProfile) => void;
-  onDuplicate: (profile: TargetProfile) => void;
-  onArchive: (profile: TargetProfile) => void;
-  onRestore: (profile: TargetProfile) => void;
+  onCreated: (profile: TargetProfile) => void;
   onDirtyChange: (dirty: boolean) => void;
-  onBack: () => void;
+  onCancel: () => void;
 }
 
+// Creates a profile. Profiles are locked once created (see
+// docs/profiles-live-view-architecture.md), so this is only ever a new
+// draft — saved profiles are shown read-only in ProfileView.
 export function ProfileEditor({
-  profile,
+  template,
   defaultPlatform,
   registry,
-  onSaved,
-  onDuplicate,
-  onArchive,
-  onRestore,
+  onCreated,
   onDirtyChange,
-  onBack,
+  onCancel,
 }: Props) {
-  const initial = useMemo(() => toDraft(profile, defaultPlatform), [profile, defaultPlatform]);
+  const initial = useMemo(() => toDraft(template, defaultPlatform), [template, defaultPlatform]);
   const [draft, setDraft] = useState<Draft>(initial);
   const [showErrors, setShowErrors] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -83,15 +81,15 @@ export function ProfileEditor({
   useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
 
   useEffect(() => {
-    if (!profile) nameRef.current?.focus();
-  }, [profile]);
+    nameRef.current?.focus();
+    nameRef.current?.select();
+  }, []);
 
   const defs = useMemo(
     () => new Map(registry.attributes.map((a) => [a.key, a])),
     [registry],
   );
   const available = attributesFor(registry.attributes, draft.platform).filter((a) => a.filterable);
-  const archived = !!profile?.archived_at;
 
   const problems = draft.criteria.filter((c) => {
     const def = defs.get(c.attribute);
@@ -132,7 +130,7 @@ export function ProfileEditor({
   };
 
   const save = async () => {
-    if (saving || archived) return;
+    if (saving) return;
     if (nameMissing || problems) {
       setShowErrors(true);
       if (nameMissing) nameRef.current?.focus();
@@ -148,11 +146,9 @@ export function ProfileEditor({
       criteria: draft.criteria.map(toCriterion),
     };
     try {
-      const saved = profile
-        ? await api.updateProfile(profile.id, input)
-        : await api.createProfile(input);
+      const created = await api.createProfile(input);
       setShowErrors(false);
-      onSaved(saved);
+      onCreated(created);
     } catch (e) {
       setError(apiErrorMessage(e));
     } finally {
@@ -222,25 +218,21 @@ export function ProfileEditor({
   return (
     <div className="profile-editor">
       <div className="profile-editor__top">
-        <button type="button" className="profile-editor__back secondary" onClick={onBack}>
+        <button type="button" className="profile-editor__back secondary" onClick={onCancel}>
           ← Profiles
         </button>
-        <h2>{profile ? profile.name || "Untitled profile" : "New profile"}</h2>
-        {dirty && !archived && <span className="profile-editor__dirty">Unsaved changes</span>}
+        <h2>{template ? `New from "${template.name}"` : "New profile"}</h2>
+        {dirty && <span className="profile-editor__dirty">Unsaved changes</span>}
       </div>
 
-      {archived && profile && (
-        <div className="profile-editor__archived">
-          This profile is archived.
-          <button type="button" onClick={() => onRestore(profile)}>
-            Restore
-          </button>
-        </div>
-      )}
+      <div className="profile-editor__lock-note">
+        Profiles can't be changed once created — check the criteria before you create it.
+        You can always use it as a template for a new one.
+      </div>
 
       {error && <div className="app__error">{error}</div>}
 
-      <fieldset className="profile-editor__body" disabled={archived}>
+      <fieldset className="profile-editor__body">
         <div className="profile-editor__fields">
           <label className="field">
             <span>Name</span>
@@ -319,30 +311,23 @@ export function ProfileEditor({
         {section("preferred")}
       </fieldset>
 
-      {!archived && (
-        <footer className="profile-editor__footer">
-          {profile && (
-            <div className="profile-editor__footer-left">
-              <button type="button" className="secondary" onClick={() => onDuplicate(profile)}>
-                Duplicate
-              </button>
-              <button type="button" className="secondary" onClick={() => onArchive(profile)}>
-                Archive
-              </button>
-            </div>
+      <footer className="profile-editor__footer">
+        <div className="profile-editor__footer-left">
+          <button type="button" className="secondary" onClick={onCancel}>
+            Cancel
+          </button>
+        </div>
+        <div className="profile-editor__footer-right">
+          {showErrors && (nameMissing || problems > 0) && (
+            <span className="profile-editor__problems">
+              {nameMissing ? "Name is required" : `${problems} criteria need attention`}
+            </span>
           )}
-          <div className="profile-editor__footer-right">
-            {showErrors && (nameMissing || problems > 0) && (
-              <span className="profile-editor__problems">
-                {nameMissing ? "Name is required" : `${problems} criteria need attention`}
-              </span>
-            )}
-            <button type="button" onClick={save} disabled={saving || (!dirty && !!profile)}>
-              {saving ? "Saving…" : profile ? "Save changes" : "Create profile"}
-            </button>
-          </div>
-        </footer>
-      )}
+          <button type="button" onClick={save} disabled={saving}>
+            {saving ? "Creating…" : "Create profile"}
+          </button>
+        </div>
+      </footer>
     </div>
   );
 }

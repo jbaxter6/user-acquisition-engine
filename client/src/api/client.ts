@@ -9,6 +9,9 @@ import type {
   MetaUsageResponse,
   Platform,
   Prospect,
+  ProfileMatchCounts,
+  ProfileSummary,
+  ProspectStatus,
   TargetProfile,
   TargetProfileInput,
 } from "../types";
@@ -260,14 +263,13 @@ export const api = {
       body: JSON.stringify(input),
     }),
 
-  updateProfile: (id: number, input: TargetProfileInput) =>
-    request<TargetProfile>(`/api/profiles/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(input),
-    }),
+  profileSummary: (id: number, status?: ProspectStatus) =>
+    request<ProfileSummary>(
+      `/api/profiles/${id}/summary${status ? `?status=${status}` : ""}`,
+    ),
 
-  duplicateProfile: (id: number) =>
-    request<TargetProfile>(`/api/profiles/${id}/duplicate`, { method: "POST" }),
+  profileSummaries: () =>
+    request<Record<number, ProfileMatchCounts>>("/api/profiles/summaries"),
 
   archiveProfile: (id: number) =>
     request<{ ok: true }>(`/api/profiles/${id}`, { method: "DELETE" }),

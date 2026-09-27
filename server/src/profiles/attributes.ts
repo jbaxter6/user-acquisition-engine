@@ -547,15 +547,6 @@ function normalizeValue(
   }
 }
 
-// Criteria whose attribute doesn't exist on `platform` — used to refuse a
-// platform change rather than silently dropping them.
-export function incompatibleCriteria(
-  criteria: Criterion[],
-  platform: Platform,
-): Criterion[] {
-  return criteria.filter((c) => !getAttribute(c.attribute)?.platforms.includes(platform));
-}
-
 // ---- Prospect attribute values ----
 
 const MAX_TEXT = 500;

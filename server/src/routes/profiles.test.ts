@@ -40,10 +40,13 @@ describe("profiles", () => {
     expect((await api("/api/profiles/9999")).status).toBe(404);
   });
 
-  it("duplicates a profile", async () => {
-    const res = await api(`/api/profiles/${id}/duplicate`, { method: "POST" });
-    expect(res.status).toBe(201);
-    expect(await res.json()).toMatchObject({ name: "Mid-tier IG (copy)", criteria: [followerRange] });
+  it("refuses to change a profile once created", async () => {
+    const res = await api(`/api/profiles/${id}`, {
+      method: "PUT",
+      json: { name: "Renamed", platform: "instagram", criteria: [] },
+    });
+    expect(res.status).toBe(405);
+    expect((await (await api(`/api/profiles/${id}`)).json()).name).toBe("Mid-tier IG");
   });
 
   it("archives and restores", async () => {
@@ -58,21 +61,33 @@ describe("profiles", () => {
     expect(back.map((p: { id: number }) => p.id)).toContain(id);
   });
 
-  it("refuses a platform change that would orphan criteria", async () => {
-    const onlyOnInstagram = (await (await api("/api/profiles/attributes")).json()).attributes.find(
-      (a: { platforms: string[] }) => a.platforms.includes("instagram") && !a.platforms.includes("twitch"),
-    );
-    expect(onlyOnInstagram).toBeTruthy();
-    const criterion = { ...followerRange, id: "c2", attribute: onlyOnInstagram.key };
-    const created = await (
-      await api("/api/profiles", { method: "POST", json: { name: "IG only", platform: "instagram", criteria: [] } })
-    ).json();
-
-    const res = await api(`/api/profiles/${created.id}`, {
-      method: "PUT",
-      json: { name: "IG only", platform: "twitch", criteria: [criterion] },
+  it("counts matching prospects, filtered by status", async () => {
+    await api("/api/prospects/bulk", {
+      method: "POST",
+      json: {
+        prospects: [
+          { username: "fits", platform: "instagram", followers: 50_000 },
+          { username: "too_small", platform: "instagram", attributes: { followers: 500 } },
+          { username: "no_data", platform: "instagram" },
+          { username: "wrong_platform", platform: "tiktok", followers: 50_000 },
+        ],
+      },
     });
-    expect(res.status).toBe(409);
-    expect((await res.json()).incompatible).toEqual(["c2"]);
+
+    const summary = await (await api(`/api/profiles/${id}/summary`)).json();
+    expect(summary).toEqual({
+      match: 1,
+      possible: 1,
+      total: 3,
+      criteria: { c1: { pass: 1, fail: 1, unknown: 1 } },
+    });
+
+    const contacted = await (await api(`/api/profiles/${id}/summary?status=contacted`)).json();
+    expect(contacted).toMatchObject({ match: 0, possible: 0, total: 0 });
+    expect((await api(`/api/profiles/${id}/summary?status=bogus`)).status).toBe(400);
+    expect((await api("/api/profiles/9999/summary")).status).toBe(404);
+
+    const all = await (await api("/api/profiles/summaries")).json();
+    expect(all[id]).toEqual({ match: 1, possible: 1, total: 3 });
   });
 });

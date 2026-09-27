@@ -3,22 +3,23 @@ import type { Platform } from "../adapters/types.js";
 import {
   createTargetProfile,
   getTargetProfileById,
+  listProspectsForMatching,
   listTargetProfiles,
   setTargetProfileArchived,
-  updateTargetProfile,
   type TargetProfileInput,
 } from "../db.js";
 import {
   ATTRIBUTES,
   OPERATORS_BY_TYPE,
   attributesForPlatform,
-  incompatibleCriteria,
   validateCriteria,
   type Criterion,
 } from "../profiles/attributes.js";
+import { summarize } from "../profiles/match.js";
 
 const PLATFORMS: Platform[] = ["instagram", "tiktok", "twitch", "youtube"];
 const COLOR_RE = /^#[0-9a-f]{6}$/i;
+const STATUSES = ["new", "contacted", "replied", "closed"];
 
 function isPlatform(value: unknown): value is Platform {
   return typeof value === "string" && (PLATFORMS as string[]).includes(value);
@@ -87,6 +88,23 @@ export function profilesRouter(): Router {
     res.json(listTargetProfiles({ platform, includeArchived: includeArchived === "true" }));
   });
 
+  // Match counts for every active profile — the list badges. Computed on
+  // read; see docs/profiles-live-view-architecture.md §4.
+  router.get("/summaries", (_req, res) => {
+    const prospectsByPlatform = new Map<string, ReturnType<typeof listProspectsForMatching>>();
+    const out: Record<number, { match: number; possible: number; total: number }> = {};
+    for (const profile of listTargetProfiles({})) {
+      let prospects = prospectsByPlatform.get(profile.platform);
+      if (!prospects) {
+        prospects = listProspectsForMatching(profile.platform);
+        prospectsByPlatform.set(profile.platform, prospects);
+      }
+      const { match, possible, total } = summarize(profile.criteria, prospects);
+      out[profile.id] = { match, possible, total };
+    }
+    res.json(out);
+  });
+
   router.get("/:id", (req, res) => {
     const profile = getTargetProfileById(Number(req.params.id));
     if (!profile) return res.status(404).json({ error: "profile not found" });
@@ -99,47 +117,21 @@ export function profilesRouter(): Router {
     res.status(201).json(createTargetProfile(parsed.input));
   });
 
-  router.put("/:id", (req, res) => {
-    const id = Number(req.params.id);
-    const existing = getTargetProfileById(id);
-    if (!existing) return res.status(404).json({ error: "profile not found" });
-
-    // Changing platform with criteria that don't exist on the new platform
-    // is refused with the offending ids, rather than silently dropping
-    // them — the client confirms with the user, strips, and resubmits.
-    const body = (req.body ?? {}) as Record<string, unknown>;
-    if (isPlatform(body.platform) && body.platform !== existing.platform && Array.isArray(body.criteria)) {
-      const incompatible = incompatibleCriteria(
-        body.criteria.filter(
-          (c): c is Criterion => typeof c === "object" && c !== null && typeof c.attribute === "string",
-        ),
-        body.platform,
-      );
-      if (incompatible.length) {
-        return res.status(409).json({
-          error: `${incompatible.length} criteria aren't available on ${body.platform}`,
-          incompatible: incompatible.map((c) => c.id),
-        });
-      }
-    }
-
-    const parsed = parseBody(req.body);
-    if (!parsed.ok) return res.status(400).json({ error: parsed.errors.join("; "), errors: parsed.errors });
-    res.json(updateTargetProfile(id, parsed.input));
+  // Profiles are immutable once created: match counts (and later Discovery
+  // runs) refer to a profile by id, so its criteria can't change under it.
+  // To change one, use it as a template for a new profile.
+  router.put("/:id", (_req, res) => {
+    res.status(405).json({ error: "profiles can't be changed once created; use it as a template instead" });
   });
 
-  router.post("/:id/duplicate", (req, res) => {
-    const source = getTargetProfileById(Number(req.params.id));
-    if (!source) return res.status(404).json({ error: "profile not found" });
-    res.status(201).json(
-      createTargetProfile({
-        name: `${source.name} (copy)`.slice(0, 120),
-        description: source.description,
-        platform: source.platform,
-        criteria: source.criteria,
-        color: source.color,
-      }),
-    );
+  router.get("/:id/summary", (req, res) => {
+    const profile = getTargetProfileById(Number(req.params.id));
+    if (!profile) return res.status(404).json({ error: "profile not found" });
+    const { status } = req.query as { status?: string };
+    if (status !== undefined && !STATUSES.includes(status)) {
+      return res.status(400).json({ error: `status must be one of ${STATUSES.join(", ")}` });
+    }
+    res.json(summarize(profile.criteria, listProspectsForMatching(profile.platform, status)));
   });
 
   router.post("/:id/restore", (req, res) => {

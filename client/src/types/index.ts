@@ -268,3 +268,17 @@ export interface TargetProfileInput {
   criteria: Criterion[];
   color: string | null;
 }
+
+export type ProspectStatus = "new" | "contacted" | "replied" | "closed";
+
+export interface ProfileMatchCounts {
+  // Every must-have passes.
+  match: number;
+  // No must-have fails, but at least one couldn't be checked (no data).
+  possible: number;
+  total: number;
+}
+
+export interface ProfileSummary extends ProfileMatchCounts {
+  criteria: Record<string, { pass: number; fail: number; unknown: number }>;
+}

@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   getAttribute,
-  incompatibleCriteria,
   normalizeAttributeValue,
   validateCriteria,
-  type Criterion,
 } from "./attributes.js";
 
 const base = { id: "c1", mode: "required" } as const;
@@ -133,18 +131,6 @@ describe("validateCriteria", () => {
         { ...base, id: "b", attribute: "followers", operator: "gte", value: -1 },
       ]),
     ).toHaveLength(2);
-  });
-});
-
-describe("incompatibleCriteria", () => {
-  it("finds criteria whose attribute isn't on the target platform", () => {
-    const criteria: Criterion[] = [
-      { ...base, id: "a", attribute: "followers", operator: "gte", value: 1 },
-      { ...base, id: "b", attribute: "account_type", operator: "in", value: ["creator"] },
-      { ...base, id: "c", attribute: "country", operator: "in", value: ["US"] },
-    ];
-    expect(incompatibleCriteria(criteria, "twitch").map((c) => c.id)).toEqual(["b"]);
-    expect(incompatibleCriteria(criteria, "youtube").map((c) => c.id)).toEqual(["a", "b"]);
   });
 });
 

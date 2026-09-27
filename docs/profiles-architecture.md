@@ -1,6 +1,13 @@
 # Profiles — Architecture Plan
 
-Status: **Phase 1 built** (2026-09-25). Phases 2–4 not started.
+Status: **Phase 1 built** (2026-09-25). Phase 2's `prospect_attributes` table
+exists. **Phase 3 partly built** (2026-09-26): `evaluate()` plus per-profile
+match counts, in `docs/profiles-live-view-architecture.md`. The preview,
+matches list and Prospecting filter aren't built yet. Phase 4 not started.
+
+**Changed 2026-09-26: profiles are immutable once created.** `PUT` returns
+405 and `/duplicate` is gone. "Use as template" pre-fills a new profile
+instead. The editing descriptions below are historical.
 Owner: JB · Drafted 2026-09-25
 
 Phase 1 went ahead with the recommended defaults for the open questions in

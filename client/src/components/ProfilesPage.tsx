@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
-import type { AttributeRegistry, Platform, TargetProfile } from "../types";
+import type { AttributeRegistry, Platform, ProfileMatchCounts, TargetProfile } from "../types";
 import { describeCriterion } from "../lib/profileCriteria";
 import { formatRelativeTime } from "../lib/relativeTime";
 import { IconPlus, IconSearch } from "./icons";
 import { PlatformBadge } from "./PlatformBadge";
 import { ProfileEditor } from "./ProfileEditor";
+import { ProfileView } from "./ProfileView";
 import { apiErrorMessage } from "../lib/apiError";
 
 const FILTERS: { value: Platform | "all"; label: string }[] = [
@@ -19,13 +20,15 @@ const FILTERS: { value: Platform | "all"; label: string }[] = [
 
 const PREVIEW_CHIPS = 3;
 
-// Profiles: saved per-platform criteria describing who we want to reach.
-// Phase 1 of docs/profiles-architecture.md — define and manage them. Later
-// phases match prospects against them and drive Discovery from them.
+// Profiles: saved per-platform criteria describing who we want to reach
+// (docs/profiles-architecture.md). Locked once created — a saved profile
+// opens read-only with its match counts, and "Use as template" starts a new
+// one from it (docs/profiles-live-view-architecture.md).
 export function ProfilesPage() {
   const [params, setParams] = useSearchParams();
   const [profiles, setProfiles] = useState<TargetProfile[]>([]);
   const [registry, setRegistry] = useState<AttributeRegistry | null>(null);
+  const [matchCounts, setMatchCounts] = useState<Record<number, ProfileMatchCounts>>({});
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Platform | "all">("all");
@@ -39,14 +42,17 @@ export function ProfilesPage() {
     selected && selected !== "new"
       ? profiles.find((p) => String(p.id) === selected) ?? null
       : null;
-  const editorOpen = selected === "new" || selectedProfile != null;
+  const creating = selected === "new";
+  const templateId = creating ? params.get("from") : null;
+  const template = templateId ? profiles.find((p) => String(p.id) === templateId) ?? null : null;
+  const editorOpen = creating || selectedProfile != null;
 
   const refresh = useCallback(
     () =>
-      api
-        .listProfiles(true)
-        .then(setProfiles)
-        .catch((e) => setError(apiErrorMessage(e))),
+      Promise.all([
+        api.listProfiles(true).then(setProfiles),
+        api.profileSummaries().then(setMatchCounts),
+      ]).catch((e) => setError(apiErrorMessage(e))),
     [],
   );
 
@@ -72,12 +78,14 @@ export function ProfilesPage() {
     dirtyRef.current = dirty;
   }, []);
 
-  const select = (id: number | "new" | null) => {
-    if (String(id) === selected) return;
-    if (dirtyRef.current && !confirm("Discard unsaved changes to this profile?")) return;
+  const select = (id: number | "new" | null, from?: number) => {
+    const next: Record<string, string> = id == null ? {} : { id: String(id) };
+    if (from != null) next.from = String(from);
+    if (next.id === selected && next.from === (params.get("from") ?? undefined)) return;
+    if (dirtyRef.current && !confirm("Discard this unsaved profile?")) return;
     dirtyRef.current = false;
     setEditorKey((k) => k + 1);
-    setParams(id == null ? {} : { id: String(id) });
+    setParams(next);
   };
 
   const upsertLocal = (p: TargetProfile) =>
@@ -85,24 +93,12 @@ export function ProfilesPage() {
       prev.some((x) => x.id === p.id) ? prev.map((x) => (x.id === p.id ? p : x)) : [p, ...prev],
     );
 
-  const handleSaved = (p: TargetProfile) => {
+  const handleCreated = (p: TargetProfile) => {
     upsertLocal(p);
     dirtyRef.current = false;
     setEditorKey((k) => k + 1);
-    setParams({ id: String(p.id) }, { replace: selected === "new" });
-  };
-
-  const handleDuplicate = async (p: TargetProfile) => {
-    if (dirtyRef.current && !confirm("Discard unsaved changes and duplicate the saved version?")) return;
-    try {
-      const copy = await api.duplicateProfile(p.id);
-      upsertLocal(copy);
-      dirtyRef.current = false;
-      setEditorKey((k) => k + 1);
-      setParams({ id: String(copy.id) });
-    } catch (e) {
-      setError(apiErrorMessage(e));
-    }
+    setParams({ id: String(p.id) }, { replace: true });
+    void refresh();
   };
 
   const handleArchive = async (p: TargetProfile) => {
@@ -120,7 +116,7 @@ export function ProfilesPage() {
   const handleRestore = async (p: TargetProfile) => {
     try {
       upsertLocal(await api.restoreProfile(p.id));
-      setEditorKey((k) => k + 1);
+      void refresh();
     } catch (e) {
       setError(apiErrorMessage(e));
     }
@@ -156,6 +152,7 @@ export function ProfilesPage() {
     const must = p.criteria.filter((c) => c.mode === "required").length;
     const nice = p.criteria.length - must;
     const chips = p.criteria.slice(0, PREVIEW_CHIPS);
+    const counts = p.archived_at ? undefined : matchCounts[p.id];
     return (
       <li key={p.id}>
         <button
@@ -169,6 +166,14 @@ export function ProfilesPage() {
           <div className="profile-item__head">
             <span className="profile-item__dot" aria-hidden="true" />
             <span className="profile-item__name">{p.name}</span>
+            {counts && (
+              <span
+                className={counts.match ? "profile-item__matches profile-item__matches--on" : "profile-item__matches"}
+                title={`${counts.match} match · ${counts.possible} possible · of ${counts.total}`}
+              >
+                {counts.match} match
+              </span>
+            )}
             <PlatformBadge platform={p.platform} />
           </div>
           {chips.length > 0 ? (
@@ -196,7 +201,7 @@ export function ProfilesPage() {
             <div className="profile-item__none">No criteria yet</div>
           )}
           <div className="profile-item__meta">
-            {must} must · {nice} nice · edited {formatRelativeTime(p.updated_at)}
+            {must} must · {nice} nice · created {formatRelativeTime(p.created_at)}
           </div>
         </button>
       </li>
@@ -262,17 +267,24 @@ export function ProfilesPage() {
       </aside>
 
       <main className="profiles__editor">
-        {registry && editorOpen ? (
+        {registry && creating && (!templateId || template) ? (
           <ProfileEditor
-            key={`${selected}-${editorKey}`}
-            profile={selectedProfile}
+            key={`new-${templateId ?? ""}-${editorKey}`}
+            template={template}
             defaultPlatform={filter === "all" ? "instagram" : filter}
             registry={registry}
-            onSaved={handleSaved}
-            onDuplicate={handleDuplicate}
+            onCreated={handleCreated}
+            onDirtyChange={onDirtyChange}
+            onCancel={() => select(template ? template.id : null)}
+          />
+        ) : registry && selectedProfile ? (
+          <ProfileView
+            key={selectedProfile.id}
+            profile={selectedProfile}
+            registry={registry}
+            onUseAsTemplate={(p) => select("new", p.id)}
             onArchive={handleArchive}
             onRestore={handleRestore}
-            onDirtyChange={onDirtyChange}
             onBack={() => select(null)}
           />
         ) : (

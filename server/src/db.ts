@@ -1546,24 +1546,43 @@ export function createTargetProfile(input: TargetProfileInput): TargetProfileRow
   return getTargetProfileById(result.lastInsertRowid as number)!;
 }
 
-export function updateTargetProfile(
-  id: number,
-  input: TargetProfileInput,
-): TargetProfileRow | undefined {
-  db.prepare(
-    `UPDATE target_profiles
-     SET name = ?, description = ?, platform = ?, criteria_json = ?, color = ?,
-         updated_at = datetime('now')
-     WHERE id = ?`,
-  ).run(
-    input.name,
-    input.description,
-    input.platform,
-    JSON.stringify(input.criteria),
-    input.color,
-    id,
-  );
-  return getTargetProfileById(id);
+// Prospects on one platform with their attributes flattened for the
+// matcher (profiles/match.ts). The prospects.followers and email columns
+// predate prospect_attributes, so they fill in when no attribute row exists.
+export function listProspectsForMatching(
+  platform: string,
+  status?: string,
+): { id: number; attributes: Record<string, unknown> }[] {
+  const prospects = db
+    .prepare<
+      string[],
+      { id: number; followers: number | null; email: string | null }
+    >(
+      `SELECT id, followers, email FROM prospects
+       WHERE platform = ?${status ? " AND status = ?" : ""}`,
+    )
+    .all(...(status ? [platform, status] : [platform]));
+
+  const rows = db
+    .prepare<[string], { prospect_id: number; attribute: string; value_json: string }>(
+      `SELECT a.prospect_id, a.attribute, a.value_json
+       FROM prospect_attributes a JOIN prospects p ON p.id = a.prospect_id
+       WHERE p.platform = ?`,
+    )
+    .all(platform);
+  const byProspect = new Map<number, Record<string, unknown>>();
+  for (const r of rows) {
+    const attrs = byProspect.get(r.prospect_id) ?? {};
+    attrs[r.attribute] = JSON.parse(r.value_json);
+    byProspect.set(r.prospect_id, attrs);
+  }
+
+  return prospects.map((p) => {
+    const attributes = byProspect.get(p.id) ?? {};
+    if (attributes.followers === undefined && p.followers != null) attributes.followers = p.followers;
+    if (attributes.has_email === undefined && p.email) attributes.has_email = true;
+    return { id: p.id, attributes };
+  });
 }
 
 export function setTargetProfileArchived(id: number, archived: boolean): void {

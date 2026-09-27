@@ -17,6 +17,8 @@
 - [ ] Save a logged-in Instagram profile page as a fixture (war/scraper/fixtures) to replace the simulated logged-in test; add the "and N more" links dialog so the full link list can be read
 - [ ] Sync `follower_count` / `is_verified_user` from Instagram's messaging API for prospects who've replied, into `prospect_attributes` with source `instagram_api`
 - [ ] Protect against losing the Railway volume itself: turn on Railway volume backups, or regularly download `GET /api/backup` somewhere else (the nightly snapshots live on the same volume)
+- [ ] Fill prospect data so profile match counts mean something: live DB has followers for 3 of 258 prospects and 0 `prospect_attributes` rows, so most prospects show as "possible"
+- [ ] Profiles Phase 3 remainder: live match preview in the new-profile editor, a ranked matches list, and a `?profileId=` filter on Prospecting (clicking a Match tile should deep-link there)
 
 ## Accomplishments
 ### 2026-09-23 (continued)
@@ -161,6 +163,9 @@
 - Added client tests (72) for `src/lib`: sheet import/column mapping, handle parsing, counts, relative time, profile criteria, API errors
 - Fixed, found by the new tests: Disconnect 500'd for any account with conversations/prospects (foreign keys), so it's now a soft disconnect (`accounts.disconnected_at`, token wiped) and reconnecting restores the same account and its threads; Sync over-counted its Meta calls (second-resolution timestamps), so it's now counted by call id; the import's Followers column dropped "12,500"/"1.2M"/"10k" values
 - Added database backups (`server/src/backup.ts`): a snapshot of `inbox.db` on startup and then daily into `$DATA_DIR/backups/`, keeping the newest 7 (self-contained files, safe while the app runs); `GET /api/backup` downloads a fresh copy (behind the site password) for keeping off the server
+- Profiles are now locked once created: `PUT /api/profiles/:id` returns 405 and the duplicate endpoint is gone. "Use as template" pre-fills a new draft (`?id=new&from=<id>`) and leaves the original alone, so match counts always refer to fixed criteria
+- Added a read-only profile view (`ProfileView.tsx`) with Match / Possible / total stat tiles, a prospect-status filter, and pass/fail/no-data coverage for each criterion. The profile list shows a "N match" badge
+- Added the matcher: `server/src/profiles/match.ts` (`evaluate`/`summarize`, missing data counts as unknown, not fail) plus `GET /api/profiles/:id/summary?status=` and `GET /api/profiles/summaries`, with tests. Removed the now-unused `incompatibleCriteria` helper
 
 ## Documentation Index
 - [Project Overview](README.md) — vision, problem statement, and 3-module architecture
@@ -182,12 +187,14 @@
 - [Prospect data model](server/src/db.ts) — `prospects` table, separate pipeline from `conversations`
 - [Message templates](server/src/db.ts) — `message_templates` table + `messages.template_id`, reusable outreach copy with per-template sent/replied/reply-rate stats (`getMessageTemplateStats`)
 - [Instagram profile data inventory](docs/instagram-profile-data.md) — UI-only (no platform APIs) inventory of what the scraper can read from an IG profile via page loads/hovers/clicks, depth levels, storage/snapshot plan, rollout order
+- [Profile matching](server/src/profiles/match.ts) — pure `evaluate()`/`summarize()`: pass/fail/unknown per criterion, match vs possible, weighted score
+- [Profiles: locked profiles, live view & match count](docs/profiles-live-view-architecture.md) — why profiles are immutable, the Use-as-template flow, view layout, summary API
 - [Profiles architecture](docs/profiles-architecture.md) — plan for target profiles/personas, attribute registry, matchmaking semantics and phases 1–4
 - [Profile attribute registry](server/src/profiles/attributes.ts) — per-platform filterable attributes + criteria validation; the contract for Profiles, import and matching
-- [Profiles API](server/src/routes/profiles.ts) — CRUD, duplicate, archive/restore, and `/attributes` (the form schema)
+- [Profiles API](server/src/routes/profiles.ts) — create/read (profiles are immutable), archive/restore, `/attributes` (the form schema), match `/summary` + `/summaries`
 - [Scraper profile readers](war/scraper/src/profiles/) — on-screen Instagram/TikTok header reads (DOM snapshot + pure parser), tested against saved pages in war/scraper/fixtures
 - [Prospect attributes](server/src/db.ts) — `prospect_attributes` table; import via `/api/prospects/bulk` `attributes`; displayed by client/src/components/ProspectAttributes.tsx
-- [Profiles UI](client/src/components/ProfilesPage.tsx) — list + editor; criterion controls in `CriterionRow.tsx`, logic in `lib/profileCriteria.ts`
+- [Profiles UI](client/src/components/ProfilesPage.tsx) — list, read-only `ProfileView.tsx` with match stats, and a create-only `ProfileEditor.tsx`; criterion controls in `CriterionRow.tsx`, logic in `lib/profileCriteria.ts`
 - [Templates API](server/src/routes/templates.ts) — CRUD + archive + `/stats` for message templates
 - [Templates UI](client/src/components/TemplatesPanel.tsx) — create/edit/archive templates and view effectiveness, on the Prospecting page
 - [Excel column mapping](client/src/lib/prospectImport.ts) — auto-detects likely columns by header name, `xlsx` loaded via dynamic import

@@ -144,6 +144,32 @@ export function describeCriterion(c: Criterion | DraftCriterion, def: AttributeD
   }
 }
 
+// Just the condition, for layouts that show the attribute label separately:
+// "10k – 100k", "≥ 3%", "US, CA", "Not personal".
+export function describeValue(c: Criterion, def: AttributeDef): string {
+  const optionLabel = (v: string) => def.options?.find((o) => o.value === v)?.label ?? v;
+  switch (c.operator) {
+    case "between": {
+      const [lo, hi] = c.value as [number, number];
+      return `${fmt(lo, def)} – ${fmt(hi, def)}`;
+    }
+    case "gte":
+      return `≥ ${fmt(c.value as number, def)}`;
+    case "lte":
+      return `≤ ${fmt(c.value as number, def)}`;
+    case "in":
+      return (c.value as string[]).map(optionLabel).join(", ");
+    case "not_in":
+      return `Not ${(c.value as string[]).map(optionLabel).join(", ")}`;
+    case "contains_any":
+      return `Any of: ${(c.value as string[]).join(", ")}`;
+    case "contains_none":
+      return `None of: ${(c.value as string[]).join(", ")}`;
+    case "is":
+      return c.value ? "Yes" : "No";
+  }
+}
+
 export function attributesFor(all: AttributeDef[], platform: Platform): AttributeDef[] {
   return all.filter((a) => a.platforms.includes(platform));
 }
