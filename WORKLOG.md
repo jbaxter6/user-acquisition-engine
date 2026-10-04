@@ -167,6 +167,11 @@
 - Added a read-only profile view (`ProfileView.tsx`) with Match / Possible / total stat tiles, a prospect-status filter, and pass/fail/no-data coverage for each criterion. The profile list shows a "N match" badge
 - Added the matcher: `server/src/profiles/match.ts` (`evaluate`/`summarize`, missing data counts as unknown, not fail) plus `GET /api/profiles/:id/summary?status=` and `GET /api/profiles/summaries`, with tests. Removed the now-unused `incompatibleCriteria` helper
 
+### 2026-10-03
+- Added `war/outreach/README.md`: the plan for a Playwright batch runner that opens Prospecting, clicks Not Contacted, and messages 10–20 people per run. Runner itself is not built yet.
+- Instagram sends are left for the next Sync to mark contacted (`ensureProspectForParticipant` flips a matching `new` prospect when it sees an outbound message). The runner will not call `mark-contacted`.
+- Built the outreach batch runner (`war/outreach`, `npm run batch`): Playwright attaches to the scraper Chrome, signs into the CRM, clicks Not Contacted, and messages a 1–20 batch with one template. It refuses Smooth handles, stops on a login wall or rate limit, and records sends in `sent.json` so a second run before Sync does not repeat them. Instagram status still comes from the next Sync. 14 tests.
+
 ## Documentation Index
 - [Project Overview](README.md) — vision, problem statement, and 3-module architecture
 - [Unified Master Inbox setup & platform API constraints](README.md) — how to run client/server, Instagram credential setup, why TikTok/Twitch are manual-only
@@ -179,6 +184,7 @@
 - [Participant profile lookup](server/src/instagramProfile.ts) — fetches/caches a message sender's avatar (distinct from our own connected accounts' avatars)
 - [Platform icons](client/src/components/PlatformIcon.tsx) — official simple-icons SVG paths for Instagram/TikTok/Twitch, used for badges and filters
 - [Meta App Review submission notes](docs/meta-app-review-submission.md) — checklist, permissions, use-case description, and demo script for getting `instagram_business_manage_messages` to Advanced Access
+- [Outreach batches](war/outreach/README.md) — planned Playwright runner: Not Contacted filter, 10–20 sends per run; Instagram status updates on the next Sync
 - [Railway deploy guide](docs/deploy-railway.md) — step-by-step: persistent volume, env vars, custom domain, updating Meta's URLs post-deploy; reflects the real www+forwarding+TXT-record path taken
 - [Site password gate](server/src/siteAuth.ts) — HTTP Basic Auth via `SITE_PASSWORD`, excludes `/webhooks/*`
 - [Conversation sync (pull-based)](server/src/sync.ts) — direct Graph API read as an alternative to webhook push; also repairs message timestamps and backfills avatars on every run

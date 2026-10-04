@@ -1,0 +1,13 @@
+<!doctype html>
+<html>
+  <body>
+    <div id="box" contenteditable="true" role="textbox" aria-label="Message"></div>
+    <button id="send" type="button" aria-label="Send">Send</button>
+    <script>
+      document.getElementById("send").addEventListener("click", () => {
+        document.body.dataset.sent = document.getElementById("box").innerText;
+        document.getElementById("box").textContent = "";
+      });
+    </script>
+  </body>
+</html>

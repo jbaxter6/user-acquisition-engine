@@ -1,0 +1,19 @@
+<!doctype html>
+<html>
+  <body>
+    <button type="button" data-e2e="message-button">Message</button>
+    <div id="dialog" role="dialog" hidden>
+      <div data-e2e="dm-input"><div id="box" contenteditable="true"></div></div>
+      <button id="send" type="button" aria-label="Send">Send</button>
+    </div>
+    <script>
+      document.querySelector("[data-e2e='message-button']").addEventListener("click", () => {
+        document.getElementById("dialog").hidden = false;
+      });
+      document.getElementById("send").addEventListener("click", () => {
+        document.body.dataset.sent = document.getElementById("box").innerText;
+        document.getElementById("box").textContent = "";
+      });
+    </script>
+  </body>
+</html>

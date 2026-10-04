@@ -1,0 +1,48 @@
+<!doctype html>
+<html>
+  <body>
+    <button class="filter-pill filter-pill--active" type="button">
+      Not Contacted <span class="filter-pill__count">2</span>
+    </button>
+    <select>
+      <option value="all">All platforms</option>
+      <option value="instagram" selected>Instagram</option>
+      <option value="tiktok">TikTok</option>
+    </select>
+    <input placeholder="Search handle, name, brand" />
+
+    <div class="prospect-card" id="prospect-card-1">
+      <a class="prospect-card__handle">@alpha</a>
+      <label>
+        Message template
+        <select>
+          <option value="">Select a template…</option>
+          <option value="1" data-body="hey alpha">Intro</option>
+        </select>
+      </label>
+      <textarea readonly placeholder="Select a template above…"></textarea>
+      <button class="prospect-card__open-btn" type="button" disabled>Copy &amp; open in Instagram</button>
+    </div>
+
+    <div class="prospect-card" id="prospect-card-2">
+      <a class="prospect-card__handle">@beta</a>
+      <button class="prospect-card__cta" type="button">Continue in inbox</button>
+    </div>
+
+    <script>
+      const card = document.querySelector("#prospect-card-1");
+      const select = card.querySelector("select");
+      const box = card.querySelector("textarea");
+      const open = card.querySelector("button");
+      select.addEventListener("change", () => {
+        const option = select.selectedOptions[0];
+        box.value = option.dataset.body || "";
+        open.disabled = !box.value.trim();
+      });
+      open.addEventListener("click", () => {
+        if (open.disabled) return;
+        window.open(new URL("ig-thread.html", location.href).href, "_blank", "noopener");
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,13 @@
+<!doctype html>
+<html>
+  <body>
+    <h1>About</h1>
+    <button type="button">View email address</button>
+    <p id="email" hidden>biz@example.com</p>
+    <script>
+      document.querySelector("button").addEventListener("click", () => {
+        document.getElementById("email").hidden = false;
+      });
+    </script>
+  </body>
+</html>
