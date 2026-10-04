@@ -25,3 +25,4 @@ Please make sure you are logged out of all Smooth social accounts when using "WA
 - **Your normal Chrome is fine.** The scraper uses its own separate profile, so being logged into Smooth in your everyday browser doesn't affect it.
 - **The `fuckem` strategies don't log in.** They start a fresh headless browser each time. This rule is about `scraper/`.
 - **Logging out isn't total protection.** Platforms can still link accounts by device and network. Keep the pace slow, and stop when you get blocked (see `fuckem/AGENTS.md`, "Well-Behaved Automation").
+- **Throwaway logins live in the app.** The Burners tab stores each throwaway's username and password (encrypted). Copy them from there when you log into the scraper browser. Do not save a Smooth account.

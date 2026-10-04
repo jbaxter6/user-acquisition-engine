@@ -93,3 +93,36 @@ describe("DELETE /api/prospects/:id", () => {
     expect((await list()).items.map((p) => p.username)).not.toContain("gamma");
   });
 });
+
+describe("GET /api/prospects follower filter", () => {
+  const names = async (query: string) =>
+    (await list(`${query}${query.includes("?") ? "&" : "?"}sort=name&limit=50`)).items.map((p) => p.username);
+
+  it("keeps prospects inside the range and prefers the attribute over the column", async () => {
+    // alpha already has column followers 1200 and an attribute of 5000.
+    await importRows([
+      { username: "column_only", platform: "instagram", followers: 500 },
+      { username: "attr_wins", platform: "instagram", followers: 100, attributes: { followers: 80_000 } },
+      { username: "attr_only", platform: "instagram", attributes: { followers: 42_000 } },
+      { username: "big", platform: "instagram", followers: 2_000_000 },
+      { username: "mystery", platform: "instagram" },
+    ]);
+
+    expect(await names("?minFollowers=10000&maxFollowers=100000")).toEqual(["attr_only", "attr_wins"]);
+    const atLeast1k = await names("?minFollowers=1000");
+    expect(atLeast1k).toEqual(expect.arrayContaining(["alpha", "attr_only", "attr_wins", "big"]));
+    expect(atLeast1k).not.toContain("column_only");
+    expect(atLeast1k).not.toContain("mystery");
+    expect(atLeast1k).not.toContain("beta");
+    expect(await names("?maxFollowers=1000")).toEqual(["column_only"]);
+
+    const counts = await (await api("/api/prospects/counts?minFollowers=10000&maxFollowers=100000")).json();
+    expect(counts).toMatchObject({ all: 2, new: 2, contacted: 0 });
+  });
+
+  it("ignores a bound that isn't a non-negative number", async () => {
+    const open = (await list("?limit=50")).total;
+    expect((await list("?minFollowers=nope&limit=50")).total).toBe(open);
+    expect((await list("?minFollowers=-5&limit=50")).total).toBe(open);
+  });
+});

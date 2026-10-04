@@ -284,3 +284,25 @@ export interface ProfileMatchCounts {
 export interface ProfileSummary extends ProfileMatchCounts {
   criteria: Record<string, { pass: number; fail: number; unknown: number }>;
 }
+
+export interface BurnerAccount {
+  id: number;
+  platform: Platform;
+  username: string;
+  email: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BurnerAccountDetail extends BurnerAccount {
+  password: string;
+}
+
+export interface BurnerAccountInput {
+  platform: Platform;
+  username: string;
+  password?: string;
+  email?: string;
+  notes?: string;
+}

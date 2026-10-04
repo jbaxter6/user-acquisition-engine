@@ -24,6 +24,10 @@ avoids a second host, CORS, and a second URL to keep in sync with Meta.
    CLIENT_URL=https://www.movewithsmooth.com
    SITE_PASSWORD=<pick a password to gate the whole site>
    ```
+   Burner passwords (the Burners tab) are encrypted with `SITE_PASSWORD`.
+   Set `BURNER_CREDENTIALS_KEY` as well if you expect to change the site
+   password later — otherwise those saved logins can't be read after the
+   change.
    Do **not** set `PORT` — Railway injects it automatically.
 
    `SITE_PASSWORD` gates the page and every API/auth route behind a single

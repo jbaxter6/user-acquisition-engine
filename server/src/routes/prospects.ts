@@ -34,18 +34,27 @@ import { getAttribute, normalizeAttributeValue } from "../profiles/attributes.js
 
 const PLATFORMS = ["instagram", "tiktok", "twitch", "youtube"];
 
+// The page parses "10k" / "1.2M" itself and sends a plain number. Anything
+// that isn't a non-negative number is ignored so a bad query doesn't 400.
+function readFollowerBound(value: string | undefined): number | undefined {
+  if (value == null || value.trim() === "") return undefined;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return undefined;
+  return n;
+}
+
 export function prospectsRouter(): Router {
   const router = Router();
 
   router.get("/", (req, res) => {
-    const { platform, status, q, sort, limit, offset } = req.query as Record<
-      string,
-      string | undefined
-    >;
+    const { platform, status, q, sort, limit, offset, minFollowers, maxFollowers } =
+      req.query as Record<string, string | undefined>;
     const { items, total } = listProspects({
       platform,
       status,
       q,
+      minFollowers: readFollowerBound(minFollowers),
+      maxFollowers: readFollowerBound(maxFollowers),
       sort: sort as ProspectSort | undefined,
       limit: limit ? Number(limit) : undefined,
       offset: offset ? Number(offset) : undefined,
@@ -112,8 +121,18 @@ export function prospectsRouter(): Router {
   });
 
   router.get("/counts", (req, res) => {
-    const { platform, q } = req.query as Record<string, string | undefined>;
-    res.json(countProspectsByStatus({ platform, q }));
+    const { platform, q, minFollowers, maxFollowers } = req.query as Record<
+      string,
+      string | undefined
+    >;
+    res.json(
+      countProspectsByStatus({
+        platform,
+        q,
+        minFollowers: readFollowerBound(minFollowers),
+        maxFollowers: readFollowerBound(maxFollowers),
+      }),
+    );
   });
 
   // Expects rows already parsed/column-mapped client-side (the Excel file

@@ -86,7 +86,11 @@ async function readProfile(page, origin, username) {
   const profileUrl = `${origin}/${encodeURIComponent(username)}`;
   // Load the profile by URL (same page the click goes to). Clicking inside
   // the app would carry other creators' links over from the previous page.
-  await page.goto(profileUrl, { waitUntil: 'networkidle', timeout: 60000 });
+  // networkidle never settles here: the page keeps connections open.
+  // The shell paints a heading before any links exist. Wait for anchors, and
+  // don't hang when a profile genuinely has none.
+  await page.goto(profileUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+  await page.waitForFunction(() => document.querySelectorAll('a[href]').length > 0, { timeout: 8000 }).catch(() => {});
 
   const data = await page.evaluate(() => {
     const socials = { instagram: '', tiktok: '', youtube: '', twitch: '' };
@@ -148,8 +152,11 @@ export async function runStrategy({ onPartial } = {}) {
   const browser = await chromium.launch({ headless: true });
   try {
     const searchPage = await browser.newPage({ userAgent: USER_AGENT });
-    await searchPage.goto(targetUrl, { waitUntil: 'networkidle', timeout: 60000 });
-    await searchPage.locator('button[aria-label="Search users"]').first().click();
+    // networkidle never settles here: the page keeps connections open.
+    await searchPage.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    const searchButton = searchPage.locator('button[aria-label="Search users"]').first();
+    await searchButton.waitFor({ state: 'visible', timeout: 30000 });
+    await searchButton.click();
     const profilePage = await browser.newPage({ userAgent: USER_AGENT });
 
     let profilesRead = 0;

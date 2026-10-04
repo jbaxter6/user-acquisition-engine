@@ -173,6 +173,12 @@
 - Built the outreach batch runner (`war/outreach`, `npm run batch`): Playwright attaches to the scraper Chrome, signs into the CRM, clicks Not Contacted, and messages a 1–20 batch with one template. It refuses Smooth handles, stops on a login wall or rate limit, and records sends in `sent.json` so a second run before Sync does not repeat them. Instagram status still comes from the next Sync. 14 tests.
 - Templates can be tagged with a kind of prompt (opener, follow-up). The Templates page and each prospect card filter on those tags. Tags stay editable after a template has been sent; the message text stays locked. Up to 8 tags, 32 characters each.
 
+### 2026-10-04
+- Added a Burners tab for throwaway WAR logins: username, password, optional email and notes. Passwords are AES-256-GCM encrypted with `BURNER_CREDENTIALS_KEY` or `SITE_PASSWORD`, omitted from the list API, and refused for the Smooth handles (`movewithsmooth`, `smoothmediatechnologies`).
+- OPP1 strat-1 and strat-2 no longer wait for `networkidle` on page load. The discover page stays busy, so that wait timed out at 60s before any profiles were collected. They now wait for DOM content, then the search button or a heading.
+- Strat-2 profile reads now wait until links render. Waiting only for the first heading captured the shell, so a 200-profile run saved every one as having no socials and wrote an empty sheet. Those 200 reads and their 17 queries were cleared from `.state.json` so the next run tries them again.
+- Prospecting can filter by follower count (min and max, including `10k` / `1.2M`). The list and status counts use the attribute value when one exists, otherwise the legacy `prospects.followers` column. Prospects with no count stay hidden while a bound is set.
+
 ## Documentation Index
 - [Project Overview](README.md) — vision, problem statement, and 3-module architecture
 - [Unified Master Inbox setup & platform API constraints](README.md) — how to run client/server, Instagram credential setup, why TikTok/Twitch are manual-only
@@ -213,7 +219,8 @@
 - [Opp strategy runbook](war/fuckem/OPP1/strat-1/run.js) — live extractor for the first numbered opp, following carousel cards to profile pages and collecting social links
 - [Meta API usage meter](docs/meta-api-usage-meter.md) — plan + as-built notes: which Meta limits apply, where our calls come from, thresholds, navbar chip UI
 - [Meta API call wrapper](server/src/meta/metaFetch.ts) — the only way the server calls Meta; counts calls and stores Meta's usage reading per account
-- [WAR account safety rule](war/IMPORTANT.md) — why the scraper must never run logged into a Smooth social account, and the pre-run check
+- [WAR account safety rule](war/IMPORTANT.md) — why the scraper must never run logged into a Smooth social account, the pre-run check, and where throwaway logins are saved
+- [Burner credentials](server/src/routes/burners.ts) — encrypted throwaway logins (`/api/burners`); UI in `client/src/components/BurnersPage.tsx`
 - [CI workflow](.github/workflows/ci.yml) — what runs on every push: per-package type-check, lint, tests, build
 - [Server test harness](server/src/test/harness.ts) — `useTestServer()` (real app, throwaway DB) and `useFakeMeta()` for route tests
 - [Database backups](server/src/backup.ts) — daily snapshots kept on the volume (newest 7) and the `GET /api/backup` download

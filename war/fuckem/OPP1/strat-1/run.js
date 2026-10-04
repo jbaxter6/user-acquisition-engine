@@ -145,7 +145,9 @@ export async function runStrategy({ onPartial } = {}) {
       userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
     });
 
-    await page.goto(targetUrl, { waitUntil: 'networkidle', timeout: 60000 });
+    // networkidle never settles here: the page keeps connections open.
+    await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.locator('[role="link"][aria-label]').first().waitFor({ state: 'attached', timeout: 30000 });
 
     const candidates = await extractProfileCandidates(page);
     const results = [];
@@ -161,7 +163,8 @@ export async function runStrategy({ onPartial } = {}) {
       });
 
       try {
-        await profilePage.goto(profileUrl, { waitUntil: 'networkidle', timeout: 60000 });
+        await profilePage.goto(profileUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+        await profilePage.locator('h1, h2, h3').first().waitFor({ state: 'attached', timeout: 20000 }).catch(() => {});
 
         const titleText = await profilePage.evaluate(() => {
           const candidates = [...document.querySelectorAll('h1, h2, h3')]

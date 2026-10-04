@@ -197,6 +197,19 @@ for (const migration of [
     last_sync_calls INTEGER,
     last_sync_at TEXT
   )`,
+  // Throwaway social logins used by WAR (never a Smooth account). The
+  // password column is ciphertext from secrets.ts; list queries omit it.
+  `CREATE TABLE IF NOT EXISTS burner_accounts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    platform TEXT NOT NULL,
+    username TEXT NOT NULL,
+    password_enc TEXT NOT NULL,
+    email TEXT,
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(platform, username)
+  )`,
 ]) {
   try {
     db.exec(migration);
@@ -489,14 +502,29 @@ export interface ProspectFilters {
   platform?: string;
   status?: string;
   q?: string;
+  minFollowers?: number;
+  maxFollowers?: number;
 }
+
+// The attribute row is the fresher number (a re-import updates it and leaves
+// the legacy column alone). Same precedence as listProspectsForMatching.
+// NULL when we have no count, so a min/max comparison excludes those rows.
+const FOLLOWER_COUNT_SQL = `COALESCE(
+  (SELECT json_extract(value_json, '$')
+   FROM prospect_attributes
+   WHERE prospect_id = prospects.id
+     AND attribute = 'followers'
+     AND json_valid(value_json)
+     AND json_type(value_json) IN ('integer', 'real')),
+  prospects.followers
+)`;
 
 function prospectWhere(filters: ProspectFilters): {
   where: string;
-  params: string[];
+  params: (string | number)[];
 } {
   const clauses: string[] = [];
-  const params: string[] = [];
+  const params: (string | number)[] = [];
   if (filters.platform) {
     clauses.push("platform = ?");
     params.push(filters.platform);
@@ -512,6 +540,14 @@ function prospectWhere(filters: ProspectFilters): {
       "(username LIKE ? ESCAPE '\\' OR display_name LIKE ? ESCAPE '\\' OR notes LIKE ? ESCAPE '\\')",
     );
     params.push(like, like, like);
+  }
+  if (filters.minFollowers != null && Number.isFinite(filters.minFollowers)) {
+    clauses.push(`${FOLLOWER_COUNT_SQL} >= ?`);
+    params.push(filters.minFollowers);
+  }
+  if (filters.maxFollowers != null && Number.isFinite(filters.maxFollowers)) {
+    clauses.push(`${FOLLOWER_COUNT_SQL} <= ?`);
+    params.push(filters.maxFollowers);
   }
   return {
     where: clauses.length ? `WHERE ${clauses.join(" AND ")}` : "",
@@ -555,22 +591,22 @@ export function listProspects(
     .all(...params, limit, offset);
   const { total } = db
     .prepare<
-      string[],
+      (string | number)[],
       { total: number }
     >(`SELECT COUNT(*) AS total FROM prospects ${where}`)
     .get(...params)!;
   return { items, total };
 }
 
-// Per-status counts for the filter pills. Honors platform/search but
-// deliberately ignores the status filter so every pill shows its own count.
+// Per-status counts for the filter pills. Honors platform, search, and
+// follower bounds, but ignores the status filter so every pill shows its count.
 export function countProspectsByStatus(
   filters: Omit<ProspectFilters, "status"> = {},
 ): Record<"all" | "new" | "contacted" | "replied" | "closed", number> {
   const { where, params } = prospectWhere(filters);
   const rows = db
     .prepare<
-      string[],
+      (string | number)[],
       { status: string; n: number }
     >(`SELECT status, COUNT(*) AS n FROM prospects ${where} GROUP BY status`)
     .all(...params);
@@ -1988,4 +2024,86 @@ export function getMetaUsageSummary(accountId: number): MetaUsageSummaryRow {
     lastSyncCalls: usage?.last_sync_calls ?? null,
     lastSyncAt: usage?.last_sync_at ?? null,
   };
+}
+
+export interface BurnerAccountRow {
+  id: number;
+  platform: string;
+  username: string;
+  password_enc: string;
+  email: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type BurnerAccountPublic = Omit<BurnerAccountRow, "password_enc">;
+
+const BURNER_PUBLIC_COLUMNS =
+  "id, platform, username, email, notes, created_at, updated_at";
+
+export function listBurnerAccounts(): BurnerAccountPublic[] {
+  return db
+    .prepare(
+      `SELECT ${BURNER_PUBLIC_COLUMNS} FROM burner_accounts ORDER BY platform ASC, username ASC`,
+    )
+    .all() as BurnerAccountPublic[];
+}
+
+export function getBurnerAccount(id: number): BurnerAccountRow | undefined {
+  return db.prepare("SELECT * FROM burner_accounts WHERE id = ?").get(id) as
+    | BurnerAccountRow
+    | undefined;
+}
+
+export function insertBurnerAccount(input: {
+  platform: string;
+  username: string;
+  passwordEnc: string;
+  email: string | null;
+  notes: string | null;
+}): BurnerAccountPublic {
+  const result = db
+    .prepare(
+      `INSERT INTO burner_accounts (platform, username, password_enc, email, notes)
+       VALUES (?, ?, ?, ?, ?)`,
+    )
+    .run(input.platform, input.username, input.passwordEnc, input.email, input.notes);
+  return db
+    .prepare(`SELECT ${BURNER_PUBLIC_COLUMNS} FROM burner_accounts WHERE id = ?`)
+    .get(result.lastInsertRowid) as BurnerAccountPublic;
+}
+
+export function updateBurnerAccount(
+  id: number,
+  input: {
+    platform: string;
+    username: string;
+    passwordEnc: string | null;
+    email: string | null;
+    notes: string | null;
+  },
+): BurnerAccountPublic | undefined {
+  const existing = getBurnerAccount(id);
+  if (!existing) return undefined;
+  db.prepare(
+    `UPDATE burner_accounts
+     SET platform = ?, username = ?, password_enc = ?, email = ?, notes = ?, updated_at = datetime('now')
+     WHERE id = ?`,
+  ).run(
+    input.platform,
+    input.username,
+    input.passwordEnc ?? existing.password_enc,
+    input.email,
+    input.notes,
+    id,
+  );
+  return db
+    .prepare(`SELECT ${BURNER_PUBLIC_COLUMNS} FROM burner_accounts WHERE id = ?`)
+    .get(id) as BurnerAccountPublic;
+}
+
+export function deleteBurnerAccount(id: number): boolean {
+  const result = db.prepare("DELETE FROM burner_accounts WHERE id = ?").run(id);
+  return result.changes > 0;
 }

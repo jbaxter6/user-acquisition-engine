@@ -14,6 +14,7 @@ import { templatesRouter } from "./routes/templates.js";
 import { profilesRouter } from "./routes/profiles.js";
 import { metaRouter } from "./routes/meta.js";
 import { backupRouter } from "./routes/backup.js";
+import { burnersRouter } from "./routes/burners.js";
 import { isSignedOutVisitor, sessionRouter, siteAuth } from "./siteAuth.js";
 import "./db.js";
 
@@ -107,6 +108,7 @@ export function createApp(): express.Express {
   app.use("/api/profiles", profilesRouter());
   app.use("/api/meta", metaRouter());
   app.use("/api/backup", backupRouter());
+  app.use("/api/burners", burnersRouter());
   app.use("/auth", authRouter());
   app.use("/auth/tiktok", tiktokLoginRouter());
 

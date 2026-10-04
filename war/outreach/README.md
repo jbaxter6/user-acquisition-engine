@@ -68,7 +68,7 @@ Use one Chrome window, the same idea as `npm run chrome` in the scraper, so both
 | Site | Who is logged in |
 |---|---|
 | The CRM (`CRM_URL`, local or production) | The site password from the login page |
-| Instagram or TikTok in that same window | A throwaway. Never a Smooth account |
+| Instagram or TikTok in that same window | A throwaway. Never a Smooth account. Copy the login from the app's Burners tab |
 
 Check the social account before the first send, the same way [../IMPORTANT.md](../IMPORTANT.md) says to check it before a scrape. If it is a Smooth account, log out and stop.
 

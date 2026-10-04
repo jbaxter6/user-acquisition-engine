@@ -37,6 +37,7 @@ import {
   IconX,
   Spinner,
 } from "./icons";
+import { formatCount, parseCount } from "../lib/formatCount";
 import { formatRelativeTime } from "../lib/relativeTime";
 import { hasTag, tagsInUse } from "../lib/templateTags";
 
@@ -110,6 +111,93 @@ const SORT_LABEL: Record<SortKey, string> = {
 const PAGE_SIZE = 24;
 const MAX_THREADS_SHOWN = 3;
 
+// Empty or unparsable text means "no bound". "10k" and "1.2M" count.
+function parseFollowerBound(text: string): number | undefined {
+  const trimmed = text.trim();
+  if (!trimmed) return undefined;
+  return parseCount(trimmed) ?? undefined;
+}
+
+function FollowerRange({
+  minText,
+  maxText,
+  onMinChange,
+  onMaxChange,
+  onClear,
+}: {
+  minText: string;
+  maxText: string;
+  onMinChange: (value: string) => void;
+  onMaxChange: (value: string) => void;
+  onClear: () => void;
+}) {
+  const minInvalid = minText.trim() !== "" && parseCount(minText) == null;
+  const maxInvalid = maxText.trim() !== "" && parseCount(maxText) == null;
+  const min = parseCount(minText);
+  const max = parseCount(maxText);
+  const inverted = min != null && max != null && min > max;
+  const active = (min != null || max != null) && !inverted;
+
+  const commit = (text: string, set: (value: string) => void) => {
+    const n = parseCount(text);
+    if (n != null) set(formatCount(n));
+  };
+
+  return (
+    <div
+      className={
+        inverted
+          ? "toolbar-range toolbar-range--invalid"
+          : active
+            ? "toolbar-range toolbar-range--active"
+            : "toolbar-range"
+      }
+      title={
+        inverted
+          ? "Minimum is higher than the maximum"
+          : "Follower count. Try 10k or 1.2M."
+      }
+    >
+      <span className="toolbar-select__prefix">Followers</span>
+      <input
+        aria-label="Minimum followers"
+        aria-invalid={minInvalid || inverted}
+        inputMode="decimal"
+        placeholder="10k"
+        autoComplete="off"
+        spellCheck={false}
+        value={minText}
+        onChange={(e) => onMinChange(e.target.value)}
+        onBlur={() => commit(minText, onMinChange)}
+      />
+      <span className="toolbar-range__dash" aria-hidden="true">
+        –
+      </span>
+      <input
+        aria-label="Maximum followers"
+        aria-invalid={maxInvalid || inverted}
+        inputMode="decimal"
+        placeholder="1M"
+        autoComplete="off"
+        spellCheck={false}
+        value={maxText}
+        onChange={(e) => onMaxChange(e.target.value)}
+        onBlur={() => commit(maxText, onMaxChange)}
+      />
+      {(minText || maxText) && (
+        <button
+          type="button"
+          className="toolbar-range__clear"
+          aria-label="Clear follower filter"
+          onClick={onClear}
+        >
+          <IconX size={12} />
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function ProspectingPage() {
   const [prospects, setProspects] = useState<Prospect[]>([]);
   // Opens on "Not Contacted" — the prospects ready for first outreach.
@@ -118,6 +206,12 @@ export function ProspectingPage() {
   );
   const [platformFilter, setPlatformFilter] = useState<Platform | "all">("all");
   const [search, setSearch] = useState("");
+  // Free text so "10k" / "1.2M" work. Applied bounds below are the parsed
+  // numbers the list actually filters on.
+  const [followerMinText, setFollowerMinText] = useState("");
+  const [followerMaxText, setFollowerMaxText] = useState("");
+  const [minFollowers, setMinFollowers] = useState<number | undefined>();
+  const [maxFollowers, setMaxFollowers] = useState<number | undefined>();
   const [sort, setSort] = useState<SortKey>("recent");
   const [view, setView] = useState<"grid" | "list">("grid");
   const [fabOpen, setFabOpen] = useState(false);
@@ -159,11 +253,21 @@ export function ProspectingPage() {
     return () => clearTimeout(id);
   }, [search]);
 
+  useEffect(() => {
+    const id = setTimeout(() => {
+      setMinFollowers(parseFollowerBound(followerMinText));
+      setMaxFollowers(parseFollowerBound(followerMaxText));
+    }, 250);
+    return () => clearTimeout(id);
+  }, [followerMinText, followerMaxText]);
+
   const queryParams = () => ({
     status: statusFilter === "all" ? undefined : statusFilter,
     platform: platformFilter === "all" ? undefined : platformFilter,
     q: debouncedSearch || undefined,
     sort,
+    minFollowers,
+    maxFollowers,
   });
 
   // Loads `limit` rows from `offset`; offset 0 replaces the list, anything
@@ -190,6 +294,8 @@ export function ProspectingPage() {
       .prospectCounts({
         platform: platformFilter === "all" ? undefined : platformFilter,
         q: debouncedSearch || undefined,
+        minFollowers,
+        maxFollowers,
       })
       .then(setCounts)
       .catch(() => {});
@@ -209,18 +315,18 @@ export function ProspectingPage() {
   useEffect(() => {
     void load(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, platformFilter, debouncedSearch, sort]);
+  }, [statusFilter, platformFilter, debouncedSearch, sort, minFollowers, maxFollowers]);
 
   useEffect(() => {
     loadCounts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [platformFilter, debouncedSearch]);
+  }, [platformFilter, debouncedSearch, minFollowers, maxFollowers]);
 
   useEffect(() => {
     window.addEventListener("accounts-synced", refresh);
     return () => window.removeEventListener("accounts-synced", refresh);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, platformFilter, debouncedSearch, sort]);
+  }, [statusFilter, platformFilter, debouncedSearch, sort, minFollowers, maxFollowers]);
 
   const hasMore = prospects.length < total;
 
@@ -240,7 +346,7 @@ export function ProspectingPage() {
     observer.observe(el);
     return () => observer.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, hasMore, statusFilter, platformFilter, debouncedSearch, sort]);
+  }, [loading, hasMore, statusFilter, platformFilter, debouncedSearch, sort, minFollowers, maxFollowers]);
 
   // "View card" on a linked prospect that hasn't been loaded yet: clear the
   // filters and search for it so it's guaranteed to be on the first page.
@@ -251,6 +357,10 @@ export function ProspectingPage() {
       revealRef.current = id;
       setStatusFilter("all");
       setPlatformFilter("all");
+      setFollowerMinText("");
+      setFollowerMaxText("");
+      setMinFollowers(undefined);
+      setMaxFollowers(undefined);
       setSearch(username);
       setDebouncedSearch(username);
     };
@@ -378,6 +488,19 @@ export function ProspectingPage() {
               ))}
             </select>
           </label>
+
+          <FollowerRange
+            minText={followerMinText}
+            maxText={followerMaxText}
+            onMinChange={setFollowerMinText}
+            onMaxChange={setFollowerMaxText}
+            onClear={() => {
+              setFollowerMinText("");
+              setFollowerMaxText("");
+              setMinFollowers(undefined);
+              setMaxFollowers(undefined);
+            }}
+          />
 
           <div className="prospecting-toolbar__spacer" />
 

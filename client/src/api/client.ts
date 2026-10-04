@@ -2,6 +2,9 @@ import type {
   AttributeRegistry,
   Conversation,
   HealthResponse,
+  BurnerAccount,
+  BurnerAccountDetail,
+  BurnerAccountInput,
   InstagramAccount,
   Message,
   MessageTemplate,
@@ -137,6 +140,8 @@ export const api = {
     sort?: string;
     limit?: number;
     offset?: number;
+    minFollowers?: number;
+    maxFollowers?: number;
   }) => {
     const qs = new URLSearchParams();
     for (const [key, value] of Object.entries(params)) {
@@ -148,10 +153,14 @@ export const api = {
     );
   },
 
-  prospectCounts: (params: { platform?: Platform; q?: string } = {}) => {
+  prospectCounts: (
+    params: { platform?: Platform; q?: string; minFollowers?: number; maxFollowers?: number } = {},
+  ) => {
     const qs = new URLSearchParams();
     if (params.platform) qs.set("platform", params.platform);
     if (params.q) qs.set("q", params.q);
+    if (params.minFollowers != null) qs.set("minFollowers", String(params.minFollowers));
+    if (params.maxFollowers != null) qs.set("maxFollowers", String(params.maxFollowers));
     const query = qs.toString();
     return request<Record<"all" | "new" | "contacted" | "replied" | "closed", number>>(
       `/api/prospects/counts${query ? `?${query}` : ""}`,
@@ -276,4 +285,23 @@ export const api = {
 
   restoreProfile: (id: number) =>
     request<TargetProfile>(`/api/profiles/${id}/restore`, { method: "POST" }),
+
+  listBurners: () => request<BurnerAccount[]>("/api/burners"),
+
+  getBurner: (id: number) => request<BurnerAccountDetail>(`/api/burners/${id}`),
+
+  createBurner: (input: BurnerAccountInput) =>
+    request<BurnerAccount>("/api/burners", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+
+  updateBurner: (id: number, input: BurnerAccountInput) =>
+    request<BurnerAccount>(`/api/burners/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(input),
+    }),
+
+  deleteBurner: (id: number) =>
+    request<{ ok: true }>(`/api/burners/${id}`, { method: "DELETE" }),
 };

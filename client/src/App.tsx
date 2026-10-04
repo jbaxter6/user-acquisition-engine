@@ -17,6 +17,7 @@ import { PlatformStatusChip } from "./components/PlatformStatusChip";
 import { ProspectingPage } from "./components/ProspectingPage";
 import { ProfilesPage } from "./components/ProfilesPage";
 import { TemplatesPanel } from "./components/TemplatesPanel";
+import { BurnersPage } from "./components/BurnersPage";
 import type {
   Conversation,
   InstagramAccount,
@@ -160,6 +161,14 @@ function AppShell() {
             >
               Templates
             </NavLink>
+            <NavLink
+              to="/burners"
+              className={({ isActive }) =>
+                isActive ? "nav-btn nav-btn--active" : "nav-btn"
+              }
+            >
+              Burners
+            </NavLink>
           </nav>
         </div>
         <div className="app__header-right">
@@ -220,6 +229,7 @@ function AppShell() {
         />
         <Route path="/profiles" element={<ProfilesPage />} />
         <Route path="/templates" element={<TemplatesPanel />} />
+        <Route path="/burners" element={<BurnersPage />} />
         <Route path="*" element={<Navigate to="/inbox" replace />} />
       </Routes>
     </div>

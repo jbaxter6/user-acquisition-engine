@@ -1838,6 +1838,68 @@ button:disabled {
   font-size: 14px;
 }
 
+.toolbar-range {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  background: var(--panel-alt);
+  border-radius: 10px;
+  padding: 0 12px;
+  height: 38px;
+  color: var(--text-dim);
+}
+
+.toolbar-range input {
+  width: 4.6rem;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-size: 14px;
+  font-family: inherit;
+  padding: 0;
+}
+
+.toolbar-range input::placeholder {
+  color: var(--text-dim);
+  opacity: 0.65;
+}
+
+.toolbar-range__dash {
+  color: var(--text-dim);
+}
+
+.toolbar-range__clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 2px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.toolbar-range__clear:hover {
+  color: var(--text);
+}
+
+.toolbar-range--active {
+  color: var(--text);
+  border-color: rgba(91, 140, 255, 0.5);
+  background: rgba(91, 140, 255, 0.12);
+}
+
+.toolbar-range--invalid {
+  border-color: rgba(245, 183, 49, 0.7);
+}
+
+.toolbar-range input[aria-invalid="true"] {
+  color: #f5b731;
+}
+
 .toolbar-search {
   min-width: 300px;
 }
@@ -3156,14 +3218,16 @@ button.tpl-tag {
 }
 
 /* ---- Profiles ---- */
-.profiles {
+.profiles,
+.burners {
   flex: 1;
   min-height: 0;
   display: grid;
   grid-template-columns: 340px 1fr;
 }
 
-.profiles__list {
+.profiles__list,
+.burners__list {
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -3334,7 +3398,8 @@ button.tpl-tag {
   opacity: 0.6;
 }
 
-.profiles__editor {
+.profiles__editor,
+.burners__editor {
   overflow-y: auto;
   min-width: 0;
 }
@@ -3721,6 +3786,7 @@ button.tpl-tag {
 
 .field input,
 .field textarea,
+.field select,
 .criterion__num,
 .criterion__op,
 .chips__add,
@@ -3740,6 +3806,7 @@ button.tpl-tag {
 
 .field input:focus,
 .field textarea:focus,
+.field select:focus,
 .criterion__num:focus,
 .criterion__op:focus,
 .chips--input:focus-within {
@@ -4098,16 +4165,61 @@ button.tpl-tag {
   }
 }
 
+.field--wide {
+  grid-column: 1 / -1;
+}
+
+.burner-secret {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.burner-secret__value {
+  flex: 1;
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.burner-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.burner-note {
+  margin: 0;
+  white-space: pre-wrap;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.burner-back {
+  display: none;
+}
+
 @media (max-width: 760px) {
-  .profiles {
+  .profiles,
+  .burners {
     grid-template-columns: 1fr;
   }
-  .profiles__list {
+  .profiles__list,
+  .burners__list {
     border-right: none;
   }
   .profiles--editing .profiles__list,
-  .profiles:not(.profiles--editing) .profiles__editor {
+  .profiles:not(.profiles--editing) .profiles__editor,
+  .burners--editing .burners__list,
+  .burners:not(.burners--editing) .burners__editor {
     display: none;
+  }
+  .burner-back {
+    display: inline-block;
   }
   .profile-editor {
     padding: 14px 16px 0;
