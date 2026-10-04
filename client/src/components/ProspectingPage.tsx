@@ -38,6 +38,7 @@ import {
   Spinner,
 } from "./icons";
 import { formatRelativeTime } from "../lib/relativeTime";
+import { hasTag, tagsInUse } from "../lib/templateTags";
 
 function highlightProspectCard(id: number): boolean {
   const el = document.getElementById(`prospect-card-${id}`);
@@ -817,6 +818,7 @@ function ProspectCard({
   const [tab, setTab] = useState<"outreach" | "accounts">("outreach");
   const [templateId, setTemplateId] = useState<number | "">("");
   const [text, setText] = useState("");
+  const [promptTag, setPromptTag] = useState<string | null>(null);
   const [linkingChannel, setLinkingChannel] = useState(false);
   const [linkingManager, setLinkingManager] = useState(false);
 
@@ -851,9 +853,22 @@ function ProspectCard({
   const handleTemplatePick = (value: string) => {
     const id = value ? Number(value) : "";
     setTemplateId(id);
-    if (id !== "") {
-      const template = templates.find((t) => t.id === id);
-      if (template) setText(template.body);
+    if (id === "") {
+      setText("");
+      return;
+    }
+    const template = templates.find((t) => t.id === id);
+    if (template) setText(template.body);
+  };
+
+  const promptTags = tagsInUse(templates);
+  const visibleTemplates =
+    promptTag == null ? templates : templates.filter((t) => hasTag(t.tags, promptTag));
+  const pickPromptTag = (tag: string | null) => {
+    setPromptTag(tag);
+    if (tag != null && templateId !== "") {
+      const current = templates.find((t) => t.id === templateId);
+      if (!current || !hasTag(current.tags, tag)) handleTemplatePick("");
     }
   };
 
@@ -1074,20 +1089,47 @@ function ProspectCard({
           ) : (
             <>
           {templates.length > 0 ? (
-            <label className="prospect-card__field">
+            <div className="prospect-card__field">
               <span>Message template</span>
+              {promptTags.length > 0 && (
+                <div className="filter-pills prospect-card__tag-filters" aria-label="Filter templates by tag">
+                  <button
+                    type="button"
+                    className={promptTag == null ? "filter-pill filter-pill--active" : "filter-pill"}
+                    onClick={() => pickPromptTag(null)}
+                  >
+                    All
+                  </button>
+                  {promptTags.map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      className={
+                        promptTag != null && hasTag([tag], promptTag)
+                          ? "filter-pill filter-pill--active"
+                          : "filter-pill"
+                      }
+                      onClick={() =>
+                        pickPromptTag(promptTag != null && hasTag([tag], promptTag) ? null : tag)
+                      }
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+              )}
               <select
-                value={templateId}
+                value={visibleTemplates.some((t) => t.id === templateId) ? templateId : ""}
                 onChange={(e) => handleTemplatePick(e.target.value)}
               >
                 <option value="">Select a template…</option>
-                {templates.map((t) => (
+                {visibleTemplates.map((t) => (
                   <option key={t.id} value={t.id}>
-                    {t.name}
+                    {t.tags.length > 0 ? `${t.name} · ${t.tags.join(", ")}` : t.name}
                   </option>
                 ))}
               </select>
-            </label>
+            </div>
           ) : (
             <p className="composer-note">
               No message templates yet — create one on the Templates page before

@@ -15,12 +15,21 @@ describe("message templates", () => {
     expect(created.status).toBe(201);
     const template = await created.json();
     templateId = template.id;
-    expect(template).toMatchObject({ name: "Opener", body: "Hey!" });
+    expect(template).toMatchObject({ name: "Opener", body: "Hey!", tags: [] });
 
-    const edited = await api(`/api/templates/${templateId}`, { method: "PUT", json: { name: "Opener v2", body: "Hey there!" } });
+    const edited = await api(`/api/templates/${templateId}`, {
+      method: "PUT",
+      json: { name: "Opener v2", body: "Hey there!", tags: [" Opener ", "opener", "Follow up"] },
+    });
     expect(edited.status).toBe(200);
+    expect(await edited.json()).toMatchObject({ tags: ["Opener", "Follow up"] });
     const all = await (await api("/api/templates")).json();
-    expect(all).toMatchObject([{ id: templateId, name: "Opener v2" }]);
+    expect(all).toMatchObject([{ id: templateId, name: "Opener v2", tags: ["Opener", "Follow up"] }]);
+  });
+
+  it("rejects a tag list that isn't tags", async () => {
+    const res = await api("/api/templates", { method: "POST", json: { name: "Bad", body: "Hi", tags: "opener" } });
+    expect(res.status).toBe(400);
   });
 
   it("404s when editing a template that doesn't exist", async () => {
@@ -40,6 +49,15 @@ describe("message templates", () => {
 
     const edit = await api(`/api/templates/${templateId}`, { method: "PUT", json: { name: "x", body: "y" } });
     expect(edit.status).toBe(409);
+
+    const retag = await api(`/api/templates/${templateId}`, {
+      method: "PUT",
+      json: { name: "Opener v2", body: "Hey there!", tags: ["Opener", "soft"] },
+    });
+    expect(retag.status).toBe(200);
+    expect(await retag.json()).toMatchObject({ tags: ["Opener", "soft"] });
+    const statsAfter = await (await api("/api/templates/stats")).json();
+    expect(statsAfter.find((t: { id: number }) => t.id === templateId).tags).toEqual(["Opener", "soft"]);
   });
 
   it("archives instead of deleting", async () => {

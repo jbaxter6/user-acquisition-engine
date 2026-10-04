@@ -65,7 +65,10 @@ db.exec(`
     name TEXT NOT NULL,
     body TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    archived_at TEXT
+    archived_at TEXT,
+    -- JSON array of prompt-type labels ("opener", "follow-up"). Not the
+    -- {{tokens}} in the body, and not used when matching a sent message.
+    tags TEXT NOT NULL DEFAULT '[]'
   );
 
   -- A separate pipeline from conversations: rows land here from an Excel
@@ -106,6 +109,7 @@ for (const migration of [
   "ALTER TABLE accounts ADD COLUMN disconnected_at TEXT",
   "ALTER TABLE conversations ADD COLUMN participant_avatar_url TEXT",
   "ALTER TABLE messages ADD COLUMN template_id INTEGER REFERENCES message_templates(id)",
+  "ALTER TABLE message_templates ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'",
   `CREATE TABLE IF NOT EXISTS prospect_channels (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     prospect_id INTEGER NOT NULL REFERENCES prospects(id) ON DELETE CASCADE,
@@ -347,12 +351,40 @@ export interface MessageRow {
   created_at: string;
 }
 
+interface MessageTemplateStored {
+  id: number;
+  name: string;
+  body: string;
+  created_at: string;
+  archived_at: string | null;
+  tags: string;
+}
+
 export interface MessageTemplateRow {
   id: number;
   name: string;
   body: string;
   created_at: string;
   archived_at: string | null;
+  tags: string[];
+}
+
+function readTemplate(row: MessageTemplateStored): MessageTemplateRow {
+  let tags: string[] = [];
+  try {
+    const parsed = JSON.parse(row.tags) as unknown;
+    if (Array.isArray(parsed)) tags = parsed.filter((tag): tag is string => typeof tag === "string");
+  } catch {
+    tags = [];
+  }
+  return {
+    id: row.id,
+    name: row.name,
+    body: row.body,
+    created_at: row.created_at,
+    archived_at: row.archived_at,
+    tags,
+  };
 }
 
 export interface ProspectRow {
@@ -1430,29 +1462,32 @@ export function listMessageTemplates(
   return db
     .prepare<
       [],
-      MessageTemplateRow
+      MessageTemplateStored
     >(`SELECT * FROM message_templates ${where} ORDER BY created_at DESC`)
-    .all();
+    .all()
+    .map(readTemplate);
 }
 
 export function getMessageTemplateById(
   id: number,
 ): MessageTemplateRow | undefined {
-  return db
+  const row = db
     .prepare<
       [number],
-      MessageTemplateRow
+      MessageTemplateStored
     >("SELECT * FROM message_templates WHERE id = ?")
     .get(id);
+  return row && readTemplate(row);
 }
 
 export function createMessageTemplate(
   name: string,
   body: string,
+  tags: string[] = [],
 ): MessageTemplateRow {
   const result = db
-    .prepare("INSERT INTO message_templates (name, body) VALUES (?, ?)")
-    .run(name, body);
+    .prepare("INSERT INTO message_templates (name, body, tags) VALUES (?, ?, ?)")
+    .run(name, body, JSON.stringify(tags));
   return getMessageTemplateById(result.lastInsertRowid as number)!;
 }
 
@@ -1460,10 +1495,11 @@ export function updateMessageTemplate(
   id: number,
   name: string,
   body: string,
+  tags: string[],
 ): MessageTemplateRow | undefined {
   db.prepare(
-    "UPDATE message_templates SET name = ?, body = ? WHERE id = ?",
-  ).run(name, body, id);
+    "UPDATE message_templates SET name = ?, body = ?, tags = ? WHERE id = ?",
+  ).run(name, body, JSON.stringify(tags), id);
   return getMessageTemplateById(id);
 }
 
@@ -1597,6 +1633,7 @@ export interface MessageTemplateStats {
   id: number;
   name: string;
   body: string;
+  tags: string[];
   archived_at: string | null;
   sent: number;
   replied: number;
@@ -1642,8 +1679,9 @@ export function findMatchingTemplate(
   templateId?: number | null,
 ): MessageTemplateRow | undefined {
   const templates = db
-    .prepare<[], MessageTemplateRow>("SELECT * FROM message_templates")
-    .all();
+    .prepare<[], MessageTemplateStored>("SELECT * FROM message_templates")
+    .all()
+    .map(readTemplate);
   if (templateId != null) {
     const tagged = templates.find((t) => t.id === templateId);
     if (tagged) return tagged;
@@ -1671,10 +1709,11 @@ function parseSqliteUtc(value: string): number {
 // thread where the prospect replied after the matching message.
 export function getMessageTemplateStats(): MessageTemplateStats[] {
   const templates = db
-    .prepare<[], MessageTemplateRow>(
+    .prepare<[], MessageTemplateStored>(
       "SELECT * FROM message_templates ORDER BY created_at DESC",
     )
-    .all();
+    .all()
+    .map(readTemplate);
   const compiled = templates.map((t) => ({
     id: t.id,
     ...compileTemplate(t.body),
@@ -1792,6 +1831,7 @@ export function getMessageTemplateStats(): MessageTemplateStats[] {
       id: t.id,
       name: t.name,
       body: t.body,
+      tags: t.tags,
       archived_at: t.archived_at,
       sent: total.sent,
       replied: total.replied,

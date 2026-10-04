@@ -171,6 +171,7 @@
 - Added `war/outreach/README.md`: the plan for a Playwright batch runner that opens Prospecting, clicks Not Contacted, and messages 10–20 people per run. Runner itself is not built yet.
 - Instagram sends are left for the next Sync to mark contacted (`ensureProspectForParticipant` flips a matching `new` prospect when it sees an outbound message). The runner will not call `mark-contacted`.
 - Built the outreach batch runner (`war/outreach`, `npm run batch`): Playwright attaches to the scraper Chrome, signs into the CRM, clicks Not Contacted, and messages a 1–20 batch with one template. It refuses Smooth handles, stops on a login wall or rate limit, and records sends in `sent.json` so a second run before Sync does not repeat them. Instagram status still comes from the next Sync. 14 tests.
+- Templates can be tagged with a kind of prompt (opener, follow-up). The Templates page and each prospect card filter on those tags. Tags stay editable after a template has been sent; the message text stays locked. Up to 8 tags, 32 characters each.
 
 ## Documentation Index
 - [Project Overview](README.md) — vision, problem statement, and 3-module architecture

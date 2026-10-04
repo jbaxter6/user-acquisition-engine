@@ -12,6 +12,7 @@ import {
 } from "./icons";
 import { PlatformBadge } from "./PlatformBadge";
 import { formatRelativeTime } from "../lib/relativeTime";
+import { hasTag, tagsInUse } from "../lib/templateTags";
 
 type ViewKey =
   | "all"
@@ -90,6 +91,9 @@ export function TemplatesPanel() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [name, setName] = useState("");
   const [body, setBody] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagDraft, setTagDraft] = useState("");
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -127,6 +131,8 @@ export function TemplatesPanel() {
     setEditingId(null);
     setName("");
     setBody("");
+    setTags([]);
+    setTagDraft("");
     setFormOpen(true);
   };
 
@@ -134,6 +140,8 @@ export function TemplatesPanel() {
     setEditingId(null);
     setName(`${t.name} (copy)`);
     setBody(t.body);
+    setTags(t.tags);
+    setTagDraft("");
     setFormOpen(true);
   };
 
@@ -141,6 +149,8 @@ export function TemplatesPanel() {
     setEditingId(t.id);
     setName(t.name);
     setBody(t.body);
+    setTags(t.tags);
+    setTagDraft("");
     setFormOpen(true);
   };
 
@@ -149,17 +159,50 @@ export function TemplatesPanel() {
     setEditingId(null);
     setName("");
     setBody("");
+    setTags([]);
+    setTagDraft("");
+  };
+
+  const addTag = (raw: string) => {
+    const next = raw
+      .split(",")
+      .map((part) => part.trim().replace(/\s+/g, " "))
+      .filter(Boolean);
+    if (next.length === 0) return;
+    setTags((current) => {
+      const seen = new Set(current.map((tag) => tag.toLowerCase()));
+      const added = [...current];
+      for (const tag of next) {
+        if (seen.has(tag.toLowerCase()) || added.length >= 8) continue;
+        seen.add(tag.toLowerCase());
+        added.push(tag);
+      }
+      return added;
+    });
+    setTagDraft("");
   };
 
   const handleSave = async () => {
     if (!name.trim() || !body.trim()) return;
     setSaving(true);
     setError(null);
+    const pending = tagDraft.trim()
+      ? [
+          ...tags,
+          ...tagDraft
+            .split(",")
+            .map((part) => part.trim().replace(/\s+/g, " "))
+            .filter(
+              (part) =>
+                part && !tags.some((tag) => tag.toLowerCase() === part.toLowerCase()),
+            ),
+        ].slice(0, 8)
+      : tags;
     try {
       if (editingId != null) {
-        await api.updateTemplate(editingId, name.trim(), body.trim());
+        await api.updateTemplate(editingId, name.trim(), body.trim(), pending);
       } else {
-        await api.createTemplate(name.trim(), body.trim());
+        await api.createTemplate(name.trim(), body.trim(), pending);
       }
       closeForm();
       refresh();
@@ -183,6 +226,9 @@ export function TemplatesPanel() {
 
   const active = stats.filter((t) => !t.archived_at);
   const archived = stats.filter((t) => t.archived_at);
+  const tagChoices = tagsInUse(active);
+  const editing = stats.find((t) => t.id === editingId) ?? null;
+  const textLocked = editing != null && editing.sent > 0;
 
   const query = search.trim().toLowerCase();
   const byHit = (a: MessageTemplateStats, b: MessageTemplateStats) =>
@@ -196,11 +242,13 @@ export function TemplatesPanel() {
         return t.avg_response_hours != null;
       return true;
     })
+    .filter((t) => tagFilter == null || hasTag(t.tags, tagFilter))
     .filter(
       (t) =>
         !query ||
         t.name.toLowerCase().includes(query) ||
-        t.body.toLowerCase().includes(query),
+        t.body.toLowerCase().includes(query) ||
+        t.tags.some((tag) => tag.toLowerCase().includes(query)),
     )
     .sort((a, b) => {
       switch (view) {
@@ -271,6 +319,35 @@ export function TemplatesPanel() {
         </button>
       </section>
 
+      {tagChoices.length > 0 && (
+        <div className="filter-pills tpl-tag-filters" aria-label="Filter by tag">
+          <button
+            type="button"
+            className={tagFilter == null ? "filter-pill filter-pill--active" : "filter-pill"}
+            onClick={() => setTagFilter(null)}
+          >
+            All tags
+          </button>
+          {tagChoices.map((tag) => (
+            <button
+              key={tag}
+              type="button"
+              className={
+                tagFilter != null && hasTag([tag], tagFilter)
+                  ? "filter-pill filter-pill--active"
+                  : "filter-pill"
+              }
+              onClick={() => setTagFilter(tagFilter != null && hasTag([tag], tagFilter) ? null : tag)}
+            >
+              {tag}
+              <span className="filter-pill__count">
+                {active.filter((t) => hasTag(t.tags, tag)).length}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="tpl-grid">
         {visible.length === 0 && (
           <p className="empty-state">
@@ -317,9 +394,12 @@ export function TemplatesPanel() {
                         {t.sent === 0 ? (
                           <button onClick={() => openEdit(t)}>Edit</button>
                         ) : (
-                          <button onClick={() => openDuplicate(t)}>
-                            Duplicate
-                          </button>
+                          <>
+                            <button onClick={() => openEdit(t)}>Edit tags</button>
+                            <button onClick={() => openDuplicate(t)}>
+                              Duplicate
+                            </button>
+                          </>
                         )}
                         <button
                           className="tpl-menu__danger"
@@ -340,6 +420,23 @@ export function TemplatesPanel() {
                     </span>
                   )}
                 </h3>
+                {t.tags.length > 0 && (
+                  <div className="tpl-tag-list">
+                    {t.tags.map((tag) => (
+                      <button
+                        key={tag}
+                        type="button"
+                        className="tpl-tag"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setTagFilter(tag);
+                        }}
+                      >
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
+                )}
 
                 <div className="tpl-card__preview">
                   <div className="tpl-card__preview-text">{renderBody(t.body)}</div>
@@ -398,13 +495,18 @@ export function TemplatesPanel() {
                       Edit
                     </button>
                   ) : (
-                    <button
-                      className="tpl-btn"
-                      onClick={() => openDuplicate(t)}
-                      title="Live templates are locked — duplicate to make changes"
-                    >
-                      Duplicate
-                    </button>
+                    <>
+                      <button className="tpl-btn" onClick={() => openEdit(t)}>
+                        Edit tags
+                      </button>
+                      <button
+                        className="tpl-btn"
+                        onClick={() => openDuplicate(t)}
+                        title="Live templates are locked — duplicate to change the message"
+                      >
+                        Duplicate
+                      </button>
+                    </>
                   )}
                   <button
                     className="tpl-btn tpl-btn--muted"
@@ -491,6 +593,23 @@ export function TemplatesPanel() {
             <div className="tpl-card__preview tpl-card__preview--full">
               {renderBody(detail.body)}
             </div>
+            {detail.tags.length > 0 && (
+              <div className="tpl-tag-list">
+                {detail.tags.map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    className="tpl-tag"
+                    onClick={() => {
+                      setDetailId(null);
+                      setTagFilter(tag);
+                    }}
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+            )}
 
             <div className="tpl-card__meta">
               <span>
@@ -550,16 +669,27 @@ export function TemplatesPanel() {
                   Edit
                 </button>
               ) : (
-                <button
-                  className="tpl-btn"
-                  onClick={() => {
-                    setDetailId(null);
-                    openDuplicate(detail);
-                  }}
-                  title="Live templates are locked — duplicate to make changes"
-                >
-                  Duplicate
-                </button>
+                <>
+                  <button
+                    className="tpl-btn"
+                    onClick={() => {
+                      setDetailId(null);
+                      openEdit(detail);
+                    }}
+                  >
+                    Edit tags
+                  </button>
+                  <button
+                    className="tpl-btn"
+                    onClick={() => {
+                      setDetailId(null);
+                      openDuplicate(detail);
+                    }}
+                    title="Live templates are locked — duplicate to change the message"
+                  >
+                    Duplicate
+                  </button>
+                </>
               )}
             </div>
           </div>
@@ -575,7 +705,13 @@ export function TemplatesPanel() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="tpl-modal__header">
-              <h2>{editingId != null ? "Edit template" : "New template"}</h2>
+              <h2>
+                {editingId != null
+                  ? textLocked
+                    ? "Edit tags"
+                    : "Edit template"
+                  : "New template"}
+              </h2>
               <button
                 className="icon-btn icon-btn--ghost"
                 onClick={closeForm}
@@ -589,6 +725,7 @@ export function TemplatesPanel() {
               placeholder="Template name (e.g. Collab Pitch v1 - Direct & Punchy)"
               value={name}
               onChange={(e) => setName(e.target.value)}
+              readOnly={textLocked}
               autoFocus
             />
             <textarea
@@ -596,11 +733,70 @@ export function TemplatesPanel() {
               rows={7}
               value={body}
               onChange={(e) => setBody(e.target.value)}
+              readOnly={textLocked}
             />
+            <div className="tpl-tag-field">
+              <span className="tpl-tag-field__label">Tags</span>
+              {tags.length > 0 && (
+                <div className="tpl-tag-list">
+                  {tags.map((tag) => (
+                    <span key={tag} className="tpl-tag">
+                      {tag}
+                      <button
+                        type="button"
+                        className="tpl-tag__remove"
+                        aria-label={`Remove ${tag}`}
+                        onClick={() =>
+                          setTags((current) => current.filter((item) => item !== tag))
+                        }
+                      >
+                        <IconX size={12} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              <input
+                type="text"
+                placeholder="Add a tag, like opener or follow-up, then press Enter"
+                value={tagDraft}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value.includes(",")) addTag(value);
+                  else setTagDraft(value);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addTag(tagDraft);
+                  }
+                }}
+              />
+              {tagsInUse(active)
+                .filter((tag) => !tags.some((item) => item.toLowerCase() === tag.toLowerCase()))
+                .length > 0 && (
+                <div className="tpl-tag-suggest">
+                  {tagsInUse(active)
+                    .filter((tag) => !tags.some((item) => item.toLowerCase() === tag.toLowerCase()))
+                    .map((tag) => (
+                      <button
+                        key={tag}
+                        type="button"
+                        className="tpl-tag tpl-tag--add"
+                        onClick={() => addTag(tag)}
+                      >
+                        {tag}
+                      </button>
+                    ))}
+                </div>
+              )}
+            </div>
             <p className="tpl-modal__hint">
-              Use {"{{variable}}"} placeholders (e.g. {"{{first_name}}"}) for
+              Tags group a kind of prompt so the list can be filtered. Use{" "}
+              {"{{variable}}"} placeholders (e.g. {"{{first_name}}"}) for
               anything that changes per recipient. Once a template has been
-              sent it's locked — duplicate it to make changes.
+              sent, the message is locked — tags can still be changed, and
+              duplicate copies the text.
             </p>
             <div className="tpl-modal__footer">
               <span className="tpl-modal__count">
@@ -615,7 +811,7 @@ export function TemplatesPanel() {
                   onClick={handleSave}
                   disabled={saving || !name.trim() || !body.trim()}
                 >
-                  {editingId != null ? "Save changes" : "Add template"}
+                  {textLocked ? "Save tags" : editingId != null ? "Save changes" : "Add template"}
                 </button>
               </div>
             </div>
