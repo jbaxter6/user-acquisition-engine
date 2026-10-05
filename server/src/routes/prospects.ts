@@ -23,6 +23,7 @@ import {
   listProspects,
   markProspectContacted,
   mergeProspectIntoTarget,
+  shuffleSeed,
   unlinkProspects,
   upsertConversation,
   upsertProspectContact,
@@ -47,7 +48,7 @@ export function prospectsRouter(): Router {
   const router = Router();
 
   router.get("/", (req, res) => {
-    const { platform, status, q, sort, limit, offset, minFollowers, maxFollowers } =
+    const { platform, status, q, sort, limit, offset, minFollowers, maxFollowers, seed } =
       req.query as Record<string, string | undefined>;
     const { items, total } = listProspects({
       platform,
@@ -56,6 +57,7 @@ export function prospectsRouter(): Router {
       minFollowers: readFollowerBound(minFollowers),
       maxFollowers: readFollowerBound(maxFollowers),
       sort: sort as ProspectSort | undefined,
+      seed: sort === "shuffle" ? shuffleSeed(seed) : undefined,
       limit: limit ? Number(limit) : undefined,
       offset: offset ? Number(offset) : undefined,
     });

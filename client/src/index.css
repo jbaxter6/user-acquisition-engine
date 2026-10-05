@@ -1835,6 +1835,19 @@ button:disabled {
   font-size: 14px;
 }
 
+.toolbar-select__sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.toolbar-reshuffle {
+  flex: none;
+  margin-right: -6px;
+}
+
 .toolbar-range {
   display: inline-flex;
   align-items: center;

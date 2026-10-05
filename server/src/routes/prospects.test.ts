@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { SHUFFLE_MASK, SHUFFLE_MULTIPLIER } from "../db.js";
 import { useTestServer } from "../test/harness.js";
 
 const { api } = useTestServer();
@@ -124,5 +125,52 @@ describe("GET /api/prospects follower filter", () => {
     const open = (await list("?limit=50")).total;
     expect((await list("?minFollowers=nope&limit=50")).total).toBe(open);
     expect((await list("?minFollowers=-5&limit=50")).total).toBe(open);
+  });
+});
+
+describe("GET /api/prospects shuffle", () => {
+  const deck = ["deck_a", "deck_b", "deck_c", "deck_d", "deck_e"].map((username) => ({
+    username,
+    platform: "instagram",
+  }));
+  const rank = (id: number, seed: number) =>
+    Number((BigInt(id) * BigInt(SHUFFLE_MULTIPLIER) + BigInt(seed)) & BigInt(SHUFFLE_MASK));
+  const byRank = (items: Array<Record<string, any>>, seed: number) =>
+    [...items].sort((a, b) => rank(a.id, seed) - rank(b.id, seed) || a.id - b.id);
+  const loadDeck = () => importRows(deck);
+
+  it("pages through one frozen order for a seed", async () => {
+    await loadDeck();
+    const full = await list("?q=deck_&sort=shuffle&seed=42&limit=50");
+    expect(full.total).toBe(5);
+    expect(full.items.map((p) => p.id)).toEqual(byRank(full.items, 42).map((p) => p.id));
+
+    const pages = [];
+    for (const offset of [0, 2, 4]) {
+      const page = await list(`?q=deck_&sort=shuffle&seed=42&limit=2&offset=${offset}`);
+      pages.push(...page.items);
+    }
+    expect(pages.map((p) => p.id)).toEqual(full.items.map((p) => p.id));
+
+    const again = await list("?q=deck_&sort=shuffle&seed=42&limit=50");
+    expect(again.items.map((p) => p.id)).toEqual(full.items.map((p) => p.id));
+  });
+
+  it("treats a missing or unusable seed as 0", async () => {
+    await loadDeck();
+    const ids = async (query: string) => (await list(query)).items.map((p) => p.id);
+    const zero = await ids("?q=deck_&sort=shuffle&seed=0&limit=50");
+    expect(await ids("?q=deck_&sort=shuffle&limit=50")).toEqual(zero);
+    expect(await ids("?q=deck_&sort=shuffle&seed=nope&limit=50")).toEqual(zero);
+    expect(await ids("?q=deck_&sort=shuffle&seed=-3&limit=50")).toEqual(zero);
+    expect(await ids("?q=deck_&sort=shuffle&seed=9999999999&limit=50")).toEqual(zero);
+  });
+
+  it("uses the seed's order and keeps the same people", async () => {
+    await loadDeck();
+    const a = await list("?q=deck_&sort=shuffle&seed=42&limit=50");
+    const b = await list("?q=deck_&sort=shuffle&seed=99&limit=50");
+    expect(b.items.map((p) => p.username).sort()).toEqual(a.items.map((p) => p.username).sort());
+    expect(b.items.map((p) => p.id)).toEqual(byRank(b.items, 99).map((p) => p.id));
   });
 });

@@ -31,6 +31,7 @@ import {
   IconFilter,
   IconGrid,
   IconList,
+  IconRefresh,
   IconSearch,
   IconShield,
   IconUpload,
@@ -102,12 +103,22 @@ const PLATFORM_FILTERS: Array<{ label: string; value: Platform | "all" }> = [
   { label: "YouTube", value: "youtube" },
 ];
 
-type SortKey = "recent" | "newest" | "name";
+type SortKey = "recent" | "newest" | "name" | "shuffle";
 const SORT_LABEL: Record<SortKey, string> = {
   recent: "Recent Activity",
   newest: "Newest",
   name: "Name A–Z",
+  shuffle: "Shuffle",
 };
+
+// 0..2^31-1, matching the server's shuffle seed. One seed is one deck for
+// every page of this scroll; a new seed is dealt only when Shuffle is chosen
+// again.
+function mintShuffleSeed(): number {
+  const buf = new Uint32Array(1);
+  crypto.getRandomValues(buf);
+  return buf[0]! & 0x7fffffff;
+}
 
 const PAGE_SIZE = 24;
 const MAX_THREADS_SHOWN = 3;
@@ -214,6 +225,7 @@ export function ProspectingPage() {
   const [minFollowers, setMinFollowers] = useState<number | undefined>();
   const [maxFollowers, setMaxFollowers] = useState<number | undefined>();
   const [sort, setSort] = useState<SortKey>("recent");
+  const [shuffleSeed, setShuffleSeed] = useState(0);
   const [view, setView] = useState<"grid" | "list">("grid");
   const [fabOpen, setFabOpen] = useState(false);
   const importPanelRef = useRef<HTMLDivElement>(null);
@@ -267,6 +279,7 @@ export function ProspectingPage() {
     platform: platformFilter === "all" ? undefined : platformFilter,
     q: debouncedSearch || undefined,
     sort,
+    seed: sort === "shuffle" ? shuffleSeed : undefined,
     minFollowers,
     maxFollowers,
   });
@@ -316,7 +329,7 @@ export function ProspectingPage() {
   useEffect(() => {
     void load(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, platformFilter, debouncedSearch, sort, minFollowers, maxFollowers]);
+  }, [statusFilter, platformFilter, debouncedSearch, sort, shuffleSeed, minFollowers, maxFollowers]);
 
   useEffect(() => {
     loadCounts();
@@ -327,7 +340,7 @@ export function ProspectingPage() {
     window.addEventListener("accounts-synced", refresh);
     return () => window.removeEventListener("accounts-synced", refresh);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, platformFilter, debouncedSearch, sort, minFollowers, maxFollowers]);
+  }, [statusFilter, platformFilter, debouncedSearch, sort, shuffleSeed, minFollowers, maxFollowers]);
 
   const hasMore = prospects.length < total;
 
@@ -347,7 +360,7 @@ export function ProspectingPage() {
     observer.observe(el);
     return () => observer.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, hasMore, statusFilter, platformFilter, debouncedSearch, sort, minFollowers, maxFollowers]);
+  }, [loading, hasMore, statusFilter, platformFilter, debouncedSearch, sort, shuffleSeed, minFollowers, maxFollowers]);
 
   // "View card" on a linked prospect that hasn't been loaded yet: clear the
   // filters and search for it so it's guaranteed to be on the first page.
@@ -519,20 +532,38 @@ export function ProspectingPage() {
             />
           </label>
 
-          <label className="toolbar-select">
+          <div className="toolbar-select">
             <IconFilter size={14} />
-            <span className="toolbar-select__prefix">Sort:</span>
-            <select
-              value={sort}
-              onChange={(e) => setSort(e.target.value as SortKey)}
-            >
-              {(Object.keys(SORT_LABEL) as SortKey[]).map((k) => (
-                <option key={k} value={k}>
-                  {SORT_LABEL[k]}
-                </option>
-              ))}
-            </select>
-          </label>
+            <label className="toolbar-select__sort">
+              <span className="toolbar-select__prefix">Sort:</span>
+              <select
+                aria-label="Sort prospects"
+                value={sort}
+                onChange={(e) => {
+                  const next = e.target.value as SortKey;
+                  if (next === "shuffle") setShuffleSeed(mintShuffleSeed());
+                  setSort(next);
+                }}
+              >
+                {(Object.keys(SORT_LABEL) as SortKey[]).map((k) => (
+                  <option key={k} value={k}>
+                    {SORT_LABEL[k]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {sort === "shuffle" && (
+              <button
+                type="button"
+                className="icon-btn icon-btn--ghost toolbar-reshuffle"
+                aria-label="Shuffle again"
+                title="Shuffle again"
+                onClick={() => setShuffleSeed(mintShuffleSeed())}
+              >
+                <IconRefresh size={14} />
+              </button>
+            )}
+          </div>
 
           <div className="view-toggle">
             <button

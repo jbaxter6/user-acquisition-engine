@@ -181,6 +181,7 @@
 - Phone layout: the app bar keeps the brand and account chips on one row and puts Inbox, Prospecting, Profiles, Templates, and Burners on a second row at their natural width. On Prospecting, the filter bar is a short stack (status pills, search, platform/sort/view, follower range) instead of a tall wrapping block.
 - Templates record an author: John, Justin, or both. The Templates form has a multi-select for those two names, cards and the author filter show who wrote each pitch, and authors stay editable after a template has been sent.
 - Templates filter bar holds search, author, tags, and view in one row. Tags are a multi-select (with a find box once there are more than six) instead of a wrapping chip row.
+- Prospecting can sort Shuffle. A seed freezes one deck for every infinite-scroll page; Shuffle again deals a new seed. A missing or bad seed stays on seed 0 so pages still tile the list once.
 
 ## Documentation Index
 - [Project Overview](README.md) — vision, problem statement, and 3-module architecture

@@ -138,6 +138,7 @@ export const api = {
     platform?: Platform;
     q?: string;
     sort?: string;
+    seed?: number;
     limit?: number;
     offset?: number;
     minFollowers?: number;

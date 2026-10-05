@@ -506,7 +506,18 @@ export function upsertProspectAttributes(
   return n;
 }
 
-export type ProspectSort = "recent" | "newest" | "name";
+export type ProspectSort = "recent" | "newest" | "name" | "shuffle";
+
+// A frozen deck: the same seed always orders ids the same way, so offset
+// pages tile the filtered set once. A new seed is a new deck. 0..2^31-1.
+export const SHUFFLE_MULTIPLIER = 1103515245;
+export const SHUFFLE_MASK = 2147483647;
+
+export function shuffleSeed(value: unknown): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isInteger(n) || n < 0 || n > SHUFFLE_MASK) return 0;
+  return n;
+}
 
 export interface ProspectFilters {
   platform?: string;
@@ -575,7 +586,7 @@ export function listProspectHandles(): { platform: string; username: string }[] 
     .all();
 }
 
-const PROSPECT_ORDER: Record<ProspectSort, string> = {
+const PROSPECT_ORDER: Record<Exclude<ProspectSort, "shuffle">, string> = {
   recent: "COALESCE(contacted_at, created_at) DESC, id DESC",
   newest: "created_at DESC, id DESC",
   name: "LOWER(COALESCE(NULLIF(display_name, ''), username)) ASC, id ASC",
@@ -586,10 +597,19 @@ export function listProspects(
     sort?: ProspectSort;
     limit?: number;
     offset?: number;
+    seed?: number;
   } = {},
 ): { items: ProspectRow[]; total: number } {
   const { where, params } = prospectWhere(filters);
-  const order = PROSPECT_ORDER[filters.sort ?? "recent"] ?? PROSPECT_ORDER.recent;
+  const orderParams: number[] = [];
+  let order: string;
+  if (filters.sort === "shuffle") {
+    // Bound seed, not interpolated. id breaks ties so the order is total.
+    order = `((id * ${SHUFFLE_MULTIPLIER} + ?) & ${SHUFFLE_MASK}) ASC, id ASC`;
+    orderParams.push(shuffleSeed(filters.seed));
+  } else {
+    order = PROSPECT_ORDER[filters.sort ?? "recent"] ?? PROSPECT_ORDER.recent;
+  }
   const limit = Math.min(Math.max(filters.limit ?? 24, 1), 200);
   const offset = Math.max(filters.offset ?? 0, 0);
 
@@ -598,7 +618,7 @@ export function listProspects(
       (string | number)[],
       ProspectRow
     >(`SELECT * FROM prospects ${where} ORDER BY ${order} LIMIT ? OFFSET ?`)
-    .all(...params, limit, offset);
+    .all(...params, ...orderParams, limit, offset);
   const { total } = db
     .prepare<
       (string | number)[],
