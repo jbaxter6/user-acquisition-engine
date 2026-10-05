@@ -243,16 +243,16 @@ export const api = {
 
   templateStats: () => request<MessageTemplateStats[]>("/api/templates/stats"),
 
-  createTemplate: (name: string, body: string, tags: string[]) =>
+  createTemplate: (name: string, body: string, tags: string[], authors: string[]) =>
     request<MessageTemplate>("/api/templates", {
       method: "POST",
-      body: JSON.stringify({ name, body, tags }),
+      body: JSON.stringify({ name, body, tags, authors }),
     }),
 
-  updateTemplate: (id: number, name: string, body: string, tags: string[]) =>
+  updateTemplate: (id: number, name: string, body: string, tags: string[], authors: string[]) =>
     request<MessageTemplate>(`/api/templates/${id}`, {
       method: "PUT",
-      body: JSON.stringify({ name, body, tags }),
+      body: JSON.stringify({ name, body, tags, authors }),
     }),
 
   archiveTemplate: (id: number) =>

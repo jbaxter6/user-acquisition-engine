@@ -76,6 +76,7 @@ export interface MessageTemplate {
   name: string;
   body: string;
   tags: string[];
+  authors: string[];
   created_at: string;
   archived_at: string | null;
 }
@@ -85,6 +86,7 @@ export interface MessageTemplateStats {
   name: string;
   body: string;
   tags: string[];
+  authors: string[];
   archived_at: string | null;
   sent: number;
   replied: number;

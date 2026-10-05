@@ -68,7 +68,9 @@ db.exec(`
     archived_at TEXT,
     -- JSON array of prompt-type labels ("opener", "follow-up"). Not the
     -- {{tokens}} in the body, and not used when matching a sent message.
-    tags TEXT NOT NULL DEFAULT '[]'
+    tags TEXT NOT NULL DEFAULT '[]',
+    -- JSON array of who wrote it: "john", "justin", or both.
+    authors TEXT NOT NULL DEFAULT '[]'
   );
 
   -- A separate pipeline from conversations: rows land here from an Excel
@@ -110,6 +112,7 @@ for (const migration of [
   "ALTER TABLE conversations ADD COLUMN participant_avatar_url TEXT",
   "ALTER TABLE messages ADD COLUMN template_id INTEGER REFERENCES message_templates(id)",
   "ALTER TABLE message_templates ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'",
+  "ALTER TABLE message_templates ADD COLUMN authors TEXT NOT NULL DEFAULT '[]'",
   `CREATE TABLE IF NOT EXISTS prospect_channels (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     prospect_id INTEGER NOT NULL REFERENCES prospects(id) ON DELETE CASCADE,
@@ -371,6 +374,7 @@ interface MessageTemplateStored {
   created_at: string;
   archived_at: string | null;
   tags: string;
+  authors: string;
 }
 
 export interface MessageTemplateRow {
@@ -380,23 +384,29 @@ export interface MessageTemplateRow {
   created_at: string;
   archived_at: string | null;
   tags: string[];
+  authors: string[];
+}
+
+function readStringList(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (Array.isArray(parsed)) return parsed.filter((item): item is string => typeof item === "string");
+  } catch {
+    return [];
+  }
+  return [];
 }
 
 function readTemplate(row: MessageTemplateStored): MessageTemplateRow {
-  let tags: string[] = [];
-  try {
-    const parsed = JSON.parse(row.tags) as unknown;
-    if (Array.isArray(parsed)) tags = parsed.filter((tag): tag is string => typeof tag === "string");
-  } catch {
-    tags = [];
-  }
   return {
     id: row.id,
     name: row.name,
     body: row.body,
     created_at: row.created_at,
     archived_at: row.archived_at,
-    tags,
+    tags: readStringList(row.tags),
+    authors: readStringList(row.authors),
   };
 }
 
@@ -1520,10 +1530,11 @@ export function createMessageTemplate(
   name: string,
   body: string,
   tags: string[] = [],
+  authors: string[] = [],
 ): MessageTemplateRow {
   const result = db
-    .prepare("INSERT INTO message_templates (name, body, tags) VALUES (?, ?, ?)")
-    .run(name, body, JSON.stringify(tags));
+    .prepare("INSERT INTO message_templates (name, body, tags, authors) VALUES (?, ?, ?, ?)")
+    .run(name, body, JSON.stringify(tags), JSON.stringify(authors));
   return getMessageTemplateById(result.lastInsertRowid as number)!;
 }
 
@@ -1532,10 +1543,11 @@ export function updateMessageTemplate(
   name: string,
   body: string,
   tags: string[],
+  authors: string[],
 ): MessageTemplateRow | undefined {
   db.prepare(
-    "UPDATE message_templates SET name = ?, body = ?, tags = ? WHERE id = ?",
-  ).run(name, body, JSON.stringify(tags), id);
+    "UPDATE message_templates SET name = ?, body = ?, tags = ?, authors = ? WHERE id = ?",
+  ).run(name, body, JSON.stringify(tags), JSON.stringify(authors), id);
   return getMessageTemplateById(id);
 }
 
@@ -1670,6 +1682,7 @@ export interface MessageTemplateStats {
   name: string;
   body: string;
   tags: string[];
+  authors: string[];
   archived_at: string | null;
   sent: number;
   replied: number;
@@ -1868,6 +1881,7 @@ export function getMessageTemplateStats(): MessageTemplateStats[] {
       name: t.name,
       body: t.body,
       tags: t.tags,
+      authors: t.authors,
       archived_at: t.archived_at,
       sent: total.sent,
       replied: total.replied,

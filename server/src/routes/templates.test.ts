@@ -15,7 +15,7 @@ describe("message templates", () => {
     expect(created.status).toBe(201);
     const template = await created.json();
     templateId = template.id;
-    expect(template).toMatchObject({ name: "Opener", body: "Hey!", tags: [] });
+    expect(template).toMatchObject({ name: "Opener", body: "Hey!", tags: [], authors: [] });
 
     const edited = await api(`/api/templates/${templateId}`, {
       method: "PUT",
@@ -30,6 +30,23 @@ describe("message templates", () => {
   it("rejects a tag list that isn't tags", async () => {
     const res = await api("/api/templates", { method: "POST", json: { name: "Bad", body: "Hi", tags: "opener" } });
     expect(res.status).toBe(400);
+  });
+
+  it("stores John and Justin, and rejects anyone else", async () => {
+    const created = await api("/api/templates", {
+      method: "POST",
+      json: { name: "Shared", body: "Hi", authors: ["Justin", "john"] },
+    });
+    expect(created.status).toBe(201);
+    const shared = await created.json();
+    expect(shared).toMatchObject({ authors: ["john", "justin"] });
+    await api(`/api/templates/${shared.id}`, { method: "DELETE" });
+
+    const bad = await api("/api/templates", {
+      method: "POST",
+      json: { name: "Nope", body: "Hi", authors: ["alex"] },
+    });
+    expect(bad.status).toBe(400);
   });
 
   it("404s when editing a template that doesn't exist", async () => {
@@ -58,6 +75,13 @@ describe("message templates", () => {
     expect(await retag.json()).toMatchObject({ tags: ["Opener", "soft"] });
     const statsAfter = await (await api("/api/templates/stats")).json();
     expect(statsAfter.find((t: { id: number }) => t.id === templateId).tags).toEqual(["Opener", "soft"]);
+
+    const reauthor = await api(`/api/templates/${templateId}`, {
+      method: "PUT",
+      json: { name: "Opener v2", body: "Hey there!", authors: ["justin"] },
+    });
+    expect(reauthor.status).toBe(200);
+    expect(await reauthor.json()).toMatchObject({ tags: ["Opener", "soft"], authors: ["justin"] });
   });
 
   it("archives instead of deleting", async () => {

@@ -1,6 +1,12 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
+import {
+  TEMPLATE_AUTHORS,
+  authorLabel,
+  isTemplateAuthor,
+  type TemplateAuthor,
+} from "../lib/templateAuthors";
 import type { MessageTemplateStats } from "../types";
 import {
   IconChevronDown,
@@ -79,6 +85,199 @@ function formatHours(hours: number | null): string {
   return `${hours.toFixed(1)} hrs`;
 }
 
+function knownAuthors(authors: string[] | undefined): TemplateAuthor[] {
+  return (authors ?? []).filter(isTemplateAuthor);
+}
+
+function tagSummary(selected: string[]): string {
+  if (selected.length === 0) return "All";
+  if (selected.length <= 2) return selected.join(", ");
+  return `${selected.length} selected`;
+}
+
+function TagFilterSelect({
+  tags,
+  counts,
+  value,
+  onChange,
+}: {
+  tags: string[];
+  counts: Map<string, number>;
+  value: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const rootRef = useRef<HTMLDivElement>(null);
+  const selected = tags.filter((tag) => value.some((item) => hasTag([item], tag)));
+  const needle = query.trim().toLowerCase();
+  const shown = needle ? tags.filter((tag) => tag.toLowerCase().includes(needle)) : tags;
+
+  useEffect(() => {
+    if (!open) {
+      setQuery("");
+      return;
+    }
+    const onPointer = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("mousedown", onPointer);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", onPointer);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const toggle = (tag: string) => {
+    const on = selected.some((item) => hasTag([item], tag));
+    onChange(on ? selected.filter((item) => !hasTag([item], tag)) : [...selected, tag]);
+  };
+
+  return (
+    <div className="tpl-tag-select" ref={rootRef}>
+      <button
+        type="button"
+        className={
+          selected.length
+            ? "tpl-tag-select__button tpl-tag-select__button--active"
+            : "tpl-tag-select__button"
+        }
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        title={selected.length ? selected.join(", ") : "All tags"}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <IconTag size={14} />
+        <span className="toolbar-select__prefix">Tags</span>
+        <span className="tpl-tag-select__value">{tagSummary(selected)}</span>
+        <IconChevronDown size={14} />
+      </button>
+      {open && (
+        <div
+          className="tpl-tag-select__menu"
+          role="listbox"
+          aria-multiselectable="true"
+          aria-label="Filter by tag"
+        >
+          {tags.length > 6 && (
+            <input
+              className="tpl-tag-select__search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Find a tag"
+              aria-label="Find a tag"
+              autoFocus
+            />
+          )}
+          <div className="tpl-tag-select__options">
+            {shown.length === 0 && <p className="tpl-tag-select__empty">No matching tags</p>}
+            {shown.map((tag) => {
+              const on = selected.some((item) => hasTag([item], tag));
+              return (
+                <label
+                  key={tag}
+                  className={
+                    on
+                      ? "tpl-tag-select__option tpl-tag-select__option--on"
+                      : "tpl-tag-select__option"
+                  }
+                >
+                  <input
+                    type="checkbox"
+                    checked={on}
+                    onChange={() => toggle(tag)}
+                  />
+                  <span className="tpl-tag-select__label">{tag}</span>
+                  <span className="filter-pill__count">{counts.get(tag) ?? 0}</span>
+                </label>
+              );
+            })}
+          </div>
+          {selected.length > 0 && (
+            <button
+              type="button"
+              className="tpl-tag-select__clear"
+              onClick={() => onChange([])}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AuthorSelect({
+  value,
+  onChange,
+}: {
+  value: string[];
+  onChange: (next: TemplateAuthor[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const selected = TEMPLATE_AUTHORS.filter((author) => value.includes(author));
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    window.addEventListener("mousedown", onPointer);
+    return () => window.removeEventListener("mousedown", onPointer);
+  }, [open]);
+
+  const toggle = (author: TemplateAuthor) => {
+    const next = new Set(selected);
+    if (next.has(author)) next.delete(author);
+    else next.add(author);
+    onChange(TEMPLATE_AUTHORS.filter((item) => next.has(item)));
+  };
+
+  return (
+    <div className="tpl-tag-field">
+      <span className="tpl-tag-field__label">Author</span>
+      <div className="tpl-author-select" ref={rootRef}>
+        <button
+          type="button"
+          className={
+            selected.length === 0
+              ? "tpl-author-select__button tpl-author-select__button--empty"
+              : "tpl-author-select__button"
+          }
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          onClick={() => setOpen((current) => !current)}
+        >
+          <span>
+            {selected.length === 0 ? "Select authors…" : selected.map(authorLabel).join(", ")}
+          </span>
+          <IconChevronDown size={14} />
+        </button>
+        {open && (
+          <div className="tpl-author-menu" role="listbox" aria-multiselectable="true" aria-label="Authors">
+            {TEMPLATE_AUTHORS.map((author) => (
+              <label key={author}>
+                <input
+                  type="checkbox"
+                  checked={selected.includes(author)}
+                  onChange={() => toggle(author)}
+                />
+                {authorLabel(author)}
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function TemplatesPanel() {
   const navigate = useNavigate();
   const [stats, setStats] = useState<MessageTemplateStats[]>([]);
@@ -92,8 +291,10 @@ export function TemplatesPanel() {
   const [name, setName] = useState("");
   const [body, setBody] = useState("");
   const [tags, setTags] = useState<string[]>([]);
+  const [authors, setAuthors] = useState<TemplateAuthor[]>([]);
   const [tagDraft, setTagDraft] = useState("");
-  const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [tagFilter, setTagFilter] = useState<string[]>([]);
+  const [authorFilter, setAuthorFilter] = useState<TemplateAuthor | null>(null);
   const [saving, setSaving] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -132,6 +333,7 @@ export function TemplatesPanel() {
     setName("");
     setBody("");
     setTags([]);
+    setAuthors([]);
     setTagDraft("");
     setFormOpen(true);
   };
@@ -141,6 +343,7 @@ export function TemplatesPanel() {
     setName(`${t.name} (copy)`);
     setBody(t.body);
     setTags(t.tags);
+    setAuthors(knownAuthors(t.authors));
     setTagDraft("");
     setFormOpen(true);
   };
@@ -150,6 +353,7 @@ export function TemplatesPanel() {
     setName(t.name);
     setBody(t.body);
     setTags(t.tags);
+    setAuthors(knownAuthors(t.authors));
     setTagDraft("");
     setFormOpen(true);
   };
@@ -160,6 +364,7 @@ export function TemplatesPanel() {
     setName("");
     setBody("");
     setTags([]);
+    setAuthors([]);
     setTagDraft("");
   };
 
@@ -200,9 +405,9 @@ export function TemplatesPanel() {
       : tags;
     try {
       if (editingId != null) {
-        await api.updateTemplate(editingId, name.trim(), body.trim(), pending);
+        await api.updateTemplate(editingId, name.trim(), body.trim(), pending, authors);
       } else {
-        await api.createTemplate(name.trim(), body.trim(), pending);
+        await api.createTemplate(name.trim(), body.trim(), pending, authors);
       }
       closeForm();
       refresh();
@@ -227,6 +432,20 @@ export function TemplatesPanel() {
   const active = stats.filter((t) => !t.archived_at);
   const archived = stats.filter((t) => t.archived_at);
   const tagChoices = tagsInUse(active);
+  const tagCounts = new Map(
+    tagChoices.map((tag) => [tag, active.filter((t) => hasTag(t.tags, tag)).length]),
+  );
+  const selectedTags = tagFilter.filter((tag) =>
+    tagChoices.some((choice) => hasTag([choice], tag)),
+  );
+  const authorChoices = TEMPLATE_AUTHORS.filter((author) =>
+    active.some((t) => knownAuthors(t.authors).includes(author)),
+  );
+  const focusTag = (tag: string) => {
+    setTagFilter((current) =>
+      current.length === 1 && hasTag(current, tag) ? [] : [tag],
+    );
+  };
   const editing = stats.find((t) => t.id === editingId) ?? null;
   const textLocked = editing != null && editing.sent > 0;
 
@@ -242,13 +461,20 @@ export function TemplatesPanel() {
         return t.avg_response_hours != null;
       return true;
     })
-    .filter((t) => tagFilter == null || hasTag(t.tags, tagFilter))
+    .filter(
+      (t) => selectedTags.length === 0 || selectedTags.some((tag) => hasTag(t.tags, tag)),
+    )
+    .filter((t) => authorFilter == null || knownAuthors(t.authors).includes(authorFilter))
     .filter(
       (t) =>
         !query ||
         t.name.toLowerCase().includes(query) ||
         t.body.toLowerCase().includes(query) ||
-        t.tags.some((tag) => tag.toLowerCase().includes(query)),
+        t.tags.some((tag) => tag.toLowerCase().includes(query)) ||
+        knownAuthors(t.authors).some(
+          (author) =>
+            author.includes(query) || authorLabel(author).toLowerCase().includes(query),
+        ),
     )
     .sort((a, b) => {
       switch (view) {
@@ -299,6 +525,45 @@ export function TemplatesPanel() {
           />
         </label>
 
+        {authorChoices.length > 0 && (
+          <label
+            className={
+              authorFilter
+                ? "toolbar-select tpl-toolbar__author toolbar-select--active"
+                : "toolbar-select tpl-toolbar__author"
+            }
+          >
+            <span className="toolbar-select__prefix">Author</span>
+            <select
+              aria-label="Filter by author"
+              value={authorFilter ?? ""}
+              onChange={(e) =>
+                setAuthorFilter(
+                  e.target.value && isTemplateAuthor(e.target.value) ? e.target.value : null,
+                )
+              }
+            >
+              <option value="">All</option>
+              {authorChoices.map((author) => (
+                <option key={author} value={author}>
+                  {authorLabel(author)} (
+                  {active.filter((t) => knownAuthors(t.authors).includes(author)).length})
+                </option>
+              ))}
+            </select>
+            <IconChevronDown size={14} />
+          </label>
+        )}
+
+        {tagChoices.length > 0 && (
+          <TagFilterSelect
+            tags={tagChoices}
+            counts={tagCounts}
+            value={selectedTags}
+            onChange={setTagFilter}
+          />
+        )}
+
         <label className="toolbar-select tpl-toolbar__sort">
           <span className="toolbar-select__prefix">View:</span>
           <select
@@ -318,35 +583,6 @@ export function TemplatesPanel() {
           <IconPlus size={16} /> Add template
         </button>
       </section>
-
-      {tagChoices.length > 0 && (
-        <div className="filter-pills tpl-tag-filters" aria-label="Filter by tag">
-          <button
-            type="button"
-            className={tagFilter == null ? "filter-pill filter-pill--active" : "filter-pill"}
-            onClick={() => setTagFilter(null)}
-          >
-            All tags
-          </button>
-          {tagChoices.map((tag) => (
-            <button
-              key={tag}
-              type="button"
-              className={
-                tagFilter != null && hasTag([tag], tagFilter)
-                  ? "filter-pill filter-pill--active"
-                  : "filter-pill"
-              }
-              onClick={() => setTagFilter(tagFilter != null && hasTag([tag], tagFilter) ? null : tag)}
-            >
-              {tag}
-              <span className="filter-pill__count">
-                {active.filter((t) => hasTag(t.tags, tag)).length}
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
 
       <div className="tpl-grid">
         {visible.length === 0 && (
@@ -395,7 +631,7 @@ export function TemplatesPanel() {
                           <button onClick={() => openEdit(t)}>Edit</button>
                         ) : (
                           <>
-                            <button onClick={() => openEdit(t)}>Edit tags</button>
+                            <button onClick={() => openEdit(t)}>Edit tags & author</button>
                             <button onClick={() => openDuplicate(t)}>
                               Duplicate
                             </button>
@@ -420,6 +656,23 @@ export function TemplatesPanel() {
                     </span>
                   )}
                 </h3>
+                {knownAuthors(t.authors).length > 0 && (
+                  <div className="tpl-tag-list">
+                    {knownAuthors(t.authors).map((author) => (
+                      <button
+                        key={author}
+                        type="button"
+                        className="tpl-tag tpl-author"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setAuthorFilter(author);
+                        }}
+                      >
+                        {authorLabel(author)}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {t.tags.length > 0 && (
                   <div className="tpl-tag-list">
                     {t.tags.map((tag) => (
@@ -429,7 +682,7 @@ export function TemplatesPanel() {
                         className="tpl-tag"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setTagFilter(tag);
+                          focusTag(tag);
                         }}
                       >
                         {tag}
@@ -497,7 +750,7 @@ export function TemplatesPanel() {
                   ) : (
                     <>
                       <button className="tpl-btn" onClick={() => openEdit(t)}>
-                        Edit tags
+                        Edit tags & author
                       </button>
                       <button
                         className="tpl-btn"
@@ -593,6 +846,23 @@ export function TemplatesPanel() {
             <div className="tpl-card__preview tpl-card__preview--full">
               {renderBody(detail.body)}
             </div>
+            {knownAuthors(detail.authors).length > 0 && (
+              <div className="tpl-tag-list">
+                {knownAuthors(detail.authors).map((author) => (
+                  <button
+                    key={author}
+                    type="button"
+                    className="tpl-tag tpl-author"
+                    onClick={() => {
+                      setDetailId(null);
+                      setAuthorFilter(author);
+                    }}
+                  >
+                    {authorLabel(author)}
+                  </button>
+                ))}
+              </div>
+            )}
             {detail.tags.length > 0 && (
               <div className="tpl-tag-list">
                 {detail.tags.map((tag) => (
@@ -602,7 +872,7 @@ export function TemplatesPanel() {
                     className="tpl-tag"
                     onClick={() => {
                       setDetailId(null);
-                      setTagFilter(tag);
+                      focusTag(tag);
                     }}
                   >
                     {tag}
@@ -677,7 +947,7 @@ export function TemplatesPanel() {
                       openEdit(detail);
                     }}
                   >
-                    Edit tags
+                    Edit tags & author
                   </button>
                   <button
                     className="tpl-btn"
@@ -708,7 +978,7 @@ export function TemplatesPanel() {
               <h2>
                 {editingId != null
                   ? textLocked
-                    ? "Edit tags"
+                    ? "Edit tags & author"
                     : "Edit template"
                   : "New template"}
               </h2>
@@ -735,6 +1005,7 @@ export function TemplatesPanel() {
               onChange={(e) => setBody(e.target.value)}
               readOnly={textLocked}
             />
+            <AuthorSelect value={authors} onChange={setAuthors} />
             <div className="tpl-tag-field">
               <span className="tpl-tag-field__label">Tags</span>
               {tags.length > 0 && (
@@ -792,11 +1063,12 @@ export function TemplatesPanel() {
               )}
             </div>
             <p className="tpl-modal__hint">
-              Tags group a kind of prompt so the list can be filtered. Use{" "}
-              {"{{variable}}"} placeholders (e.g. {"{{first_name}}"}) for
-              anything that changes per recipient. Once a template has been
-              sent, the message is locked — tags can still be changed, and
-              duplicate copies the text.
+              Tags group a kind of prompt so the list can be filtered. Author
+              can be John, Justin, or both. Use {"{{variable}}"} placeholders
+              (e.g. {"{{first_name}}"}) for anything that changes per
+              recipient. Once a template has been sent, the message is locked
+              — tags and author can still be changed, and duplicate copies the
+              text.
             </p>
             <div className="tpl-modal__footer">
               <span className="tpl-modal__count">
@@ -811,7 +1083,7 @@ export function TemplatesPanel() {
                   onClick={handleSave}
                   disabled={saving || !name.trim() || !body.trim()}
                 >
-                  {textLocked ? "Save tags" : editingId != null ? "Save changes" : "Add template"}
+                  {textLocked ? "Save tags & author" : editingId != null ? "Save changes" : "Add template"}
                 </button>
               </div>
             </div>
