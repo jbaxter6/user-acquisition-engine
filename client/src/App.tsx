@@ -123,7 +123,7 @@ function AppShell() {
   return (
     <div className="app">
       <header className="app__header">
-        <div className="app__header-left">
+        <div className="app__header-bar">
           <div className="app__brand" aria-label="JB brand">
             <span className="app__brand-mark">{BRAND_NAME}</span>
           </div>
@@ -170,29 +170,29 @@ function AppShell() {
               Burners
             </NavLink>
           </nav>
-        </div>
-        <div className="app__header-right">
-          <AccountConnection accounts={accounts} onChange={refreshAccounts} />
-          <PlatformStatusChip
-            platform="tiktok"
-            count={0}
-            title="No TikTok integration yet — messages are logged manually"
-          />
-          <PlatformStatusChip
-            platform="twitch"
-            count={0}
-            title="No Twitch integration yet — messages are logged manually"
-          />
-          {passwordRequired && (
-            <button
-              className="icon-btn icon-btn--ghost"
-              onClick={logout}
-              title="Sign out"
-              aria-label="Sign out"
-            >
-              <IconLogOut size={16} />
-            </button>
-          )}
+          <div className="app__header-right">
+            <AccountConnection accounts={accounts} onChange={refreshAccounts} />
+            <PlatformStatusChip
+              platform="tiktok"
+              count={0}
+              title="No TikTok integration yet — messages are logged manually"
+            />
+            <PlatformStatusChip
+              platform="twitch"
+              count={0}
+              title="No Twitch integration yet — messages are logged manually"
+            />
+            {passwordRequired && (
+              <button
+                className="icon-btn icon-btn--ghost"
+                onClick={logout}
+                title="Sign out"
+                aria-label="Sign out"
+              >
+                <IconLogOut size={16} />
+              </button>
+            )}
+          </div>
         </div>
       </header>
 

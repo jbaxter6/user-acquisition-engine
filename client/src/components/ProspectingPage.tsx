@@ -85,12 +85,13 @@ const STATUS_LABEL: Record<Prospect["status"], string> = {
 
 const STATUS_FILTERS: Array<{
   label: string;
+  short: string;
   value: Prospect["status"] | "all";
 }> = [
-  { label: "All", value: "all" },
-  { label: "Not Contacted", value: "new" },
-  { label: "Awaiting Reply", value: "contacted" },
-  { label: "Replied", value: "replied" },
+  { label: "All", short: "All", value: "all" },
+  { label: "Not Contacted", short: "New", value: "new" },
+  { label: "Awaiting Reply", short: "Waiting", value: "contacted" },
+  { label: "Replied", short: "Replied", value: "replied" },
 ];
 
 const PLATFORM_FILTERS: Array<{ label: string; value: Platform | "all" }> = [
@@ -462,8 +463,12 @@ export function ProspectingPage() {
                     : "filter-pill"
                 }
                 onClick={() => setStatusFilter(f.value)}
+                title={f.label}
               >
-                {f.label}
+                <span className="filter-pill__text">{f.label}</span>
+                <span className="filter-pill__text filter-pill__text--short">
+                  {f.short}
+                </span>
                 <span
                   className={`filter-pill__count filter-pill__count--${f.value}`}
                 >

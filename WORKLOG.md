@@ -178,6 +178,7 @@
 - OPP1 strat-1 and strat-2 no longer wait for `networkidle` on page load. The discover page stays busy, so that wait timed out at 60s before any profiles were collected. They now wait for DOM content, then the search button or a heading.
 - Strat-2 profile reads now wait until links render. Waiting only for the first heading captured the shell, so a 200-profile run saved every one as having no socials and wrote an empty sheet. Those 200 reads and their 17 queries were cleared from `.state.json` so the next run tries them again.
 - Prospecting can filter by follower count (min and max, including `10k` / `1.2M`). The list and status counts use the attribute value when one exists, otherwise the legacy `prospects.followers` column. Prospects with no count stay hidden while a bound is set.
+- Phone layout: the app bar keeps the brand and account chips on one row and puts Inbox, Prospecting, Profiles, Templates, and Burners on a second row at their natural width. On Prospecting, the filter bar is a short stack (status pills, search, platform/sort/view, follower range) instead of a tall wrapping block.
 
 ## Documentation Index
 - [Project Overview](README.md) — vision, problem statement, and 3-module architecture
